@@ -9,6 +9,9 @@ class EmailQueue(Base):
     to_email = Column(String(100), nullable=False)
     subject = Column(String(200), nullable=False)
     content = Column(Text, nullable=False)
+    content_type = Column(String(20), default="plain")  # plain, html
+    email_type = Column(String(50), nullable=True)  # verification, reset, subscription, etc.
+    attachments = Column(Text, nullable=True)  # JSON string for attachments
     status = Column(String(20), default="pending")  # pending, sent, failed
     retry_count = Column(Integer, default=0)
     max_retries = Column(Integer, default=3)

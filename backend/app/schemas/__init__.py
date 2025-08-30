@@ -21,6 +21,9 @@ from .notification import (
     NotificationType, NotificationStatus, NotificationList, NotificationBroadcast,
     EmailTemplateBase, EmailTemplateCreate, EmailTemplateUpdate, EmailTemplateInDB, EmailTemplatePreview
 )
+from .email import (
+    EmailQueue, EmailQueueCreate, EmailQueueUpdate, EmailQueueInDB, EmailQueueBase
+)
 from .config import (
     SystemConfig, SystemConfigCreate, SystemConfigUpdate,
     ConfigCategory, ConfigValue
@@ -53,6 +56,9 @@ __all__ = [
     "Notification", "NotificationInDB", "NotificationCreate", "NotificationUpdate",
     "NotificationType", "NotificationStatus", "NotificationList", "NotificationBroadcast",
     "EmailTemplateBase", "EmailTemplateCreate", "EmailTemplateUpdate", "EmailTemplateInDB", "EmailTemplatePreview",
+    
+    # Email schemas
+    "EmailQueue", "EmailQueueCreate", "EmailQueueUpdate", "EmailQueueInDB", "EmailQueueBase",
     
     # Config schemas
     "SystemConfig", "SystemConfigCreate", "SystemConfigUpdate",
