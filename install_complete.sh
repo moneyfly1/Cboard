@@ -523,25 +523,18 @@ configure_admin() {
     log_success "管理员账户配置完成"
 }
 
-# 配置邮件服务
+# 配置邮件服务（跳过）
 configure_email() {
-    log_info "配置邮件服务..."
+    log_info "跳过邮件服务配置..."
     
-    read -p "请输入SMTP服务器 (例如: smtp.qq.com): " smtp_host
-    read -p "请输入SMTP端口 (默认: 587): " smtp_port
-    smtp_port=${smtp_port:-587}
-    read -p "请输入邮箱地址: " email_username
-    read -s -p "请输入邮箱密码/授权码: " email_password
-    echo
-    read -p "请输入发件人名称: " sender_name
+    # 使用默认值
+    SMTP_HOST="smtp.qq.com"
+    SMTP_PORT="587"
+    EMAIL_USERNAME="your-email@qq.com"
+    EMAIL_PASSWORD="your-smtp-password"
+    SENDER_NAME="XBoard Modern"
     
-    SMTP_HOST=$smtp_host
-    SMTP_PORT=$smtp_port
-    EMAIL_USERNAME=$email_username
-    EMAIL_PASSWORD=$email_password
-    SENDER_NAME=$sender_name
-    
-    log_success "邮件服务配置完成"
+    log_success "邮件服务配置完成（使用默认值）"
 }
 
 # 生成环境配置文件

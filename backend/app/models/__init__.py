@@ -2,10 +2,9 @@ from .user import User
 from .subscription import Subscription, Device
 from .order import Order, Package
 from .email import EmailQueue
-from .notification import EmailTemplate
+from .notification import EmailTemplate, Notification
 from .node import Node
 from .payment import PaymentTransaction, PaymentConfig, PaymentCallback
-from .notification import Notification
 from .config import SystemConfig, Announcement, ThemeConfig
 
 # 设置关系
