@@ -338,6 +338,7 @@ onUnmounted(() => {
 </script>
 
 <style scoped lang="scss">
+@import '@/styles/global.scss';
 .user-layout {
   display: flex;
   height: 100vh;

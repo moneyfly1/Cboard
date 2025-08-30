@@ -367,6 +367,27 @@ EOF
         sed -i 's|src="/logo.png"|src="/vite.svg"|g' src/components/layout/AdminLayout.vue
     fi
     
+    # 修复SCSS导入问题
+    log_info "修复SCSS导入问题..."
+    
+    # 修复UserLayout.vue中的SCSS导入
+    if [ -f "src/components/layout/UserLayout.vue" ]; then
+        if ! grep -q "@import '@/styles/global.scss';" src/components/layout/UserLayout.vue; then
+            sed -i '/<style scoped lang="scss">/a @import '\''@/styles/global.scss'\'';' src/components/layout/UserLayout.vue
+        fi
+    fi
+    
+    # 修复AdminLayout.vue中的SCSS导入
+    if [ -f "src/components/layout/AdminLayout.vue" ]; then
+        if ! grep -q "@import '@/styles/global.scss';" src/components/layout/AdminLayout.vue; then
+            sed -i '/<style scoped lang="scss">/a @import '\''@/styles/global.scss'\'';' src/components/layout/AdminLayout.vue
+        fi
+    fi
+    
+    # 更新sass版本
+    log_info "更新sass版本..."
+    npm install sass@latest
+    
     # 清理缓存
     log_info "清理缓存..."
     rm -rf node_modules/.cache
