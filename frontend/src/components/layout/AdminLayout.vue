@@ -309,7 +309,7 @@ onUnmounted(() => {
 </script>
 
 <style scoped lang="scss">
-@import '@/styles/global.scss';
+@use '@/styles/global.scss' as *;
 .admin-layout {
   display: flex;
   height: 100vh;

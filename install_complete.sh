@@ -367,20 +367,26 @@ EOF
         sed -i 's|src="/logo.png"|src="/vite.svg"|g' src/components/layout/AdminLayout.vue
     fi
     
-    # 修复SCSS导入问题
-    log_info "修复SCSS导入问题..."
+    # 修复SCSS导入和弃用警告问题
+    log_info "修复SCSS导入和弃用警告问题..."
+    
+    # 更新global.scss中的map函数
+    if [ -f "src/styles/global.scss" ]; then
+        sed -i 's/map-has-key/map.has-key/g' src/styles/global.scss
+        sed -i 's/map-get/map.get/g' src/styles/global.scss
+    fi
     
     # 修复UserLayout.vue中的SCSS导入
     if [ -f "src/components/layout/UserLayout.vue" ]; then
-        if ! grep -q "@import '@/styles/global.scss';" src/components/layout/UserLayout.vue; then
-            sed -i '/<style scoped lang="scss">/a @import '\''@/styles/global.scss'\'';' src/components/layout/UserLayout.vue
+        if ! grep -q "@use '@/styles/global.scss'" src/components/layout/UserLayout.vue; then
+            sed -i 's/@import '\''@\/styles\/global\.scss'\'';/@use '\''@\/styles\/global\.scss'\'' as *;/g' src/components/layout/UserLayout.vue
         fi
     fi
     
     # 修复AdminLayout.vue中的SCSS导入
     if [ -f "src/components/layout/AdminLayout.vue" ]; then
-        if ! grep -q "@import '@/styles/global.scss';" src/components/layout/AdminLayout.vue; then
-            sed -i '/<style scoped lang="scss">/a @import '\''@/styles/global.scss'\'';' src/components/layout/AdminLayout.vue
+        if ! grep -q "@use '@/styles/global.scss'" src/components/layout/AdminLayout.vue; then
+            sed -i 's/@import '\''@\/styles\/global\.scss'\'';/@use '\''@\/styles\/global\.scss'\'' as *;/g' src/components/layout/AdminLayout.vue
         fi
     fi
     

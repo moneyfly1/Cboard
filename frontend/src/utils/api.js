@@ -1,5 +1,4 @@
 import axios from 'axios'
-import { useAuthStore } from '@/store/auth'
 import router from '@/router'
 
 // 创建axios实例
@@ -14,9 +13,10 @@ export const api = axios.create({
 // 请求拦截器
 api.interceptors.request.use(
   config => {
-    const authStore = useAuthStore()
-    if (authStore.token) {
-      config.headers.Authorization = `Bearer ${authStore.token}`
+    // 从localStorage获取token，避免循环导入
+    const token = localStorage.getItem('token')
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`
     }
     return config
   },
@@ -32,20 +32,11 @@ api.interceptors.response.use(
   },
   async error => {
     if (error.response?.status === 401) {
-      const authStore = useAuthStore()
-      
-      // 尝试刷新token
-      try {
-        await authStore.refreshToken()
-        // 重新发送原请求
-        const originalRequest = error.config
-        originalRequest.headers.Authorization = `Bearer ${authStore.token}`
-        return api(originalRequest)
-      } catch (refreshError) {
-        // 刷新失败，跳转到登录页
-        authStore.logout()
-        router.push('/login')
-      }
+      // 清除token并跳转到登录页
+      localStorage.removeItem('token')
+      localStorage.removeItem('refresh_token')
+      localStorage.removeItem('user')
+      router.push('/login')
     }
     return Promise.reject(error)
   }
