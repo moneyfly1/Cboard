@@ -396,6 +396,17 @@ EOF
         fi
     fi
     
+    # 修复useApi导出问题
+    log_info "修复useApi导出问题..."
+    
+    # 确保api.js中导出了useApi函数
+    if [ -f "src/utils/api.js" ]; then
+        if ! grep -q "export const useApi" src/utils/api.js; then
+            # 在api实例定义后添加useApi函数
+            sed -i '/export const api = axios.create/a \n// useApi函数 - 用于在Vue组件中获取API实例\nexport const useApi = () => {\n  return api\n}' src/utils/api.js
+        fi
+    fi
+    
     # 更新sass版本
     log_info "更新sass版本..."
     npm install sass@latest

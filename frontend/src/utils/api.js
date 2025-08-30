@@ -10,6 +10,11 @@ export const api = axios.create({
   }
 })
 
+// useApi函数 - 用于在Vue组件中获取API实例
+export const useApi = () => {
+  return api
+}
+
 // 请求拦截器
 api.interceptors.request.use(
   config => {
