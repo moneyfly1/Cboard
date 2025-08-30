@@ -451,6 +451,69 @@ EOF
         fi
     fi
     
+    # 修复security.py中缺失的认证函数
+    if [ -f "../backend/app/utils/security.py" ]; then
+        # 检查是否已经添加了必要的导入
+        if ! grep -q "from fastapi import Depends, HTTPException, status" ../backend/app/utils/security.py; then
+            # 添加必要的导入
+            sed -i '1s/^/from fastapi import Depends, HTTPException, status\n/' ../backend/app/utils/security.py
+            sed -i '2s/^/from fastapi.security import OAuth2PasswordBearer\n/' ../backend/app/utils/security.py
+            sed -i '3s/^/from sqlalchemy.orm import Session\n/' ../backend/app/utils/security.py
+            sed -i '5s/^/from app.core.database import get_db\n/' ../backend/app/utils/security.py
+            sed -i '6s/^/from app.models.user import User\n/' ../backend/app/utils/security.py
+        fi
+        
+        # 检查是否已经添加了oauth2_scheme
+        if ! grep -q "oauth2_scheme = OAuth2PasswordBearer" ../backend/app/utils/security.py; then
+            # 在pwd_context定义后添加oauth2_scheme
+            sed -i '/pwd_context = CryptContext/a\\n# OAuth2 密码承载者\noauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/v1/auth/login")' ../backend/app/utils/security.py
+        fi
+        
+        # 检查是否已经添加了get_current_user函数
+        if ! grep -q "def get_current_user" ../backend/app/utils/security.py; then
+            # 在文件末尾添加get_current_user和get_current_admin_user函数
+            cat >> ../backend/app/utils/security.py << 'EOF'
+
+def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)) -> User:
+    """获取当前用户"""
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    
+    try:
+        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+        username: str = payload.get("sub")
+        if username is None:
+            raise credentials_exception
+    except JWTError:
+        raise credentials_exception
+    
+    user = db.query(User).filter(User.username == username).first()
+    if user is None:
+        raise credentials_exception
+    
+    if not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Inactive user"
+        )
+    
+    return user
+
+def get_current_admin_user(current_user: User = Depends(get_current_user)) -> User:
+    """获取当前管理员用户"""
+    if not current_user.is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not enough permissions"
+        )
+    return current_user
+EOF
+        fi
+    fi
+    
     # 修复所有可能的依赖问题
     log_info "修复依赖问题..."
     
