@@ -429,6 +429,19 @@ EOF
         fi
     fi
     
+    # 确保schemas/notification.py中有Notification类
+    if [ -f "../backend/app/schemas/notification.py" ]; then
+        if ! grep -q "class Notification(NotificationInDB)" ../backend/app/schemas/notification.py; then
+            # 添加Notification类作为NotificationInDB的别名
+            cat >> ../backend/app/schemas/notification.py << 'EOF'
+
+class Notification(NotificationInDB):
+    """Notification schema alias for backward compatibility"""
+    pass
+EOF
+        fi
+    fi
+    
     # 修复所有可能的依赖问题
     log_info "修复依赖问题..."
     

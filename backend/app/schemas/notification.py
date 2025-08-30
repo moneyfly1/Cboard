@@ -42,6 +42,10 @@ class NotificationInDB(NotificationBase):
     class Config:
         from_attributes = True
 
+class Notification(NotificationInDB):
+    """Notification schema alias for backward compatibility"""
+    pass
+
 class NotificationList(BaseModel):
     notifications: List[NotificationInDB]
     total: int
