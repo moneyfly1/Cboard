@@ -7,8 +7,8 @@ import re
 
 from app.core.config import settings
 from app.core.database import get_db
-from app.schemas.user import UserLogin, UserCreate, User, Token
-from app.schemas.common import ResponseBase
+from app.schemas.user import UserLogin, UserCreate, User
+from app.schemas.common import ResponseBase, Token
 from app.services.user import UserService
 from app.utils.security import create_access_token, create_refresh_token
 

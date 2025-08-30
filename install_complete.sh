@@ -442,6 +442,15 @@ EOF
         fi
     fi
     
+    # 修复auth.py中的Token导入问题
+    if [ -f "../backend/app/api/api_v1/endpoints/auth.py" ]; then
+        if grep -q "from app.schemas.user import.*Token" ../backend/app/api/api_v1/endpoints/auth.py; then
+            # 修复Token导入，从user.py改为common.py
+            sed -i 's/from app.schemas.user import UserLogin, UserCreate, User, Token/from app.schemas.user import UserLogin, UserCreate, User/' ../backend/app/api/api_v1/endpoints/auth.py
+            sed -i 's/from app.schemas.common import ResponseBase/from app.schemas.common import ResponseBase, Token/' ../backend/app/api/api_v1/endpoints/auth.py
+        fi
+    fi
+    
     # 修复所有可能的依赖问题
     log_info "修复依赖问题..."
     
