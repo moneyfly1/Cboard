@@ -4,7 +4,7 @@
     <header class="header">
       <div class="header-left">
         <div class="logo" @click="$router.push('/admin/dashboard')">
-          <img src="/logo.png" alt="Logo" class="logo-img">
+          <img src="/vite.svg" alt="Logo" class="logo-img">
           <span class="logo-text" v-show="!sidebarCollapsed">XBoard 管理后台</span>
         </div>
         <div class="menu-toggle" @click="toggleSidebar">
