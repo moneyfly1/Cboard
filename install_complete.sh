@@ -372,6 +372,12 @@ EOF
     
     # 更新global.scss中的map函数
     if [ -f "src/styles/global.scss" ]; then
+        # 添加map模块导入
+        if ! grep -q "@use \"sass:map\"" src/styles/global.scss; then
+            sed -i '1i @use "sass:map";' src/styles/global.scss
+        fi
+        
+        # 更新map函数语法
         sed -i 's/map-has-key/map.has-key/g' src/styles/global.scss
         sed -i 's/map-get/map.get/g' src/styles/global.scss
     fi
