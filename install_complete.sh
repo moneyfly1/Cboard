@@ -407,6 +407,17 @@ EOF
         fi
     fi
     
+    # 修复Pydantic导入问题
+    log_info "修复Pydantic导入问题..."
+    
+    # 确保config.py中正确导入BaseSettings
+    if [ -f "../backend/app/core/config.py" ]; then
+        if ! grep -q "from pydantic_settings import BaseSettings" ../backend/app/core/config.py; then
+            # 修复BaseSettings导入
+            sed -i 's/from pydantic import AnyHttpUrl, BaseSettings, validator/from pydantic import AnyHttpUrl, validator\nfrom pydantic_settings import BaseSettings/' ../backend/app/core/config.py
+        fi
+    fi
+    
     # 更新sass版本
     log_info "更新sass版本..."
     npm install sass@latest
