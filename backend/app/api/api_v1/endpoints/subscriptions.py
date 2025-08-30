@@ -14,7 +14,7 @@ from app.schemas.common import ResponseBase
 from app.services.subscription import SubscriptionService
 from app.services.user import UserService
 from app.utils.security import get_current_user, generate_subscription_url
-from app.utils.email import send_subscription_email
+from app.services.email import EmailService
 from app.utils.device import generate_device_fingerprint, detect_device_type, extract_device_name
 
 router = APIRouter()
@@ -120,14 +120,23 @@ def send_subscription_email_endpoint(
     
     # 发送邮件
     try:
-        send_subscription_email(
-            email=current_user.email,
-            username=current_user.username,
-            ssr_url=ssr_url,
-            clash_url=clash_url,
-            expire_time=subscription.expire_time
-        )
-        return ResponseBase(message="订阅邮件发送成功")
+        email_service = EmailService(db)
+        subscription_data = {
+            'id': subscription.id,
+            'package_name': subscription.package.name if subscription.package else '未知套餐',
+            'expires_at': subscription.expire_time.strftime('%Y-%m-%d %H:%M:%S') if subscription.expire_time else '未知',
+            'status': subscription.status,
+            'ssr_url': ssr_url,
+            'clash_url': clash_url
+        }
+        success = email_service.send_subscription_email(current_user.email, subscription_data)
+        if success:
+            return ResponseBase(message="订阅邮件发送成功")
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="邮件发送失败"
+            )
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

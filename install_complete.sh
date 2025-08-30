@@ -514,6 +514,21 @@ EOF
         fi
     fi
     
+    # 修复email导入错误
+    if [ -f "../backend/app/api/api_v1/endpoints/subscriptions.py" ]; then
+        # 修复subscriptions.py中的email导入
+        if grep -q "from app.utils.email import send_subscription_email" ../backend/app/api/api_v1/endpoints/subscriptions.py; then
+            sed -i 's/from app.utils.email import send_subscription_email/from app.services.email import EmailService/' ../backend/app/api/api_v1/endpoints/subscriptions.py
+        fi
+    fi
+    
+    if [ -f "../backend/app/api/api_v1/endpoints/admin.py" ]; then
+        # 修复admin.py中的email导入
+        if grep -q "from app.utils.email import send_subscription_email" ../backend/app/api/api_v1/endpoints/admin.py; then
+            sed -i 's/from app.utils.email import send_subscription_email/from app.services.email import EmailService/' ../backend/app/api/api_v1/endpoints/admin.py
+        fi
+    fi
+    
     # 修复所有可能的依赖问题
     log_info "修复依赖问题..."
     

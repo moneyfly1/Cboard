@@ -280,9 +280,14 @@ def send_subscription_email_to_user(
         )
     
     # 发送订阅邮件
-    from app.utils.email import send_subscription_email
-    
-    success = send_subscription_email(user.email, user.username)
+    email_service = EmailService(db)
+    subscription_data = {
+        'id': subscription.id if subscription else 0,
+        'package_name': subscription.package.name if subscription and subscription.package else '未知套餐',
+        'expires_at': subscription.expire_time.strftime('%Y-%m-%d %H:%M:%S') if subscription and subscription.expire_time else '未知',
+        'status': subscription.status if subscription else '未知'
+    }
+    success = email_service.send_subscription_email(user.email, subscription_data)
     
     if success:
         return ResponseBase(message="订阅邮件发送成功")
@@ -311,8 +316,14 @@ def batch_send_subscription_email(
             if user:
                 subscription = subscription_service.get_by_user_id(user_id)
                 if subscription:
-                    from app.utils.email import send_subscription_email
-                    if send_subscription_email(user.email, user.username):
+                    email_service = EmailService(db)
+                    subscription_data = {
+                        'id': subscription.id,
+                        'package_name': subscription.package.name if subscription.package else '未知套餐',
+                        'expires_at': subscription.expire_time.strftime('%Y-%m-%d %H:%M:%S') if subscription.expire_time else '未知',
+                        'status': subscription.status
+                    }
+                    if email_service.send_subscription_email(user.email, subscription_data):
                         success_count += 1
                     else:
                         failed_count += 1
@@ -778,8 +789,14 @@ def batch_send_subscription_email(
         try:
             subscription = subscription_service.get(subscription_id)
             if subscription and subscription.user:
-                from app.utils.email import send_subscription_email
-                if send_subscription_email(subscription.user.email, subscription.user.username):
+                email_service = EmailService(db)
+                subscription_data = {
+                    'id': subscription.id,
+                    'package_name': subscription.package.name if subscription.package else '未知套餐',
+                    'expires_at': subscription.expire_time.strftime('%Y-%m-%d %H:%M:%S') if subscription.expire_time else '未知',
+                    'status': subscription.status
+                }
+                if email_service.send_subscription_email(subscription.user.email, subscription_data):
                     success_count += 1
                 else:
                     failed_count += 1
