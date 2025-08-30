@@ -597,6 +597,40 @@ EOF
         fi
     fi
     
+    # 确保所有__init__.py文件存在
+    echo "📁 确保__init__.py文件存在..."
+    for dir in "../backend/app" "../backend/app/api" "../backend/app/api/api_v1" "../backend/app/api/api_v1/endpoints" "../backend/app/core" "../backend/app/models" "../backend/app/schemas" "../backend/app/services" "../backend/app/utils"; do
+        if [ ! -f "$dir/__init__.py" ]; then
+            echo "# Auto-generated __init__.py" > "$dir/__init__.py"
+        fi
+    done
+    
+    # 更新models/__init__.py
+    if [ -f "../backend/app/models/__init__.py" ]; then
+        if ! grep -q "from .email import EmailQueue" ../backend/app/models/__init__.py; then
+            # 在notification导入后添加email导入
+            sed -i '/from .notification import/a\\from .email import EmailQueue' ../backend/app/models/__init__.py
+        fi
+        
+        if ! grep -q '"EmailQueue"' ../backend/app/models/__init__.py; then
+            # 在__all__列表中添加EmailQueue
+            sed -i 's/\]$/, "EmailQueue"]/' ../backend/app/models/__init__.py
+        fi
+    fi
+    
+    # 检查并修复其他可能的导入问题
+    echo "🔍 检查其他可能的导入问题..."
+    
+    # 检查是否有缺失的依赖
+    if ! grep -q "user-agents" ../backend/requirements.txt; then
+        echo "user-agents" >> ../backend/requirements.txt
+    fi
+    
+    # 检查是否有缺失的pydantic-settings
+    if ! grep -q "pydantic-settings" ../backend/requirements.txt; then
+        echo "pydantic-settings" >> ../backend/requirements.txt
+    fi
+    
     # 修复所有可能的依赖问题
     log_info "修复依赖问题..."
     
