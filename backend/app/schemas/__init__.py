@@ -26,7 +26,8 @@ from .email import (
 )
 from .config import (
     SystemConfig, SystemConfigCreate, SystemConfigUpdate,
-    ConfigCategory, ConfigValue
+    ConfigCategory, ConfigValue, Announcement, AnnouncementCreate, AnnouncementUpdate, AnnouncementInDB,
+    ThemeConfig, ThemeConfigCreate, ThemeConfigUpdate, ThemeConfigInDB, SystemSettings
 )
 from .common import (
     Token, TokenData, ResponseBase, PaginationParams, 
@@ -62,7 +63,8 @@ __all__ = [
     
     # Config schemas
     "SystemConfig", "SystemConfigCreate", "SystemConfigUpdate",
-    "ConfigCategory", "ConfigValue",
+    "ConfigCategory", "ConfigValue", "Announcement", "AnnouncementCreate", "AnnouncementUpdate", "AnnouncementInDB",
+    "ThemeConfig", "ThemeConfigCreate", "ThemeConfigUpdate", "ThemeConfigInDB", "SystemSettings",
     
     # Common schemas
     "Token", "TokenData", "ResponseBase", "PaginationParams", 

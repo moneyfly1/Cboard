@@ -152,4 +152,79 @@ class ConfigTestRequest(BaseModel):
 class ConfigTestResponse(BaseModel):
     success: bool
     message: str
-    details: Optional[Dict[str, Any]] = None 
+    details: Optional[Dict[str, Any]] = None
+
+# Announcement schemas
+class AnnouncementBase(BaseModel):
+    title: str
+    content: str
+    is_active: bool = True
+    priority: int = 0
+    start_date: Optional[datetime] = None
+    end_date: Optional[datetime] = None
+    target_audience: str = "all"  # all, users, admins
+    category: str = "general"
+
+class AnnouncementCreate(AnnouncementBase):
+    pass
+
+class AnnouncementUpdate(BaseModel):
+    title: Optional[str] = None
+    content: Optional[str] = None
+    is_active: Optional[bool] = None
+    priority: Optional[int] = None
+    start_date: Optional[datetime] = None
+    end_date: Optional[datetime] = None
+    target_audience: Optional[str] = None
+    category: Optional[str] = None
+
+class AnnouncementInDB(AnnouncementBase):
+    id: int
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+    created_by: Optional[int] = None
+
+    class Config:
+        from_attributes = True
+
+class Announcement(AnnouncementInDB):
+    pass
+
+# Theme schemas
+class ThemeConfigBase(BaseModel):
+    name: str
+    description: Optional[str] = None
+    is_active: bool = True
+    config_data: Dict[str, Any] = {}
+
+class ThemeConfigCreate(ThemeConfigBase):
+    pass
+
+class ThemeConfigUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    is_active: Optional[bool] = None
+    config_data: Optional[Dict[str, Any]] = None
+
+class ThemeConfigInDB(ThemeConfigBase):
+    id: int
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+class ThemeConfig(ThemeConfigInDB):
+    pass
+
+# System Settings
+class SystemSettings(BaseModel):
+    general: GeneralConfig
+    registration: RegistrationConfig
+    email: EmailConfig
+    notification: NotificationConfig
+    theme: ThemeConfig
+    payment: PaymentConfig
+    announcement: AnnouncementConfig
+    security: SecurityConfig
+    performance: PerformanceConfig 

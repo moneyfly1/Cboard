@@ -631,6 +631,103 @@ EOF
         echo "pydantic-settings" >> ../backend/requirements.txt
     fi
     
+    # 修复config schemas中缺失的类
+    if [ -f "../backend/app/schemas/config.py" ]; then
+        if ! grep -q "class AnnouncementCreate" ../backend/app/schemas/config.py; then
+            # 在文件末尾添加缺失的schemas
+            cat >> ../backend/app/schemas/config.py << 'EOF'
+
+# Announcement schemas
+class AnnouncementBase(BaseModel):
+    title: str
+    content: str
+    is_active: bool = True
+    priority: int = 0
+    start_date: Optional[datetime] = None
+    end_date: Optional[datetime] = None
+    target_audience: str = "all"  # all, users, admins
+    category: str = "general"
+
+class AnnouncementCreate(AnnouncementBase):
+    pass
+
+class AnnouncementUpdate(BaseModel):
+    title: Optional[str] = None
+    content: Optional[str] = None
+    is_active: Optional[bool] = None
+    priority: Optional[int] = None
+    start_date: Optional[datetime] = None
+    end_date: Optional[datetime] = None
+    target_audience: Optional[str] = None
+    category: Optional[str] = None
+
+class AnnouncementInDB(AnnouncementBase):
+    id: int
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+    created_by: Optional[int] = None
+
+    class Config:
+        from_attributes = True
+
+class Announcement(AnnouncementInDB):
+    pass
+
+# Theme schemas
+class ThemeConfigBase(BaseModel):
+    name: str
+    description: Optional[str] = None
+    is_active: bool = True
+    config_data: Dict[str, Any] = {}
+
+class ThemeConfigCreate(ThemeConfigBase):
+    pass
+
+class ThemeConfigUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    is_active: Optional[bool] = None
+    config_data: Optional[Dict[str, Any]] = None
+
+class ThemeConfigInDB(ThemeConfigBase):
+    id: int
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+class ThemeConfig(ThemeConfigInDB):
+    pass
+
+# System Settings
+class SystemSettings(BaseModel):
+    general: GeneralConfig
+    registration: RegistrationConfig
+    email: EmailConfig
+    notification: NotificationConfig
+    theme: ThemeConfig
+    payment: PaymentConfig
+    announcement: AnnouncementConfig
+    security: SecurityConfig
+    performance: PerformanceConfig
+EOF
+        fi
+    fi
+    
+    # 更新schemas/__init__.py以包含新的config schemas
+    if [ -f "../backend/app/schemas/__init__.py" ]; then
+        if ! grep -q "AnnouncementCreate" ../backend/app/schemas/__init__.py; then
+            # 更新config导入
+            sed -i 's/ConfigCategory, ConfigValue/ConfigCategory, ConfigValue, Announcement, AnnouncementCreate, AnnouncementUpdate, AnnouncementInDB, ThemeConfig, ThemeConfigCreate, ThemeConfigUpdate, ThemeConfigInDB, SystemSettings/' ../backend/app/schemas/__init__.py
+        fi
+        
+        if ! grep -q '"AnnouncementCreate"' ../backend/app/schemas/__init__.py; then
+            # 更新__all__列表
+            sed -i 's/"ConfigCategory", "ConfigValue"/"ConfigCategory", "ConfigValue", "Announcement", "AnnouncementCreate", "AnnouncementUpdate", "AnnouncementInDB", "ThemeConfig", "ThemeConfigCreate", "ThemeConfigUpdate", "ThemeConfigInDB", "SystemSettings"/' ../backend/app/schemas/__init__.py
+        fi
+    fi
+    
     # 修复所有可能的依赖问题
     log_info "修复依赖问题..."
     
