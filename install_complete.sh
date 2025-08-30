@@ -429,6 +429,21 @@ EOF
         fi
     fi
     
+    # 修复所有可能的依赖问题
+    log_info "修复依赖问题..."
+    
+    # 确保backend requirements.txt包含所有必要的依赖
+    if [ -f "../backend/requirements.txt" ]; then
+        # 检查并添加缺失的依赖
+        if ! grep -q "pydantic-settings" ../backend/requirements.txt; then
+            echo "pydantic-settings" >> ../backend/requirements.txt
+        fi
+        
+        if ! grep -q "user-agents" ../backend/requirements.txt; then
+            echo "user-agents" >> ../backend/requirements.txt
+        fi
+    fi
+    
     # 更新sass版本
     log_info "更新sass版本..."
     npm install sass@latest
@@ -616,8 +631,8 @@ init_database() {
     
     cd backend
     python -c "
-from app.core.database import engine
-from app.models import Base
+from app.core.database import engine, Base
+from app.models import User, Subscription, Device, Order, Package
 Base.metadata.create_all(bind=engine)
 print('数据库初始化完成')
 "
