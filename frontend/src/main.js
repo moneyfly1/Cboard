@@ -11,7 +11,7 @@ import { useSettingsStore } from './store/settings'
 import { useAuthStore } from './store/auth'
 
 // 导入全局样式
-import './styles/main.scss'
+import './styles/global.scss'
 
 const app = createApp(App)
 const pinia = createPinia()

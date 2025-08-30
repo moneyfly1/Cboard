@@ -33,19 +33,19 @@
     <!-- 套餐列表 -->
     <div class="packages-grid">
       <el-card 
-        v-for="package in packages" 
-        :key="package.id" 
+        v-for="pkg in packages" 
+        :key="pkg.id" 
         class="package-card"
-        :class="{ 'recommended': package.is_recommended }"
+        :class="{ 'recommended': pkg.is_recommended }"
       >
         <div class="package-header">
-          <h3>{{ package.name }}</h3>
+          <h3>{{ pkg.name }}</h3>
           <div class="price">
             <span class="currency">¥</span>
-            <span class="amount">{{ package.price }}</span>
-            <span class="period">/{{ package.duration }}天</span>
+            <span class="amount">{{ pkg.price }}</span>
+            <span class="period">/{{ pkg.duration }}天</span>
           </div>
-          <div class="recommended-badge" v-if="package.is_recommended">
+          <div class="recommended-badge" v-if="pkg.is_recommended">
             推荐
           </div>
         </div>
@@ -53,11 +53,11 @@
         <div class="package-features">
           <div class="feature-item">
             <i class="el-icon-check"></i>
-            <span>时长：{{ package.duration }} 天</span>
+            <span>时长：{{ pkg.duration }} 天</span>
           </div>
           <div class="feature-item">
             <i class="el-icon-check"></i>
-            <span>设备限制：{{ package.device_limit }} 个</span>
+            <span>设备限制：{{ pkg.device_limit }} 个</span>
           </div>
           <div class="feature-item">
             <i class="el-icon-check"></i>
@@ -73,7 +73,7 @@
           <el-button 
             type="primary" 
             size="large" 
-            @click="selectPackage(package)"
+            @click="selectPackage(pkg)"
             :loading="loading"
           >
             立即购买
@@ -98,30 +98,26 @@
           </div>
         </div>
 
-        <div class="payment-methods">
+        <div class="payment-method">
           <h4>选择支付方式</h4>
           <el-radio-group v-model="paymentMethod">
-            <el-radio label="alipay">
-              <i class="el-icon-money"></i>
-              支付宝
-            </el-radio>
-            <el-radio label="wechat">
-              <i class="el-icon-money"></i>
-              微信支付
-            </el-radio>
+            <el-radio label="alipay">支付宝</el-radio>
+            <el-radio label="wechat">微信支付</el-radio>
           </el-radio-group>
         </div>
       </div>
 
       <template #footer>
-        <el-button @click="paymentDialogVisible = false">取消</el-button>
-        <el-button 
-          type="primary" 
-          @click="confirmPayment"
-          :loading="paymentLoading"
-        >
-          确认支付
-        </el-button>
+        <span class="dialog-footer">
+          <el-button @click="paymentDialogVisible = false">取消</el-button>
+          <el-button 
+            type="primary" 
+            @click="confirmPayment"
+            :loading="paymentLoading"
+          >
+            确认支付
+          </el-button>
+        </span>
       </template>
     </el-dialog>
 
@@ -130,18 +126,20 @@
       v-model="qrCodeDialogVisible"
       title="扫码支付"
       width="400px"
-      center
+      :close-on-click-modal="false"
+      :close-on-press-escape="false"
     >
-      <div class="qrcode-content">
-        <div class="qrcode-wrapper">
-          <div id="payment-qrcode"></div>
+      <div class="qr-code-content">
+        <div class="qr-code-container">
+          <canvas id="payment-qrcode"></canvas>
         </div>
         <div class="payment-info">
-          <p>请使用{{ paymentMethod === 'alipay' ? '支付宝' : '微信' }}扫描二维码完成支付</p>
-          <p class="amount">支付金额：¥{{ selectedPackage?.price }}</p>
+          <p>订单金额：¥{{ selectedPackage?.price }}</p>
+          <p>剩余时间：{{ paymentTimer }} 秒</p>
         </div>
-        <div class="payment-timer">
-          <p>支付倒计时：{{ paymentTimer }} 秒</p>
+        <div class="payment-tips">
+          <p>请使用支付宝扫描二维码完成支付</p>
+          <p>支付完成后页面将自动跳转</p>
         </div>
       </div>
     </el-dialog>
@@ -149,33 +147,29 @@
 </template>
 
 <script>
-import { ref, reactive, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import QRCode from 'qrcode'
-import { useAuthStore } from '@/store/auth'
-import { packageAPI, orderAPI } from '@/utils/api'
+import { orderAPI } from '@/utils/api'
 
 export default {
   name: 'Packages',
   setup() {
-    const authStore = useAuthStore()
     const loading = ref(false)
     const paymentLoading = ref(false)
     const paymentDialogVisible = ref(false)
     const qrCodeDialogVisible = ref(false)
     const paymentMethod = ref('alipay')
-    const paymentTimer = ref(300) // 5分钟倒计时
-    let timerInterval = null
-
+    const paymentTimer = ref(300)
     const currentSubscription = ref(null)
     const packages = ref([])
     const selectedPackage = ref(null)
-    const currentOrder = ref(null)
+    let timerInterval = null
 
     // 获取当前订阅信息
     const fetchCurrentSubscription = async () => {
       try {
-        const response = await packageAPI.getCurrentSubscription()
+        const response = await orderAPI.getCurrentSubscription()
         currentSubscription.value = response.data
       } catch (error) {
         console.error('获取当前订阅失败:', error)
@@ -184,11 +178,15 @@ export default {
 
     // 获取套餐列表
     const fetchPackages = async () => {
+      loading.value = true
       try {
-        const response = await packageAPI.getPackages()
+        const response = await orderAPI.getPackages()
         packages.value = response.data
       } catch (error) {
         ElMessage.error('获取套餐列表失败')
+        console.error('获取套餐列表失败:', error)
+      } finally {
+        loading.value = false
       }
     }
 
@@ -207,29 +205,28 @@ export default {
 
       paymentLoading.value = true
       try {
-        // 创建订单
-        const orderData = {
+        const response = await orderAPI.createOrder({
           package_id: selectedPackage.value.id,
           payment_method: paymentMethod.value
-        }
-        
-        const response = await orderAPI.createOrder(orderData)
-        currentOrder.value = response.data
-        
+        })
+
+        const order = response.data
+        selectedPackage.value = order
+
         // 生成支付二维码
-        await generatePaymentQRCode(response.data.payment_url)
-        
+        await generatePaymentQRCode(order.payment_url)
+
+        // 关闭支付对话框，显示二维码对话框
         paymentDialogVisible.value = false
         qrCodeDialogVisible.value = true
-        
-        // 开始倒计时
+
+        // 开始倒计时和轮询
         startPaymentTimer()
-        
-        // 开始轮询支付状态
         startPaymentPolling()
-        
+
       } catch (error) {
         ElMessage.error('创建订单失败')
+        console.error('创建订单失败:', error)
       } finally {
         paymentLoading.value = false
       }
@@ -267,7 +264,7 @@ export default {
     const startPaymentPolling = () => {
       const pollInterval = setInterval(async () => {
         try {
-          const response = await orderAPI.getOrderStatus(currentOrder.value.order_no)
+          const response = await orderAPI.getOrderStatus(selectedPackage.value.order_no)
           if (response.data.status === 'paid') {
             clearInterval(pollInterval)
             clearInterval(timerInterval)
@@ -346,14 +343,12 @@ export default {
 
 .current-subscription-card {
   margin-bottom: 2rem;
-  border-radius: 12px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
 }
 
 .card-header {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 8px;
   font-weight: 600;
 }
 
@@ -368,14 +363,19 @@ export default {
   justify-content: space-between;
   align-items: center;
   padding: 0.5rem 0;
+  border-bottom: 1px solid #f0f0f0;
 }
 
-.info-item .label {
+.info-item:last-child {
+  border-bottom: none;
+}
+
+.label {
   color: #666;
   font-weight: 500;
 }
 
-.info-item .value {
+.value {
   color: #1677ff;
   font-weight: 600;
 }
@@ -388,11 +388,9 @@ export default {
 }
 
 .package-card {
-  border-radius: 12px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
-  transition: all 0.3s ease;
   position: relative;
-  overflow: hidden;
+  transition: all 0.3s ease;
+  border: 2px solid transparent;
 }
 
 .package-card:hover {
@@ -401,77 +399,75 @@ export default {
 }
 
 .package-card.recommended {
-  border: 2px solid #1677ff;
-}
-
-.package-header {
-  text-align: center;
-  padding: 1.5rem;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-  position: relative;
-}
-
-.package-header h3 {
-  margin: 0 0 1rem 0;
-  font-size: 1.5rem;
-  font-weight: 600;
-}
-
-.price {
-  font-size: 2.5rem;
-  font-weight: bold;
-  margin-bottom: 0.5rem;
-}
-
-.currency {
-  font-size: 1.5rem;
-  vertical-align: top;
-}
-
-.period {
-  font-size: 1rem;
-  opacity: 0.8;
+  border-color: #1677ff;
 }
 
 .recommended-badge {
   position: absolute;
-  top: 1rem;
-  right: 1rem;
-  background: #ff6b6b;
+  top: -10px;
+  right: 20px;
+  background: #1677ff;
   color: white;
-  padding: 0.25rem 0.75rem;
-  border-radius: 20px;
+  padding: 4px 12px;
+  border-radius: 12px;
   font-size: 0.8rem;
   font-weight: 600;
 }
 
+.package-header {
+  text-align: center;
+  margin-bottom: 1.5rem;
+}
+
+.package-header h3 {
+  color: #333;
+  font-size: 1.5rem;
+  margin-bottom: 1rem;
+}
+
+.price {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 4px;
+}
+
+.currency {
+  color: #1677ff;
+  font-size: 1.2rem;
+  font-weight: 600;
+}
+
+.amount {
+  color: #1677ff;
+  font-size: 2.5rem;
+  font-weight: 700;
+}
+
+.period {
+  color: #666;
+  font-size: 1rem;
+}
+
 .package-features {
-  padding: 1.5rem;
+  margin-bottom: 2rem;
 }
 
 .feature-item {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  margin-bottom: 0.75rem;
+  gap: 8px;
+  padding: 0.5rem 0;
   color: #333;
 }
 
 .feature-item i {
   color: #52c41a;
-  font-size: 1.1rem;
+  font-size: 1rem;
 }
 
 .package-actions {
-  padding: 0 1.5rem 1.5rem;
-}
-
-.package-actions .el-button {
-  width: 100%;
-  height: 44px;
-  font-size: 1rem;
-  font-weight: 600;
+  text-align: center;
 }
 
 .payment-content {
@@ -479,15 +475,15 @@ export default {
 }
 
 .selected-package {
-  margin-bottom: 2rem;
+  margin-bottom: 1.5rem;
   padding: 1rem;
   background: #f8f9fa;
   border-radius: 8px;
 }
 
 .selected-package h4 {
-  margin: 0 0 1rem 0;
-  color: #1677ff;
+  color: #333;
+  margin-bottom: 1rem;
 }
 
 .package-details p {
@@ -497,39 +493,24 @@ export default {
 
 .package-details .price {
   font-size: 1.2rem;
-  font-weight: bold;
+  font-weight: 600;
   color: #1677ff;
 }
 
-.payment-methods {
-  margin-top: 1rem;
+.payment-method {
+  margin-top: 1.5rem;
 }
 
-.payment-methods h4 {
-  margin: 0 0 1rem 0;
+.payment-method h4 {
+  margin-bottom: 1rem;
   color: #333;
 }
 
-.payment-methods .el-radio {
-  display: block;
-  margin-bottom: 1rem;
-  padding: 1rem;
-  border: 1px solid #e8e8e8;
-  border-radius: 8px;
-  transition: all 0.3s ease;
-}
-
-.payment-methods .el-radio:hover {
-  border-color: #1677ff;
-  background: #f0f8ff;
-}
-
-.qrcode-content {
+.qr-code-content {
   text-align: center;
-  padding: 1rem 0;
 }
 
-.qrcode-wrapper {
+.qr-code-container {
   margin-bottom: 1.5rem;
 }
 
@@ -539,36 +520,29 @@ export default {
 
 .payment-info p {
   margin: 0.5rem 0;
+  color: #333;
+}
+
+.payment-tips {
   color: #666;
+  font-size: 0.9rem;
 }
 
-.payment-info .amount {
-  font-size: 1.2rem;
-  font-weight: bold;
-  color: #1677ff;
-}
-
-.payment-timer {
-  color: #ff6b6b;
-  font-weight: 600;
+.payment-tips p {
+  margin: 0.25rem 0;
 }
 
 @media (max-width: 768px) {
-  .packages-container {
-    padding: 10px;
-  }
-  
   .packages-grid {
     grid-template-columns: 1fr;
-    gap: 1rem;
   }
   
   .subscription-info {
     grid-template-columns: 1fr;
   }
   
-  .price {
-    font-size: 2rem;
+  .package-card {
+    margin-bottom: 1rem;
   }
 }
 </style> 

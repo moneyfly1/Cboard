@@ -1,166 +1,155 @@
+from pydantic import BaseModel, Field
 from typing import Optional, Dict, Any, List
 from datetime import datetime
-from pydantic import BaseModel, validator
+from enum import Enum
 
-# 系统配置模式
-class SystemConfigBase(BaseModel):
+class ConfigCategory(str, Enum):
+    GENERAL = "general"
+    REGISTRATION = "registration"
+    EMAIL = "email"
+    NOTIFICATION = "notification"
+    THEME = "theme"
+    PAYMENT = "payment"
+    ANNOUNCEMENT = "announcement"
+    SECURITY = "security"
+    PERFORMANCE = "performance"
+
+class ConfigValue(BaseModel):
     key: str
-    value: Optional[str] = None
-    type: str
-    category: str
-    display_name: str
+    value: Any
     description: Optional[str] = None
-    is_public: bool = False
-    sort_order: int = 0
+    type: str = "string"
+    required: bool = False
+    options: Optional[List[Any]] = None
+
+class SystemConfigBase(BaseModel):
+    category: ConfigCategory
+    config_data: Dict[str, Any] = {}
 
 class SystemConfigCreate(SystemConfigBase):
     pass
 
-class SystemConfigUpdate(BaseModel):
-    value: Optional[str] = None
-    display_name: Optional[str] = None
-    description: Optional[str] = None
-    is_public: Optional[bool] = None
-    sort_order: Optional[int] = None
-
-class SystemConfigInDB(SystemConfigBase):
-    id: int
-    created_at: datetime
-    updated_at: Optional[datetime] = None
-
-    class Config:
-        from_attributes = True
-
-# 公告模式
-class AnnouncementBase(BaseModel):
-    title: str
-    content: str
-    type: str = 'info'
-    is_active: bool = True
-    is_pinned: bool = False
-    start_time: Optional[datetime] = None
-    end_time: Optional[datetime] = None
-    target_users: str = 'all'
-
-class AnnouncementCreate(AnnouncementBase):
+class SystemConfigUpdate(SystemConfigBase):
     pass
 
-class AnnouncementUpdate(BaseModel):
-    title: Optional[str] = None
-    content: Optional[str] = None
-    type: Optional[str] = None
-    is_active: Optional[bool] = None
-    is_pinned: Optional[bool] = None
-    start_time: Optional[datetime] = None
-    end_time: Optional[datetime] = None
-    target_users: Optional[str] = None
-
-class AnnouncementInDB(AnnouncementBase):
+class SystemConfig(SystemConfigBase):
     id: int
-    created_by: int
     created_at: datetime
-    updated_at: Optional[datetime] = None
+    updated_at: datetime
 
     class Config:
         from_attributes = True
 
-# 主题配置模式
-class ThemeConfigBase(BaseModel):
-    name: str
-    display_name: str
-    is_active: bool = False
-    is_default: bool = False
-    config: Optional[Dict[str, Any]] = None
-    preview_image: Optional[str] = None
-
-class ThemeConfigCreate(ThemeConfigBase):
-    pass
-
-class ThemeConfigUpdate(BaseModel):
-    display_name: Optional[str] = None
-    is_active: Optional[bool] = None
-    is_default: Optional[bool] = None
-    config: Optional[Dict[str, Any]] = None
-    preview_image: Optional[str] = None
-
-class ThemeConfigInDB(ThemeConfigBase):
-    id: int
-    created_at: datetime
-    updated_at: Optional[datetime] = None
-
-    class Config:
-        from_attributes = True
-
-# 配置分类模式
-class ConfigCategory(BaseModel):
-    category: str
-    display_name: str
-    description: Optional[str] = None
-    icon: Optional[str] = None
-    configs: List[SystemConfigInDB] = []
-
-# 系统设置模式
-class SystemSettings(BaseModel):
-    # 基本设置
-    site_name: str = "XBoard"
-    site_description: str = "高性能面板系统"
-    site_keywords: str = "面板,管理,系统"
+class GeneralConfig(BaseModel):
+    site_name: str = "XBoard Modern"
+    site_description: str = "现代化订阅管理系统"
     site_logo: Optional[str] = None
-    site_favicon: Optional[str] = None
-    
-    # 注册设置
-    allow_registration: bool = True
+    maintenance_mode: bool = False
+    maintenance_message: str = "系统维护中，请稍后再试"
+    registration_enabled: bool = True
+    email_verification_required: bool = True
+    min_password_length: int = 6
+    max_login_attempts: int = 5
+    session_timeout: int = 30
+
+class RegistrationConfig(BaseModel):
+    enabled: bool = True
     require_email_verification: bool = True
     allow_qq_email_only: bool = True
-    min_password_length: int = 8
-    
-    # 邮件设置
-    smtp_host: str = ""
+    auto_approve: bool = False
+    welcome_message: str = "欢迎加入XBoard！"
+    terms_of_service: str = ""
+    privacy_policy: str = ""
+
+class EmailConfig(BaseModel):
+    smtp_host: str = "smtp.qq.com"
     smtp_port: int = 587
     smtp_username: str = ""
     smtp_password: str = ""
-    smtp_encryption: str = "tls"
-    from_email: str = ""
-    from_name: str = ""
-    
-    # 通知设置
-    enable_email_notification: bool = True
-    enable_sms_notification: bool = False
-    enable_webhook_notification: bool = False
-    webhook_url: Optional[str] = None
-    
-    # 主题设置
+    sender_name: str = "XBoard"
+    sender_email: str = ""
+    use_tls: bool = True
+    use_ssl: bool = False
+    max_retries: int = 3
+    retry_delay: int = 60
+
+class NotificationConfig(BaseModel):
+    email_notifications: bool = True
+    push_notifications: bool = False
+    subscription_expiry_reminder: bool = True
+    reminder_days: List[int] = [7, 3, 1]
+    new_user_notification: bool = True
+    payment_notification: bool = True
+    system_notification: bool = True
+
+class ThemeConfig(BaseModel):
     default_theme: str = "default"
-    allow_user_theme: bool = True
-    available_themes: List[str] = ["default", "dark", "blue", "green"]
-    
-    # 支付设置
-    enable_payment: bool = True
-    default_payment_method: Optional[str] = None
-    payment_currency: str = "CNY"
-    
-    # 公告设置
-    enable_announcement: bool = True
-    announcement_position: str = "top"  # top, sidebar, popup
-    max_announcements: int = 5
-    
-    # 安全设置
-    enable_captcha: bool = False
+    available_themes: List[str] = ["default", "dark", "light"]
+    custom_css: Optional[str] = None
+    logo_url: Optional[str] = None
+    favicon_url: Optional[str] = None
+    primary_color: str = "#1677ff"
+    secondary_color: str = "#52c41a"
+
+class PaymentConfig(BaseModel):
+    enabled: bool = True
+    currency: str = "CNY"
+    alipay_enabled: bool = True
+    alipay_app_id: str = ""
+    alipay_private_key: str = ""
+    alipay_public_key: str = ""
+    wechat_enabled: bool = False
+    wechat_app_id: str = ""
+    wechat_mch_id: str = ""
+    wechat_key: str = ""
+    paypal_enabled: bool = False
+    paypal_client_id: str = ""
+    paypal_client_secret: str = ""
+
+class AnnouncementConfig(BaseModel):
+    enabled: bool = True
+    max_announcements: int = 10
+    auto_publish: bool = False
+    require_approval: bool = True
+    allow_html: bool = False
+    max_length: int = 1000
+
+class SecurityConfig(BaseModel):
+    jwt_secret_key: str = ""
+    jwt_algorithm: str = "HS256"
+    access_token_expire_minutes: int = 30
+    refresh_token_expire_days: int = 7
+    password_min_length: int = 6
+    password_require_special: bool = False
+    password_require_number: bool = True
+    password_require_uppercase: bool = False
     max_login_attempts: int = 5
-    lockout_duration: int = 30  # 分钟
-    session_timeout: int = 1440  # 分钟
-    
-    # 性能设置
-    enable_cache: bool = True
-    cache_duration: int = 3600  # 秒
+    lockout_duration: int = 30
+    session_timeout: int = 30
+    enable_captcha: bool = False
+    enable_2fa: bool = False
+
+class PerformanceConfig(BaseModel):
+    cache_enabled: bool = True
+    cache_type: str = "memory"
+    cache_timeout: int = 300
+    max_connections: int = 1000
+    workers: int = 4
     enable_compression: bool = True
-    max_upload_size: int = 10  # MB
+    enable_gzip: bool = True
+    static_file_cache: int = 3600
+    api_rate_limit: int = 100
+    api_rate_limit_window: int = 60
 
-# 配置更新模式
 class ConfigUpdateRequest(BaseModel):
-    category: str
-    configs: Dict[str, Any]
+    category: ConfigCategory
+    config: Dict[str, Any]
 
-# 配置初始化模式
-class ConfigInitRequest(BaseModel):
-    configs: List[SystemConfigCreate] 
+class ConfigTestRequest(BaseModel):
+    category: ConfigCategory
+    test_data: Dict[str, Any]
+
+class ConfigTestResponse(BaseModel):
+    success: bool
+    message: str
+    details: Optional[Dict[str, Any]] = None 

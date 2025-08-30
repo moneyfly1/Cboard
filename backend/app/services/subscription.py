@@ -2,11 +2,17 @@ from datetime import datetime, timedelta
 from typing import Optional, List, Tuple
 from sqlalchemy.orm import Session
 from sqlalchemy import func, and_, or_
+import secrets
+import string
+import yaml
+import base64
+from pathlib import Path
 
 from app.models.subscription import Subscription, Device
 from app.models.user import User
+from app.models.node import Node
 from app.schemas.subscription import SubscriptionCreate, SubscriptionUpdate
-from app.utils.security import generate_subscription_key
+from app.utils.security import generate_subscription_url
 
 class SubscriptionService:
     def __init__(self, db: Session):
@@ -24,7 +30,7 @@ class SubscriptionService:
         """创建订阅"""
         subscription = Subscription(
             user_id=subscription_in.user_id,
-            url=subscription_in.url,
+            subscription_url=subscription_in.subscription_url,
             device_limit=subscription_in.device_limit,
             expire_time=subscription_in.expire_time
         )
@@ -49,14 +55,16 @@ class SubscriptionService:
         self.db.refresh(subscription)
         return subscription
 
-    def update_subscription_key(self, subscription_id: int) -> bool:
+    def update_subscription_key(self, subscription_id: int, new_key: str = None) -> bool:
         """更新订阅密钥"""
         subscription = self.get(subscription_id)
         if not subscription:
             return False
         
-        new_key = generate_subscription_key()
-        subscription.url = new_key
+        if new_key is None:
+            new_key = generate_subscription_url()
+        
+        subscription.subscription_url = new_key
         self.db.commit()
         return True
 
@@ -100,11 +108,11 @@ class SubscriptionService:
             # 创建新设备记录
             device = Device(
                 subscription_id=subscription_id,
-                fingerprint=device_info["fingerprint"],
-                name=device_info.get("name", "未知设备"),
+                name=device_info.get("name", "Unknown Device"),
                 type=device_info.get("type", "unknown"),
-                ip=device_info.get("ip", ""),
+                ip=device_info.get("ip", "unknown"),
                 user_agent=device_info.get("user_agent", ""),
+                fingerprint=device_info["fingerprint"],
                 last_access=datetime.utcnow()
             )
             
@@ -131,152 +139,157 @@ class SubscriptionService:
         self.db.commit()
         return True
 
-    def get_device_count(self, subscription_id: int) -> int:
-        """获取设备数量"""
-        return self.db.query(Device).filter(Device.subscription_id == subscription_id).count()
-
-    def is_device_limit_reached(self, subscription_id: int) -> bool:
-        """检查是否达到设备限制"""
+    def check_device_limit(self, subscription_id: int) -> bool:
+        """检查设备数量限制"""
         subscription = self.get(subscription_id)
         if not subscription:
-            return True
+            return False
         
-        device_count = self.get_device_count(subscription_id)
-        return device_count >= subscription.device_limit
+        device_count = self.db.query(Device).filter(Device.subscription_id == subscription_id).count()
+        return device_count < subscription.device_limit
 
-    def get_expiring_subscriptions(self, days: int = 7) -> List[Subscription]:
-        """获取即将过期的订阅"""
-        cutoff_date = datetime.utcnow() + timedelta(days=days)
+    def get_active_subscriptions(self) -> List[Subscription]:
+        """获取所有有效订阅"""
+        now = datetime.utcnow()
         return self.db.query(Subscription).filter(
-            and_(
-                Subscription.expire_time <= cutoff_date,
-                Subscription.expire_time > datetime.utcnow()
+            or_(
+                Subscription.expire_time.is_(None),
+                Subscription.expire_time > now
             )
         ).all()
 
     def get_expired_subscriptions(self) -> List[Subscription]:
-        """获取已过期的订阅"""
+        """获取所有过期订阅"""
+        now = datetime.utcnow()
         return self.db.query(Subscription).filter(
-            Subscription.expire_time <= datetime.utcnow()
+            and_(
+                Subscription.expire_time.isnot(None),
+                Subscription.expire_time <= now
+            )
         ).all()
-
-    def extend_subscription(self, subscription_id: int, days: int) -> bool:
-        """延长订阅"""
-        subscription = self.get(subscription_id)
-        if not subscription:
-            return False
-        
-        if subscription.expire_time and subscription.expire_time > datetime.utcnow():
-            # 从当前到期时间延长
-            subscription.expire_time = subscription.expire_time + timedelta(days=days)
-        else:
-            # 从当前时间开始计算
-            subscription.expire_time = datetime.utcnow() + timedelta(days=days)
-        
-        self.db.commit()
-        return True
 
     def get_subscription_stats(self) -> dict:
         """获取订阅统计信息"""
-        total_subscriptions = self.count()
-        active_subscriptions = self.count_active()
-        expired_subscriptions = self.count_expired()
-        expiring_soon = self.count_expiring_soon(7)
+        total = self.db.query(Subscription).count()
+        active = len(self.get_active_subscriptions())
+        expired = len(self.get_expired_subscriptions())
         
         return {
-            "total": total_subscriptions,
-            "active": active_subscriptions,
-            "expired": expired_subscriptions,
-            "expiring_soon": expiring_soon
+            "total": total,
+            "active": active,
+            "expired": expired,
+            "active_rate": (active / total * 100) if total > 0 else 0
         }
 
-    def count(self) -> int:
-        """统计订阅总数"""
-        return self.db.query(Subscription).count()
-
-    def count_active(self) -> int:
-        """统计活跃订阅数量"""
-        return self.db.query(Subscription).filter(
-            Subscription.expire_time > datetime.utcnow()
-        ).count()
-
-    def count_expired(self) -> int:
-        """统计过期订阅数量"""
-        return self.db.query(Subscription).filter(
-            Subscription.expire_time <= datetime.utcnow()
-        ).count()
-
-    def count_expiring_soon(self, days: int = 7) -> int:
-        """统计即将过期的订阅数量"""
-        cutoff_date = datetime.utcnow() + timedelta(days=days)
-        return self.db.query(Subscription).filter(
-            and_(
-                Subscription.expire_time <= cutoff_date,
-                Subscription.expire_time > datetime.utcnow()
-            )
-        ).count()
-
-    def count_total_devices(self) -> int:
-        """统计总设备数量"""
-        return self.db.query(Device).count()
-
-    def count_online_devices(self) -> int:
-        """统计在线设备数量（24小时内访问过）"""
-        cutoff_date = datetime.utcnow() - timedelta(hours=24)
-        return self.db.query(Device).filter(
-            Device.last_access >= cutoff_date
-        ).count()
-
-    def reset_subscription(self, subscription_id: int) -> bool:
-        """重置订阅"""
-        subscription = self.get(subscription_id)
-        if not subscription:
-            return False
+    def generate_ssr_subscription(self, subscription: Subscription) -> str:
+        """生成SSR订阅内容"""
+        # 获取所有可用节点
+        nodes = self.db.query(Node).filter(Node.is_active == True).all()
         
-        # 生成新的订阅密钥
-        new_key = generate_subscription_key()
-        subscription.url = new_key
+        if not nodes:
+            return "# 暂无可用节点"
         
-        # 删除所有设备
-        self.delete_devices_by_subscription_id(subscription_id)
+        ssr_lines = []
+        for node in nodes:
+            # 生成SSR链接格式
+            ssr_url = self._generate_ssr_url(node, subscription)
+            ssr_lines.append(ssr_url)
         
-        self.db.commit()
-        return True
+        return "\n".join(ssr_lines)
 
-    def get_subscriptions_with_pagination(
-        self, 
-        skip: int = 0, 
-        limit: int = 100,
-        search: Optional[str] = None,
-        status: Optional[str] = None
-    ) -> Tuple[List[Subscription], int]:
-        """分页获取订阅列表"""
-        query = self.db.query(Subscription)
+    def generate_clash_subscription(self, subscription: Subscription) -> dict:
+        """生成Clash订阅内容"""
+        # 获取所有可用节点
+        nodes = self.db.query(Node).filter(Node.is_active == True).all()
         
-        # 搜索条件
-        if search:
-            query = query.join(User).filter(
-                or_(
-                    User.username.contains(search),
-                    User.email.contains(search)
-                )
-            )
+        if not nodes:
+            return {"error": "暂无可用节点"}
         
-        # 状态筛选
-        if status == "active":
-            query = query.filter(Subscription.expire_time > datetime.utcnow())
-        elif status == "expired":
-            query = query.filter(Subscription.expire_time <= datetime.utcnow())
-        elif status == "expiring_soon":
-            cutoff_date = datetime.utcnow() + timedelta(days=7)
-            query = query.filter(
-                and_(
-                    Subscription.expire_time <= cutoff_date,
-                    Subscription.expire_time > datetime.utcnow()
-                )
-            )
+        # 读取Clash模板配置
+        template_path = Path("uploads/config/clash.yaml")
+        if template_path.exists():
+            with open(template_path, 'r', encoding='utf-8') as f:
+                config = yaml.safe_load(f)
+        else:
+            # 使用默认配置
+            config = self._get_default_clash_config()
         
-        total = query.count()
-        subscriptions = query.offset(skip).limit(limit).order_by(Subscription.created_at.desc()).all()
+        # 添加节点到配置
+        proxies = []
+        proxy_names = []
         
-        return subscriptions, total 
+        for node in nodes:
+            proxy_config = self._generate_clash_proxy_config(node, subscription)
+            proxies.append(proxy_config)
+            proxy_names.append(node.name)
+        
+        config["proxies"] = proxies
+        
+        # 更新代理组
+        if "proxy-groups" in config:
+            for group in config["proxy-groups"]:
+                if group["type"] == "select":
+                    group["proxies"] = proxy_names
+        
+        return config
+
+    def _generate_ssr_url(self, node: Node, subscription: Subscription) -> str:
+        """生成SSR URL"""
+        # SSR URL格式: ssr://server:port:protocol:method:obfs:password/?obfsparam=&protoparam=&remarks=&group=
+        
+        # 基础参数
+        server = node.server
+        port = node.port
+        protocol = node.protocol or "origin"
+        method = node.method or "chacha20"
+        obfs = node.obfs or "plain"
+        password = node.password or ""
+        
+        # 特殊参数
+        obfsparam = node.obfs_param or ""
+        protoparam = node.protocol_param or ""
+        remarks = node.name
+        group = "XBoard"
+        
+        # 构建URL
+        ssr_str = f"{server}:{port}:{protocol}:{method}:{obfs}:{password}/?obfsparam={obfsparam}&protoparam={protoparam}&remarks={remarks}&group={group}"
+        
+        # Base64编码
+        return f"ssr://{base64.b64encode(ssr_str.encode()).decode()}"
+
+    def _generate_clash_proxy_config(self, node: Node, subscription: Subscription) -> dict:
+        """生成Clash代理配置"""
+        return {
+            "name": node.name,
+            "type": "ssr",
+            "server": node.server,
+            "port": node.port,
+            "cipher": node.method or "chacha20",
+            "password": node.password or "",
+            "protocol": node.protocol or "origin",
+            "protocol-param": node.protocol_param or "",
+            "obfs": node.obfs or "plain",
+            "obfs-param": node.obfs_param or ""
+        }
+
+    def _get_default_clash_config(self) -> dict:
+        """获取默认Clash配置"""
+        return {
+            "port": 7890,
+            "socks-port": 7891,
+            "allow-lan": True,
+            "mode": "Rule",
+            "log-level": "info",
+            "external-controller": ":9090",
+            "proxies": [],
+            "proxy-groups": [
+                {
+                    "name": "Proxy",
+                    "type": "select",
+                    "proxies": []
+                }
+            ],
+            "rules": [
+                "MATCH,Proxy"
+            ]
+        } 

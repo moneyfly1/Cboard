@@ -1,9 +1,11 @@
 from datetime import datetime, timedelta
 from typing import Any, List
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.orm import Session
 import secrets
 import string
+import base64
+from urllib.parse import quote
 
 from app.core.config import settings
 from app.core.database import get_db
@@ -11,8 +13,9 @@ from app.schemas.subscription import SubscriptionInDB, DeviceInDB
 from app.schemas.common import ResponseBase
 from app.services.subscription import SubscriptionService
 from app.services.user import UserService
-from app.utils.security import get_current_user
+from app.utils.security import get_current_user, generate_subscription_url
 from app.utils.email import send_subscription_email
+from app.utils.device import generate_device_fingerprint, detect_device_type, extract_device_name
 
 router = APIRouter()
 
@@ -89,7 +92,7 @@ def reset_subscription(
     subscription_service.delete_devices_by_subscription_id(subscription.id)
     
     # 生成新的订阅密钥
-    new_key = generate_subscription_key()
+    new_key = generate_subscription_url()
     subscription_service.update_subscription_key(subscription.id, new_key)
     
     return ResponseBase(message="订阅地址重置成功")
@@ -99,7 +102,7 @@ def send_subscription_email_endpoint(
     current_user = Depends(get_current_user),
     db: Session = Depends(get_db)
 ) -> Any:
-    """发送订阅地址到QQ邮箱"""
+    """发送订阅邮件"""
     subscription_service = SubscriptionService(db)
     
     # 获取用户订阅
@@ -118,16 +121,17 @@ def send_subscription_email_endpoint(
     # 发送邮件
     try:
         send_subscription_email(
-            to_email=current_user.email,
+            email=current_user.email,
             username=current_user.username,
             ssr_url=ssr_url,
-            clash_url=clash_url
+            clash_url=clash_url,
+            expire_time=subscription.expire_time
         )
-        return ResponseBase(message="订阅地址已发送到您的QQ邮箱")
+        return ResponseBase(message="订阅邮件发送成功")
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="发送邮件失败"
+            detail=f"邮件发送失败: {str(e)}"
         )
 
 @router.get("/devices", response_model=ResponseBase)
@@ -149,21 +153,17 @@ def get_user_devices(
     # 获取设备列表
     devices = subscription_service.get_devices_by_subscription_id(subscription.id)
     
-    return ResponseBase(
-        data={
-            "devices": [
-                {
-                    "id": device.id,
-                    "name": device.name,
-                    "type": device.type,
-                    "ip": device.ip,
-                    "user_agent": device.user_agent,
-                    "last_access": device.last_access.isoformat() if device.last_access else None
-                }
-                for device in devices
-            ]
-        }
-    )
+    device_list = []
+    for device in devices:
+        device_list.append({
+            "id": device.id,
+            "name": device.name,
+            "type": device.type,
+            "ip": device.ip,
+            "last_access": device.last_access.strftime('%Y-%m-%d %H:%M:%S') if device.last_access else None
+        })
+    
+    return ResponseBase(data={"devices": device_list})
 
 @router.delete("/devices/{device_id}", response_model=ResponseBase)
 def remove_device(
@@ -174,20 +174,20 @@ def remove_device(
     """移除设备"""
     subscription_service = SubscriptionService(db)
     
-    # 获取用户订阅
-    subscription = subscription_service.get_by_user_id(current_user.id)
-    if not subscription:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="未找到订阅信息"
-        )
-    
-    # 检查设备是否属于该用户
+    # 获取设备
     device = subscription_service.get_device(device_id)
-    if not device or device.subscription_id != subscription.id:
+    if not device:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="设备不存在"
+        )
+    
+    # 检查设备是否属于当前用户
+    subscription = subscription_service.get(device.subscription_id)
+    if not subscription or subscription.user_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="无权操作此设备"
         )
     
     # 删除设备
@@ -199,6 +199,7 @@ def remove_device(
 @router.get("/{subscription_id}/ssr")
 def get_ssr_subscription(
     subscription_id: int,
+    request: Request,
     db: Session = Depends(get_db)
 ) -> Any:
     """获取SSR订阅内容"""
@@ -220,14 +221,16 @@ def get_ssr_subscription(
         )
     
     # 记录设备访问
-    record_device_access(subscription, db)
+    record_device_access(subscription, request, db)
     
     # 返回SSR订阅内容
-    return generate_ssr_subscription(subscription)
+    ssr_content = subscription_service.generate_ssr_subscription(subscription)
+    return ResponseBase(data={"content": ssr_content})
 
 @router.get("/{subscription_id}/clash")
 def get_clash_subscription(
     subscription_id: int,
+    request: Request,
     db: Session = Depends(get_db)
 ) -> Any:
     """获取Clash订阅内容"""
@@ -249,33 +252,23 @@ def get_clash_subscription(
         )
     
     # 记录设备访问
-    record_device_access(subscription, db)
+    record_device_access(subscription, request, db)
     
     # 返回Clash订阅内容
-    return generate_clash_subscription(subscription)
-
-def generate_subscription_key() -> str:
-    """生成订阅密钥"""
-    return ''.join(secrets.choice(string.ascii_letters + string.digits) for _ in range(32))
+    clash_content = subscription_service.generate_clash_subscription(subscription)
+    return ResponseBase(data={"content": clash_content})
 
 def base64_encode(text: str) -> str:
     """Base64编码"""
-    import base64
     return base64.b64encode(text.encode()).decode()
 
 def urlencode(text: str) -> str:
     """URL编码"""
-    from urllib.parse import quote
     return quote(text)
 
-def record_device_access(subscription, db: Session):
+def record_device_access(subscription, request: Request, db: Session):
     """记录设备访问"""
-    from app.utils.device import generate_device_fingerprint, detect_device_type, extract_device_name
-    from app.services.subscription import SubscriptionService
-    
-    # 获取请求信息
-    from fastapi import Request
-    request = Request.get_current()
+    subscription_service = SubscriptionService(db)
     
     user_agent = request.headers.get("user-agent", "")
     client_ip = request.client.host if request.client else "unknown"
@@ -286,62 +279,13 @@ def record_device_access(subscription, db: Session):
     device_name = extract_device_name(user_agent)
     
     # 记录设备访问
-    subscription_service = SubscriptionService(db)
     subscription_service.record_device_access(
         subscription_id=subscription.id,
-        fingerprint=fingerprint,
-        name=device_name,
-        type=device_type,
-        ip=client_ip,
-        user_agent=user_agent
-    )
-
-def generate_ssr_subscription(subscription):
-    """生成SSR订阅内容"""
-    # 这里应该根据实际的节点配置生成SSR订阅内容
-    # 示例格式
-    nodes = [
-        "ssr://example.com:443:origin:chacha20:plain:base64password/?obfsparam=&protoparam=&remarks=Example&group=Default"
-    ]
-    return "\n".join(nodes)
-
-def generate_clash_subscription(subscription):
-    """生成Clash订阅内容"""
-    # 这里应该根据实际的节点配置生成Clash订阅内容
-    # 示例格式
-    import yaml
-    
-    config = {
-        "port": 7890,
-        "socks-port": 7891,
-        "allow-lan": True,
-        "mode": "Rule",
-        "log-level": "info",
-        "external-controller": ":9090",
-        "proxies": [
-            {
-                "name": "Example",
-                "type": "ssr",
-                "server": "example.com",
-                "port": 443,
-                "cipher": "chacha20",
-                "password": "password",
-                "protocol": "origin",
-                "protocol-param": "",
-                "obfs": "plain",
-                "obfs-param": ""
-            }
-        ],
-        "proxy-groups": [
-            {
-                "name": "Proxy",
-                "type": "select",
-                "proxies": ["Example"]
-            }
-        ],
-        "rules": [
-            "MATCH,Proxy"
-        ]
-    }
-    
-    return yaml.dump(config, allow_unicode=True) 
+        device_info={
+            "fingerprint": fingerprint,
+            "name": device_name,
+            "type": device_type,
+            "ip": client_ip,
+            "user_agent": user_agent
+        }
+    ) 

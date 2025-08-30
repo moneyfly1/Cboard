@@ -1,0 +1,744 @@
+#!/bin/bash
+
+# XBoard Modern 完整安装脚本
+# 支持自动环境检测和智能安装
+
+set -e
+
+# 颜色定义
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+# 日志函数
+log_info() {
+    echo -e "${BLUE}[INFO]${NC} $1"
+}
+
+log_success() {
+    echo -e "${GREEN}[✓]${NC} $1"
+}
+
+log_warning() {
+    echo -e "${YELLOW}[!]${NC} $1"
+}
+
+log_error() {
+    echo -e "${RED}[✗]${NC} $1"
+}
+
+# 检测操作系统和架构
+detect_os_and_arch() {
+    log_info "检测操作系统和架构..."
+    
+    OS=$(uname -s)
+    ARCH=$(uname -m)
+    
+    case $OS in
+        Linux)
+            if [ -f /etc/os-release ]; then
+                . /etc/os-release
+                OS_NAME=$NAME
+                OS_VERSION=$VERSION_ID
+            else
+                OS_NAME="Linux"
+                OS_VERSION="unknown"
+            fi
+            ;;
+        Darwin)
+            OS_NAME="macOS"
+            OS_VERSION=$(sw_vers -productVersion)
+            ;;
+        MINGW*|MSYS*|CYGWIN*)
+            OS_NAME="Windows"
+            OS_VERSION="unknown"
+            ;;
+        *)
+            OS_NAME="Unknown"
+            OS_VERSION="unknown"
+            ;;
+    esac
+    
+    log_success "操作系统: $OS_NAME $OS_VERSION"
+    log_success "架构: $ARCH"
+}
+
+# 获取项目路径
+get_project_path() {
+    if [ -n "$1" ]; then
+        PROJECT_PATH="$1"
+    else
+        # 智能检测项目路径
+        CURRENT_DIR=$(pwd)
+        SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+        
+        log_info "当前工作目录: $CURRENT_DIR"
+        log_info "脚本所在目录: $SCRIPT_DIR"
+        
+        # 策略1: 检查当前目录是否就是项目根目录（包含backend、frontend等目录）
+        if [ -d "backend" ] && [ -d "frontend" ] && [ -f "backend/requirements.txt" ]; then
+            PROJECT_PATH="$CURRENT_DIR"
+            log_info "检测到当前目录为项目根目录"
+        # 策略2: 检查当前目录是否包含xboard-modern子目录
+        elif [ -d "xboard-modern" ]; then
+            PROJECT_PATH="$CURRENT_DIR/xboard-modern"
+            log_info "检测到xboard-modern子目录"
+        # 策略3: 检查脚本目录是否在项目内
+        elif [ -d "$SCRIPT_DIR/backend" ] && [ -d "$SCRIPT_DIR/frontend" ]; then
+            PROJECT_PATH="$SCRIPT_DIR"
+            log_info "检测到脚本在项目目录内"
+        # 策略4: 检查脚本目录的父目录是否包含项目
+        elif [ -d "$(dirname "$SCRIPT_DIR")/backend" ] && [ -d "$(dirname "$SCRIPT_DIR")/frontend" ]; then
+            PROJECT_PATH="$(dirname "$SCRIPT_DIR")"
+            log_info "检测到项目在脚本父目录"
+        # 策略5: 递归查找项目目录
+        else
+            log_info "尝试递归查找项目目录..."
+            FOUND_PATH=""
+            
+            # 从当前目录开始向上查找
+            SEARCH_DIR="$CURRENT_DIR"
+            while [ "$SEARCH_DIR" != "/" ] && [ -n "$SEARCH_DIR" ]; do
+                if [ -d "$SEARCH_DIR/backend" ] && [ -d "$SEARCH_DIR/frontend" ] && [ -f "$SEARCH_DIR/backend/requirements.txt" ]; then
+                    FOUND_PATH="$SEARCH_DIR"
+                    break
+                fi
+                SEARCH_DIR=$(dirname "$SEARCH_DIR")
+            done
+            
+            if [ -n "$FOUND_PATH" ]; then
+                PROJECT_PATH="$FOUND_PATH"
+                log_info "递归查找到项目目录: $PROJECT_PATH"
+            else
+                log_error "无法找到项目目录"
+                log_info "请确保在以下任一位置运行脚本："
+                log_info "1. 项目根目录（包含backend和frontend目录）"
+                log_info "2. 包含xboard-modern子目录的目录"
+                log_info "3. 项目目录的父目录"
+                exit 1
+            fi
+        fi
+    fi
+    
+    # 验证项目路径
+    if [ ! -d "$PROJECT_PATH" ]; then
+        log_error "项目路径不存在: $PROJECT_PATH"
+        exit 1
+    fi
+    
+    # 验证项目结构
+    if [ ! -d "$PROJECT_PATH/backend" ] || [ ! -d "$PROJECT_PATH/frontend" ] || [ ! -f "$PROJECT_PATH/backend/requirements.txt" ]; then
+        log_error "项目结构不完整: $PROJECT_PATH"
+        log_info "项目应包含: backend/, frontend/, backend/requirements.txt"
+        exit 1
+    fi
+    
+    log_success "项目路径: $PROJECT_PATH"
+    cd "$PROJECT_PATH"
+}
+
+# 安装系统依赖
+install_system_deps() {
+    log_info "安装系统依赖..."
+    
+    case $OS_NAME in
+        *Ubuntu*|*Debian*)
+            apt update
+            apt install -y python3 python3-dev python3-venv python3-pip build-essential curl git nginx wget
+            log_info "跳过启动现有服务，避免与宝塔面板冲突"
+            ;;
+        *CentOS*|*Red*Hat*|*Fedora*)
+            yum update -y
+            yum install -y python3 python3-devel python3-pip gcc curl git nginx wget
+            log_info "跳过启动现有服务，避免与宝塔面板冲突"
+            ;;
+        *Arch*)
+            pacman -Syu --noconfirm python python-pip base-devel curl git nginx wget
+            log_info "跳过启动现有服务，避免与宝塔面板冲突"
+            ;;
+        macOS)
+            if ! command -v brew &> /dev/null; then
+                log_info "安装 Homebrew..."
+                /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+            fi
+            brew install python3 node nginx
+            ;;
+        *)
+            log_warning "未知操作系统，请手动安装依赖"
+            ;;
+    esac
+    
+    # 安装 Node.js (如果未安装)
+    if ! command -v node &> /dev/null; then
+        log_info "安装 Node.js..."
+        case $OS_NAME in
+            *Ubuntu*|*Debian*)
+                curl -fsSL https://deb.nodesource.com/setup_18.x | bash -
+                apt install -y nodejs
+                ;;
+            *CentOS*|*Red*Hat*|*Fedora*)
+                curl -fsSL https://rpm.nodesource.com/setup_18.x | bash -
+                yum install -y nodejs
+                ;;
+            *Arch*)
+                pacman -S --noconfirm nodejs npm
+                ;;
+            macOS)
+                brew install node
+                ;;
+        esac
+    fi
+    
+    log_success "系统依赖安装完成"
+}
+
+# 设置Python环境
+setup_python_env() {
+    log_info "设置Python环境..."
+    
+    if [ ! -d "venv" ]; then
+        python3 -m venv venv
+        log_success "虚拟环境创建成功"
+    else
+        log_info "虚拟环境已存在"
+    fi
+    
+    source venv/bin/activate
+    
+    # 升级pip
+    pip install --upgrade pip
+    
+    log_success "Python环境设置完成"
+}
+
+# 安装Python依赖
+install_python_deps() {
+    log_info "安装Python依赖..."
+    
+    source venv/bin/activate
+    
+    # 检查requirements.txt文件是否存在
+    if [ ! -f "backend/requirements.txt" ]; then
+        log_error "找不到 backend/requirements.txt 文件"
+        log_info "当前目录: $(pwd)"
+        log_info "目录内容:"
+        ls -la
+        if [ -d "backend" ]; then
+            log_info "backend目录内容:"
+            ls -la backend/
+        fi
+        exit 1
+    fi
+    
+    # 安装依赖
+    pip install -r backend/requirements.txt
+    
+    log_success "Python依赖安装完成"
+}
+
+# 验证Python依赖
+check_python_deps() {
+    log_info "验证关键依赖..."
+    
+    source venv/bin/activate
+    
+    # 检查关键包
+    python -c "import fastapi, uvicorn, sqlalchemy, pydantic" 2>/dev/null || {
+        log_error "关键依赖验证失败"
+        return 1
+    }
+    
+    log_success "关键依赖验证成功"
+}
+
+# 创建必要目录
+create_directories() {
+    log_info "创建必要目录..."
+    
+    mkdir -p uploads
+    mkdir -p logs
+    mkdir -p backend/static
+    mkdir -p backend/templates
+    
+    log_success "目录创建完成"
+}
+
+# 修复前端文件
+fix_frontend_files() {
+    log_info "修复前端文件..."
+    
+    # 确保所有必要的目录存在
+    mkdir -p frontend/src/views/admin
+    mkdir -p frontend/src/components/layout
+    mkdir -p frontend/src/utils
+    mkdir -p frontend/src/store
+    mkdir -p frontend/src/styles
+    
+    # 创建缺失的样式文件
+    if [ ! -f "frontend/src/styles/main.scss" ]; then
+        cat > frontend/src/styles/main.scss << 'EOF'
+// 全局样式
+@import './global.scss';
+
+// 主题变量
+:root {
+  --primary-color: #1677ff;
+  --success-color: #52c41a;
+  --warning-color: #faad14;
+  --error-color: #ff4d4f;
+  --text-color: #333;
+  --text-color-secondary: #666;
+  --border-color: #d9d9d9;
+  --background-color: #f5f5f5;
+}
+
+// 响应式设计
+@media (max-width: 768px) {
+  .el-card {
+    margin-bottom: 15px;
+  }
+  
+  .el-form-item {
+    margin-bottom: 15px;
+  }
+}
+EOF
+    fi
+    
+    log_success "前端文件修复完成"
+}
+
+# 安装前端依赖
+install_frontend_deps() {
+    log_info "安装前端依赖..."
+    
+    cd frontend
+    
+    # 安装依赖
+    npm install
+    
+    log_success "前端依赖安装完成"
+    cd ..
+}
+
+# 构建前端
+build_frontend() {
+    log_info "构建前端..."
+    
+    cd frontend
+    
+    # 快速修复依赖问题
+    log_info "检查并修复依赖问题..."
+    
+    # 确保chart.js已安装
+    if ! npm list chart.js > /dev/null 2>&1; then
+        log_info "安装chart.js..."
+        npm install chart.js@^4.4.0
+    fi
+    
+    # 检查其他依赖
+    local deps=("qrcode" "dayjs" "clipboard")
+    for dep in "${deps[@]}"; do
+        if ! npm list "$dep" > /dev/null 2>&1; then
+            log_info "安装 $dep..."
+            npm install "$dep"
+        fi
+    done
+    
+    # 清理缓存
+    log_info "清理缓存..."
+    rm -rf node_modules/.cache
+    rm -rf dist
+    
+    # 检查语法错误
+    log_info "检查语法错误..."
+    if npm run lint 2>/dev/null; then
+        log_success "语法检查通过"
+    else
+        log_warning "发现语法问题，但继续构建..."
+    fi
+    
+    # 构建
+    log_info "开始构建..."
+    npm run build
+    
+    log_success "前端构建完成"
+    cd ..
+}
+
+# 配置数据库
+configure_database() {
+    log_info "配置数据库..."
+    
+    echo "请选择数据库类型:"
+    echo "1) SQLite (推荐用于开发)"
+    echo "2) MySQL"
+    echo "3) PostgreSQL"
+    read -p "请输入选择 (1-3): " db_choice
+    
+    case $db_choice in
+        1)
+            DATABASE_TYPE="sqlite"
+            DATABASE_URL="sqlite:///./xboard.db"
+            ;;
+        2)
+            DATABASE_TYPE="mysql"
+            read -p "请输入MySQL主机 (默认: localhost): " mysql_host
+            mysql_host=${mysql_host:-localhost}
+            read -p "请输入MySQL端口 (默认: 3306): " mysql_port
+            mysql_port=${mysql_port:-3306}
+            read -p "请输入MySQL数据库名: " mysql_db
+            read -p "请输入MySQL用户名: " mysql_user
+            read -s -p "请输入MySQL密码: " mysql_password
+            echo
+            DATABASE_URL="mysql+pymysql://$mysql_user:$mysql_password@$mysql_host:$mysql_port/$mysql_db"
+            ;;
+        3)
+            DATABASE_TYPE="postgresql"
+            read -p "请输入PostgreSQL主机 (默认: localhost): " pg_host
+            pg_host=${pg_host:-localhost}
+            read -p "请输入PostgreSQL端口 (默认: 5432): " pg_port
+            pg_port=${pg_port:-5432}
+            read -p "请输入PostgreSQL数据库名: " pg_db
+            read -p "请输入PostgreSQL用户名: " pg_user
+            read -s -p "请输入PostgreSQL密码: " pg_password
+            echo
+            DATABASE_URL="postgresql://$pg_user:$pg_password@$pg_host:$pg_port/$pg_db"
+            ;;
+        *)
+            log_error "无效选择"
+            exit 1
+            ;;
+    esac
+    
+    log_success "数据库配置完成"
+}
+
+# 配置管理员账户
+configure_admin() {
+    log_info "配置管理员账户..."
+    
+    read -p "请输入管理员邮箱 (QQ邮箱): " admin_email
+    read -s -p "请输入管理员密码: " admin_password
+    echo
+    read -s -p "请确认管理员密码: " admin_password_confirm
+    echo
+    
+    if [ "$admin_password" != "$admin_password_confirm" ]; then
+        log_error "密码不匹配"
+        exit 1
+    fi
+    
+    ADMIN_EMAIL=$admin_email
+    ADMIN_PASSWORD=$admin_password
+    
+    log_success "管理员账户配置完成"
+}
+
+# 配置邮件服务
+configure_email() {
+    log_info "配置邮件服务..."
+    
+    read -p "请输入SMTP服务器 (例如: smtp.qq.com): " smtp_host
+    read -p "请输入SMTP端口 (默认: 587): " smtp_port
+    smtp_port=${smtp_port:-587}
+    read -p "请输入邮箱地址: " email_username
+    read -s -p "请输入邮箱密码/授权码: " email_password
+    echo
+    read -p "请输入发件人名称: " sender_name
+    
+    SMTP_HOST=$smtp_host
+    SMTP_PORT=$smtp_port
+    EMAIL_USERNAME=$email_username
+    EMAIL_PASSWORD=$email_password
+    SENDER_NAME=$sender_name
+    
+    log_success "邮件服务配置完成"
+}
+
+# 生成环境配置文件
+generate_env_file() {
+    log_info "生成环境配置文件..."
+    
+    cat > .env << EOF
+# 数据库配置
+DATABASE_TYPE=$DATABASE_TYPE
+DATABASE_URL=$DATABASE_URL
+
+# 应用配置
+APP_NAME=XBoard Modern
+APP_VERSION=1.0.0
+DEBUG=false
+SECRET_KEY=$(openssl rand -hex 32)
+
+# 管理员配置
+ADMIN_EMAIL=$ADMIN_EMAIL
+ADMIN_PASSWORD=$ADMIN_PASSWORD
+
+# 邮件配置
+SMTP_HOST=$SMTP_HOST
+SMTP_PORT=$SMTP_PORT
+EMAIL_USERNAME=$EMAIL_USERNAME
+EMAIL_PASSWORD=$EMAIL_PASSWORD
+SENDER_NAME=$SENDER_NAME
+
+# 缓存配置
+CACHE_TYPE=memory
+CACHE_DEFAULT_TIMEOUT=300
+
+# 安全配置
+CORS_ORIGINS=["http://localhost:3000", "http://localhost:8080"]
+JWT_SECRET_KEY=$(openssl rand -hex 32)
+JWT_ALGORITHM=HS256
+ACCESS_TOKEN_EXPIRE_MINUTES=30
+REFRESH_TOKEN_EXPIRE_DAYS=7
+
+# 文件上传配置
+UPLOAD_DIR=uploads
+MAX_FILE_SIZE=10485760
+
+# 日志配置
+LOG_LEVEL=INFO
+LOG_FILE=logs/xboard.log
+
+# 支付配置
+ALIPAY_APP_ID=
+ALIPAY_PRIVATE_KEY=
+ALIPAY_PUBLIC_KEY=
+WECHAT_APP_ID=
+WECHAT_MCH_ID=
+WECHAT_KEY=
+PAYPAL_CLIENT_ID=
+PAYPAL_CLIENT_SECRET=
+
+# 主题配置
+DEFAULT_THEME=default
+THEME_DIR=themes
+
+# 通知配置
+ENABLE_EMAIL_NOTIFICATIONS=true
+ENABLE_PUSH_NOTIFICATIONS=false
+
+# 性能配置
+WORKERS=4
+MAX_CONNECTIONS=1000
+EOF
+    
+    log_success "环境配置文件生成完成"
+}
+
+# 初始化数据库
+init_database() {
+    log_info "初始化数据库..."
+    
+    source venv/bin/activate
+    
+    cd backend
+    python -c "
+from app.core.database import engine
+from app.models import Base
+Base.metadata.create_all(bind=engine)
+print('数据库初始化完成')
+"
+    cd ..
+    
+    log_success "数据库初始化完成"
+}
+
+# 创建系统服务 (仅Linux)
+create_systemd_service() {
+    if [ "$OS_NAME" != "Linux" ]; then
+        log_info "跳过系统服务创建 (非Linux系统)"
+        return
+    fi
+    
+    log_info "创建系统服务..."
+    
+    cat > /etc/systemd/system/xboard-backend.service << EOF
+[Unit]
+Description=XBoard Backend Service
+After=network.target
+
+[Service]
+Type=exec
+User=www-data
+Group=www-data
+WorkingDirectory=$PROJECT_PATH
+Environment=PATH=$PROJECT_PATH/venv/bin
+ExecStart=$PROJECT_PATH/venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
+EOF
+    
+    systemctl daemon-reload
+    systemctl enable xboard-backend
+    
+    log_success "系统服务创建完成"
+}
+
+# 配置Nginx (仅Linux)
+configure_nginx() {
+    if [ "$OS_NAME" != "Linux" ]; then
+        log_info "跳过Nginx配置 (非Linux系统)"
+        return
+    fi
+    
+    log_info "配置Nginx..."
+    
+    cat > /etc/nginx/sites-available/xboard << EOF
+server {
+    listen 80;
+    server_name _;
+    
+    # 前端静态文件
+    location / {
+        root $PROJECT_PATH/frontend/dist;
+        try_files \$uri \$uri/ /index.html;
+    }
+    
+    # API代理
+    location /api/ {
+        proxy_pass http://127.0.0.1:8000;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+    }
+    
+    # 静态文件
+    location /static/ {
+        alias $PROJECT_PATH/backend/static/;
+    }
+    
+    # 上传文件
+    location /uploads/ {
+        alias $PROJECT_PATH/uploads/;
+    }
+}
+EOF
+    
+    # 启用站点
+    ln -sf /etc/nginx/sites-available/xboard /etc/nginx/sites-enabled/
+    
+    # 验证配置
+    nginx -t
+    
+    log_success "Nginx配置完成"
+}
+
+# 启动服务 (仅Linux)
+start_services() {
+    if [ "$OS_NAME" != "Linux" ]; then
+        log_info "跳过服务启动 (非Linux系统)"
+        return
+    fi
+    
+    log_info "启动服务..."
+    
+    systemctl start xboard-backend
+    
+    log_success "服务启动完成"
+}
+
+# 显示安装结果
+show_result() {
+    log_success "安装完成！"
+    echo
+    echo "=== 安装信息 ==="
+    echo "项目路径: $PROJECT_PATH"
+    echo "数据库类型: $DATABASE_TYPE"
+    echo "管理员邮箱: $ADMIN_EMAIL"
+    echo
+    echo "=== 访问地址 ==="
+    echo "前端: http://localhost"
+    echo "API文档: http://localhost/api/docs"
+    echo
+    echo "=== 管理命令 ==="
+    echo "启动后端: systemctl start xboard-backend"
+    echo "停止后端: systemctl stop xboard-backend"
+    echo "查看状态: systemctl status xboard-backend"
+    echo "查看日志: journalctl -u xboard-backend -f"
+    echo
+    echo "=== 宝塔面板用户注意 ==="
+    echo "1. 请确保Nginx配置正确"
+    echo "2. 如需重启Nginx，请在宝塔面板中操作"
+    echo "3. 后端服务已设置为开机自启"
+    echo
+    echo "=== 开发模式启动 ==="
+    echo "cd $PROJECT_PATH"
+    echo "source venv/bin/activate"
+    echo "cd backend && uvicorn app.main:app --reload --host 0.0.0.0 --port 8000"
+}
+
+# 主安装流程
+main() {
+    echo "=================================="
+    echo "    XBoard Modern 安装程序"
+    echo "=================================="
+    echo
+    
+    # 获取项目路径
+    get_project_path "$1"
+    
+    # 检测环境
+    detect_os_and_arch
+    
+    # 安装系统依赖
+    install_system_deps
+    
+    # 设置Python环境
+    setup_python_env
+    
+    # 安装Python依赖
+    install_python_deps
+    
+    # 验证依赖
+    check_python_deps
+    
+    # 创建目录
+    create_directories
+    
+    # 修复前端文件
+    fix_frontend_files
+    
+    # 安装前端依赖
+    install_frontend_deps
+    
+    # 构建前端
+    build_frontend
+    
+    # 配置数据库
+    configure_database
+    
+    # 配置管理员
+    configure_admin
+    
+    # 配置邮件
+    configure_email
+    
+    # 生成环境文件
+    generate_env_file
+    
+    # 初始化数据库
+    init_database
+    
+    # 创建系统服务
+    create_systemd_service
+    
+    # 配置Nginx
+    configure_nginx
+    
+    # 启动服务
+    start_services
+    
+    # 显示结果
+    show_result
+}
+
+# 运行主程序
+main "$@" 

@@ -1,186 +1,382 @@
-# XBoard Modern - 高性能面板系统
+# XBoard Modern
 
-## 📖 项目简介
+一个现代化的订阅管理系统，基于 Python FastAPI + Vue 3 构建。
 
-XBoard Modern 是一个基于现代技术栈构建的高性能面板系统，采用前后端分离架构，提供完整的用户管理、订阅管理、支付系统、主题管理等功能。
+## 功能特性
 
-## 🚀 技术栈
+### 用户端功能
+- 🔐 用户认证（QQ邮箱注册、登录、密码重置）
+- 📱 订阅管理（查看状态、重置地址、设备管理）
+- 💳 套餐购买（多种支付方式）
+- 📊 订单记录
+- 🌐 节点列表
+- 📧 邮件通知
+- 🎨 主题切换
+
+### 管理端功能
+- 👥 用户管理（增删改查、批量操作）
+- 📦 订阅管理（状态管理、设备监控）
+- 💰 订单管理
+- 🎯 套餐管理
+- ⚙️ 系统设置（统一配置中心）
+- 📈 数据统计
+- 📢 通知管理
+- 🔧 配置管理
+
+## 技术栈
 
 ### 后端
-- **框架**: Python + FastAPI
-- **数据库**: SQLite (开发) / PostgreSQL (生产)
-- **ORM**: SQLAlchemy
-- **认证**: JWT
-- **邮件**: SMTP
-- **缓存**: Redis
+- **Python 3.8+**
+- **FastAPI** - 现代化Web框架
+- **SQLAlchemy** - ORM
+- **Pydantic** - 数据验证
+- **JWT** - 身份认证
+- **SQLite/MySQL/PostgreSQL** - 数据库
+- **Uvicorn** - ASGI服务器
 
 ### 前端
-- **框架**: Vue 3 + Composition API
-- **路由**: Vue Router 4
-- **状态管理**: Pinia
-- **UI组件**: Element Plus
-- **构建工具**: Vite
-- **样式**: SCSS
+- **Vue 3** - 渐进式框架
+- **Element Plus** - UI组件库
+- **Vite** - 构建工具
+- **Vue Router 4** - 路由管理
+- **Pinia** - 状态管理
+- **Axios** - HTTP客户端
 
 ### 部署
-- **容器化**: Docker + Docker Compose
-- **反向代理**: Nginx
-- **进程管理**: Uvicorn
+- **Docker** - 容器化
+- **Nginx** - 反向代理
+- **Systemd** - 服务管理
 
-## 📁 项目结构
+## 快速开始
+
+### 系统要求
+
+- Python 3.8+
+- Node.js 16+
+- 数据库（SQLite/MySQL/PostgreSQL）
+
+### 自动安装
+
+#### Linux/macOS
+```bash
+# 下载项目
+git clone https://github.com/moneyfly1/xboard.git
+cd xboard/xboard-modern
+
+# 运行安装脚本
+chmod +x install_complete.sh
+./install_complete.sh
+```
+
+#### Windows
+```cmd
+# 下载项目
+git clone https://github.com/moneyfly1/xboard.git
+cd xboard\xboard-modern
+
+# 运行安装脚本
+install_windows.bat
+```
+
+### 手动安装
+
+1. **克隆项目**
+```bash
+git clone https://github.com/moneyfly1/xboard.git
+cd xboard/xboard-modern
+```
+
+2. **安装后端依赖**
+```bash
+# 创建虚拟环境
+python3 -m venv venv
+source venv/bin/activate  # Linux/macOS
+# 或
+venv\Scripts\activate.bat  # Windows
+
+# 安装依赖
+pip install -r backend/requirements.txt
+```
+
+3. **安装前端依赖**
+```bash
+cd frontend
+npm install
+npm run build
+cd ..
+```
+
+4. **配置环境变量**
+```bash
+cp .env.example .env
+# 编辑 .env 文件，配置数据库、邮件等信息
+```
+
+5. **初始化数据库**
+```bash
+cd backend
+python -c "from app.core.database import engine; from app.models import Base; Base.metadata.create_all(bind=engine)"
+cd ..
+```
+
+6. **启动服务**
+```bash
+# 开发模式
+cd backend
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+
+# 生产模式
+uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4
+```
+
+## 配置说明
+
+### 环境变量
+
+创建 `.env` 文件并配置以下变量：
+
+```env
+# 数据库配置
+DATABASE_TYPE=sqlite
+DATABASE_URL=sqlite:///./xboard.db
+
+# 应用配置
+APP_NAME=XBoard Modern
+SECRET_KEY=your-secret-key-here
+
+# 管理员配置
+ADMIN_EMAIL=admin@example.com
+ADMIN_PASSWORD=your-password
+
+# 邮件配置
+SMTP_HOST=smtp.qq.com
+SMTP_PORT=587
+EMAIL_USERNAME=your-email@qq.com
+EMAIL_PASSWORD=your-password
+SENDER_NAME=XBoard
+
+# 缓存配置
+CACHE_TYPE=memory
+CACHE_DEFAULT_TIMEOUT=300
+
+# 安全配置
+JWT_SECRET_KEY=your-jwt-secret
+ACCESS_TOKEN_EXPIRE_MINUTES=30
+REFRESH_TOKEN_EXPIRE_DAYS=7
+
+# 支付配置
+ALIPAY_APP_ID=your-alipay-app-id
+ALIPAY_PRIVATE_KEY=your-alipay-private-key
+ALIPAY_PUBLIC_KEY=your-alipay-public-key
+```
+
+### 数据库配置
+
+#### SQLite（推荐开发环境）
+```env
+DATABASE_TYPE=sqlite
+DATABASE_URL=sqlite:///./xboard.db
+```
+
+#### MySQL
+```env
+DATABASE_TYPE=mysql
+DATABASE_URL=mysql+pymysql://user:password@localhost:3306/xboard
+```
+
+#### PostgreSQL
+```env
+DATABASE_TYPE=postgresql
+DATABASE_URL=postgresql://user:password@localhost:5432/xboard
+```
+
+### 邮件配置
+
+#### QQ邮箱
+```env
+SMTP_HOST=smtp.qq.com
+SMTP_PORT=587
+EMAIL_USERNAME=your-qq@qq.com
+EMAIL_PASSWORD=your-authorization-code
+```
+
+#### 163邮箱
+```env
+SMTP_HOST=smtp.163.com
+SMTP_PORT=587
+EMAIL_USERNAME=your-email@163.com
+EMAIL_PASSWORD=your-authorization-code
+```
+
+## 部署指南
+
+### Docker部署
+
+1. **构建镜像**
+```bash
+docker build -t xboard-modern .
+```
+
+2. **运行容器**
+```bash
+docker run -d \
+  --name xboard \
+  -p 8000:8000 \
+  -v $(pwd)/uploads:/app/uploads \
+  -v $(pwd)/logs:/app/logs \
+  xboard-modern
+```
+
+### 宝塔面板部署
+
+1. **上传项目文件到网站目录**
+2. **运行安装脚本**
+```bash
+cd /www/wwwroot/your-domain
+chmod +x install_complete.sh
+./install_complete.sh
+```
+
+3. **配置Nginx反向代理**
+```nginx
+location /api/ {
+    proxy_pass http://127.0.0.1:8000;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+}
+```
+
+### 系统服务
+
+创建systemd服务文件：
+
+```ini
+[Unit]
+Description=XBoard Backend Service
+After=network.target
+
+[Service]
+Type=exec
+User=www-data
+Group=www-data
+WorkingDirectory=/path/to/xboard-modern
+Environment=PATH=/path/to/xboard-modern/venv/bin
+ExecStart=/path/to/xboard-modern/venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
+```
+
+启用服务：
+```bash
+sudo systemctl enable xboard-backend
+sudo systemctl start xboard-backend
+```
+
+## API文档
+
+启动服务后，访问以下地址查看API文档：
+
+- Swagger UI: http://localhost:8000/docs
+- ReDoc: http://localhost:8000/redoc
+
+## 开发指南
+
+### 项目结构
 
 ```
 xboard-modern/
 ├── backend/                 # 后端代码
-│   ├── app/                # 应用代码
-│   │   ├── api/           # API接口
-│   │   ├── core/          # 核心配置
-│   │   ├── models/        # 数据模型
-│   │   ├── schemas/       # 数据验证
-│   │   ├── services/      # 业务逻辑
-│   │   └── utils/         # 工具函数
-│   ├── main.py            # 应用入口
-│   └── requirements.txt   # 依赖包
+│   ├── app/
+│   │   ├── api/            # API路由
+│   │   ├── core/           # 核心配置
+│   │   ├── models/         # 数据模型
+│   │   ├── schemas/        # 数据验证
+│   │   ├── services/       # 业务逻辑
+│   │   └── utils/          # 工具函数
+│   ├── requirements.txt    # Python依赖
+│   └── main.py            # 应用入口
 ├── frontend/               # 前端代码
-│   ├── src/               # 源代码
-│   │   ├── components/    # 组件
-│   │   ├── views/         # 页面
-│   │   ├── store/         # 状态管理
-│   │   ├── router/        # 路由
-│   │   ├── utils/         # 工具函数
-│   │   └── styles/        # 样式文件
-│   ├── package.json       # 依赖配置
-│   └── vite.config.js     # 构建配置
-├── nginx/                  # Nginx配置
+│   ├── src/
+│   │   ├── components/     # 组件
+│   │   ├── views/          # 页面
+│   │   ├── router/         # 路由
+│   │   ├── store/          # 状态管理
+│   │   └── utils/          # 工具函数
+│   ├── package.json        # Node.js依赖
+│   └── vite.config.js      # Vite配置
 ├── docs/                   # 文档
-├── docker-compose.yml      # Docker编排
-├── env.example            # 环境变量示例
-├── dev.sh                 # 开发环境启动脚本
-└── start.sh               # 生产环境启动脚本
+├── install_complete.sh     # Linux安装脚本
+├── install_windows.bat     # Windows安装脚本
+└── uninstall.sh           # 卸载脚本
 ```
 
-## ✨ 主要功能
+### 开发模式
 
-### 用户管理
-- 用户注册/登录
-- 邮箱验证
-- 密码重置
-- 用户资料管理
-- 权限控制
+1. **启动后端**
+```bash
+cd backend
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+```
 
-### 订阅管理
-- 订阅创建/续费
-- 设备管理
-- 流量统计
-- 到期提醒
+2. **启动前端**
+```bash
+cd frontend
+npm run dev
+```
 
-### 支付系统
-- 多支付方式支持
-- 支付宝/微信支付
-- PayPal/Stripe
-- 加密货币支付
-- 支付回调处理
+### 代码规范
 
-### 管理后台
-- 用户管理
-- 订阅管理
-- 订单管理
-- 套餐管理
-- 系统设置
-- 数据统计
+- 后端使用 `black` 格式化代码
+- 前端使用 `prettier` 格式化代码
+- 遵循 PEP 8 和 Vue 3 官方规范
 
-### 主题系统
-- 多主题支持
-- 动态主题切换
+## 常见问题
+
+### Q: 安装时遇到依赖问题？
+A: 确保使用Python 3.8+和Node.js 16+，对于ARM架构，脚本会自动适配兼容版本。
+
+### Q: 邮件发送失败？
+A: 检查SMTP配置，确保使用正确的授权码而非登录密码。
+
+### Q: 数据库连接失败？
+A: 检查数据库配置，确保数据库服务正在运行。
+
+### Q: 前端构建失败？
+A: 确保Node.js版本正确，清除node_modules后重新安装。
+
+### Q: 宝塔面板冲突？
+A: 安装脚本已优化，不会重启现有服务，避免与宝塔面板冲突。
+
+## 更新日志
+
+### v1.0.0
+- 初始版本发布
+- 完整的用户和管理功能
+- 支持多种数据库
 - 响应式设计
-- 移动端优化
+- 主题系统
 
-### 系统设置
-- 基本设置
-- 邮件配置
-- 支付配置
-- 主题配置
-- 安全设置
-- 性能优化
+## 贡献指南
 
-## 🛠️ 快速开始
+1. Fork 项目
+2. 创建功能分支
+3. 提交更改
+4. 推送到分支
+5. 创建 Pull Request
 
-### 环境要求
-- Python 3.8+
-- Node.js 16+
-- Docker & Docker Compose
-
-### 开发环境
-
-1. **克隆项目**
-```bash
-git clone <repository-url>
-cd xboard-modern
-```
-
-2. **启动开发环境**
-```bash
-./dev.sh
-```
-
-3. **访问应用**
-- 前端: http://localhost:3000
-- 后端API: http://localhost:8000
-- API文档: http://localhost:8000/docs
-
-### 生产环境
-
-1. **配置环境变量**
-```bash
-cp env.example .env
-# 编辑 .env 文件，配置数据库、邮件等
-```
-
-2. **启动生产环境**
-```bash
-./start.sh
-```
-
-## 📚 文档
-
-详细文档请查看 `docs/` 目录：
-
-- [项目概述](docs/PROJECT_SUMMARY.md)
-- [后端开发总结](docs/BACKEND_DEVELOPMENT_SUMMARY.md)
-- [前端页面检查](docs/FRONTEND_PAGES_CHECK.md)
-- [支付系统总结](docs/PAYMENT_SYSTEM_SUMMARY.md)
-- [系统设置总结](docs/SYSTEM_SETTINGS_SUMMARY.md)
-- [主题优化总结](docs/THEME_OPTIMIZATION_SUMMARY.md)
-- [项目结构优化](docs/PROJECT_STRUCTURE_OPTIMIZATION.md)
-
-## 🔧 配置说明
-
-### 环境变量
-- `DATABASE_URL`: 数据库连接地址
-- `SECRET_KEY`: JWT密钥
-- `SMTP_HOST`: SMTP服务器地址
-- `SMTP_PORT`: SMTP端口
-- `SMTP_USERNAME`: SMTP用户名
-- `SMTP_PASSWORD`: SMTP密码
-
-### 系统设置
-系统支持通过管理后台动态配置：
-- 网站基本信息
-- 注册设置
-- 邮件配置
-- 支付配置
-- 主题设置
-- 安全设置
-- 性能优化
-
-## 🤝 贡献
-
-欢迎提交 Issue 和 Pull Request！
-
-## 📄 许可证
+## 许可证
 
 MIT License
 
-## 📞 支持
+## 支持
 
-如有问题，请提交 Issue 或联系开发团队。 
+如有问题，请提交 Issue 或联系开发者。
+
+---
+
+**XBoard Modern** - 现代化的订阅管理系统 
