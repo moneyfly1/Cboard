@@ -1,11 +1,11 @@
 from .user import User
 from .subscription import Subscription, Device
 from .order import Order, Package
-from .email import EmailQueue
+from .email import EmailQueue, EmailTemplate
 from .node import Node
-from .payment import PaymentTransaction, PaymentConfig
+from .payment import PaymentTransaction, PaymentConfig, PaymentCallback
 from .notification import Notification
-from .config import SystemConfig
+from .config import SystemConfig, Announcement, ThemeConfig
 
 # 设置关系
 from sqlalchemy.orm import relationship
@@ -45,9 +45,13 @@ __all__ = [
     "Order",
     "Package", 
     "EmailQueue",
+    "EmailTemplate",
     "Node",
     "PaymentTransaction",
     "PaymentConfig",
+    "PaymentCallback",
     "Notification",
-    "SystemConfig"
+    "SystemConfig",
+    "Announcement",
+    "ThemeConfig"
 ] 

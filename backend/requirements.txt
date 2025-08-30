@@ -67,4 +67,7 @@ flake8
 isort
 
 # 监控和性能
-prometheus-client 
+prometheus-client
+
+# 用户代理解析
+user-agents 

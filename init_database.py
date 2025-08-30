@@ -20,7 +20,7 @@ from backend.app.core.config import settings
 from backend.app.models import (
     User, Subscription, Device, Order, Package, 
     EmailQueue, Notification, EmailTemplate,
-    SystemConfig, NodeConfig, PaymentConfig,
+    SystemConfig, PaymentConfig,
     PaymentTransaction, PaymentCallback,
     Announcement, ThemeConfig
 )

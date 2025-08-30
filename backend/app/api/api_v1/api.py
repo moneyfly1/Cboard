@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 
-from app.api.api_v1.endpoints import auth, users, subscriptions, orders, packages, nodes, admin, notifications, config, statistics
+from app.api.api_v1.endpoints import auth, users, subscriptions, orders, packages, nodes, admin, notifications, config, statistics, payment, settings
 
 api_router = APIRouter()
 
@@ -16,4 +16,6 @@ api_router.include_router(nodes.router, prefix="/nodes", tags=["节点"])
 api_router.include_router(admin.router, prefix="/admin", tags=["管理端"])
 api_router.include_router(notifications.router, prefix="/notifications", tags=["通知"])
 api_router.include_router(config.router, prefix="/config", tags=["配置"])
-api_router.include_router(statistics.router, prefix="/statistics", tags=["统计"]) 
+api_router.include_router(statistics.router, prefix="/statistics", tags=["统计"])
+api_router.include_router(payment.router, prefix="/payment", tags=["支付"])
+api_router.include_router(settings.router, prefix="/settings", tags=["设置"]) 
