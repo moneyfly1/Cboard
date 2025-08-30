@@ -418,6 +418,17 @@ EOF
         fi
     fi
     
+    # 修复模型导入问题
+    log_info "修复模型导入问题..."
+    
+    # 确保models/__init__.py中正确导入EmailTemplate
+    if [ -f "../backend/app/models/__init__.py" ]; then
+        if ! grep -q "from .notification import EmailTemplate" ../backend/app/models/__init__.py; then
+            # 修复EmailTemplate导入
+            sed -i 's/from .email import EmailQueue, EmailTemplate/from .email import EmailQueue\nfrom .notification import EmailTemplate/' ../backend/app/models/__init__.py
+        fi
+    fi
+    
     # 更新sass版本
     log_info "更新sass版本..."
     npm install sass@latest

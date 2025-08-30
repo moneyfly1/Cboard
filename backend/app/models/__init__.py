@@ -1,7 +1,8 @@
 from .user import User
 from .subscription import Subscription, Device
 from .order import Order, Package
-from .email import EmailQueue, EmailTemplate
+from .email import EmailQueue
+from .notification import EmailTemplate
 from .node import Node
 from .payment import PaymentTransaction, PaymentConfig, PaymentCallback
 from .notification import Notification
