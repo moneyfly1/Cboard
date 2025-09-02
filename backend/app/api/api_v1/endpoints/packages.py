@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.schemas.order import PackageInDB
+from app.schemas.package import Package
 from app.schemas.common import ResponseBase
 from app.services.package import PackageService
 from app.utils.security import get_current_user
@@ -25,11 +25,12 @@ def get_packages(
                     "id": pkg.id,
                     "name": pkg.name,
                     "price": pkg.price,
-                    "duration": pkg.duration,
+                    "duration_days": pkg.duration_days,
                     "device_limit": pkg.device_limit,
                     "description": pkg.description,
-                    "is_recommended": pkg.is_recommended,
-                    "is_popular": pkg.is_popular
+                    "is_active": pkg.is_active,
+                    "sort_order": getattr(pkg, 'sort_order', 1),
+                    "bandwidth_limit": getattr(pkg, 'bandwidth_limit', None)
                 }
                 for pkg in packages
             ]
@@ -57,12 +58,10 @@ def get_package(
                 "id": package.id,
                 "name": package.name,
                 "price": package.price,
-                "duration": package.duration,
+                "duration_days": package.duration_days,
                 "device_limit": package.device_limit,
                 "description": package.description,
-                "is_recommended": package.is_recommended,
-                "is_popular": package.is_popular,
-                "features": package.features
+                "is_active": package.is_active
             }
         }
     ) 

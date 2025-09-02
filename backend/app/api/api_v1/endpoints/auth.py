@@ -1,9 +1,10 @@
 from datetime import timedelta
 from typing import Any
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request, Form
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 import re
+from pydantic import BaseModel
 
 from app.core.config import settings
 from app.core.database import get_db
@@ -14,13 +15,19 @@ from app.utils.security import create_access_token, create_refresh_token
 
 router = APIRouter()
 
-def validate_qq_email(email: str) -> bool:
-    """验证是否为QQ邮箱"""
-    qq_pattern = r'^\d+@qq\.com$'
-    return bool(re.match(qq_pattern, email))
+# 添加一个支持JSON格式的登录模型
+class LoginRequest(BaseModel):
+    username: str
+    password: str
 
-def extract_qq_number(email: str) -> str:
-    """从QQ邮箱中提取QQ号码"""
+def validate_email(email: str) -> bool:
+    """验证邮箱格式"""
+    import re
+    email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+    return bool(re.match(email_pattern, email))
+
+def extract_username(email: str) -> str:
+    """从邮箱中提取用户名"""
     return email.split('@')[0]
 
 @router.post("/register", response_model=ResponseBase)
@@ -28,75 +35,108 @@ def register(
     user_in: UserCreate,
     db: Session = Depends(get_db)
 ) -> Any:
-    """用户注册 - 只允许QQ邮箱注册"""
+    """用户注册 - 支持任意邮箱注册"""
     user_service = UserService(db)
     
     # 验证邮箱格式
-    if not validate_qq_email(user_in.email):
+    if not validate_email(user_in.email):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="只允许使用QQ邮箱注册"
+            detail="邮箱格式不正确"
         )
     
-    # 提取QQ号码作为用户名
-    qq_number = extract_qq_number(user_in.email)
-    user_in.username = qq_number
+    # 提取用户名
+    username = extract_username(user_in.email)
+    user_in.username = username
     
     # 检查用户是否已存在
-    if user_service.get_by_username(qq_number):
+    if user_service.get_by_username(username):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="该QQ号码已被注册"
+            detail="该用户名已被注册"
         )
     
     if user_service.get_by_email(user_in.email):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="该QQ邮箱已被注册"
+            detail="该邮箱已被注册"
         )
     
     # 创建用户
     user = user_service.create(user_in)
     
     return ResponseBase(
-        message="注册成功，请查收QQ邮箱验证邮件",
-        data={"user_id": user.id, "qq": qq_number}
+        message="注册成功，请查收邮箱验证邮件",
+        data={"user_id": user.id, "username": username}
     )
 
 @router.post("/login", response_model=Token)
 def login(
     form_data: OAuth2PasswordRequestForm = Depends(),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    request: Request = None
 ) -> Any:
-    """用户登录 - 支持QQ号码或QQ邮箱登录"""
+    """用户登录 - 支持用户名或邮箱登录"""
     user_service = UserService(db)
     
-    # 判断输入的是QQ号码还是邮箱
+    # 判断输入的是用户名还是邮箱
     login_identifier = form_data.username
     if '@' in login_identifier:
         # 邮箱登录
         user = user_service.authenticate_by_email(login_identifier, form_data.password)
     else:
-        # QQ号码登录
+        # 用户名登录
         user = user_service.authenticate(login_identifier, form_data.password)
     
     if not user:
+        # 登录失败时不记录用户活动，因为user_id为None
+        # 可以选择记录到系统日志或跳过
+        pass
+        
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="QQ号码或密码错误",
+            detail="用户名或密码错误",
             headers={"WWW-Authenticate": "Bearer"},
         )
     
     if not user.is_active:
+        # 记录失败的登录尝试
+        if request:
+            user_service.log_user_activity(
+                user_id=user.id,
+                activity_type="login_failed",
+                description="登录失败: 账户已被禁用",
+                ip_address=request.client.host if request.client else None,
+                user_agent=request.headers.get("user-agent")
+            )
+        
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="账户已被禁用"
         )
     
-    if not user.is_verified:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="请先验证QQ邮箱"
+    # 临时禁用邮箱验证检查
+    # if not user.is_verified:
+    #     raise HTTPException(
+    #         status_code=status.HTTP_400_BAD_REQUEST,
+    #         detail="请先验证QQ邮箱"
+    #     )
+    
+    # 记录成功的登录
+    if request:
+        user_service.log_login(
+            user_id=user.id,
+            ip_address=request.client.host if request.client else None,
+            user_agent=request.headers.get("user-agent"),
+            login_status="success"
+        )
+        
+        user_service.log_user_activity(
+            user_id=user.id,
+            activity_type="login_success",
+            description="用户登录成功",
+            ip_address=request.client.host if request.client else None,
+            user_agent=request.headers.get("user-agent")
         )
     
     # 更新最后登录时间
@@ -118,7 +158,100 @@ def login(
         access_token=access_token,
         token_type="bearer",
         expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
-        refresh_token=refresh_token
+        refresh_token=refresh_token,
+        user=user
+    )
+
+@router.post("/login-json", response_model=Token)
+def login_json(
+    login_data: LoginRequest,
+    db: Session = Depends(get_db),
+    request: Request = None
+) -> Any:
+    """用户登录 - JSON格式，支持用户名或邮箱登录"""
+    user_service = UserService(db)
+    
+    # 判断输入的是用户名还是邮箱
+    login_identifier = login_data.username
+    if '@' in login_identifier:
+        # 邮箱登录
+        user = user_service.authenticate_by_email(login_identifier, login_data.password)
+    else:
+        # 用户名登录
+        user = user_service.authenticate(login_identifier, login_data.password)
+    
+    if not user:
+        # 登录失败时不记录用户活动，因为user_id为None
+        # 可以选择记录到系统日志或跳过
+        pass
+        
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="用户名或密码错误",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    
+    if not user.is_active:
+        # 记录失败的登录尝试
+        if request:
+            user_service.log_user_activity(
+                user_id=user.id,
+                activity_type="login_failed",
+                description="登录失败: 账户已被禁用",
+                ip_address=request.client.host if request.client else None,
+                user_agent=request.headers.get("user-agent")
+            )
+        
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="账户已被禁用"
+        )
+    
+    # 临时禁用邮箱验证检查
+    # if not user.is_verified:
+    #     raise HTTPException(
+    #         status_code=status.HTTP_400_BAD_REQUEST,
+    #         detail="请先验证QQ邮箱"
+    #     )
+    
+    # 记录成功的登录
+    if request:
+        user_service.log_login(
+            user_id=user.id,
+            ip_address=request.client.host if request.client else None,
+            user_agent=request.headers.get("user-agent"),
+            login_status="success"
+        )
+        
+        user_service.log_user_activity(
+            user_id=user.id,
+            activity_type="login_success",
+            description="用户登录成功",
+            ip_address=request.client.host if request.client else None,
+            user_agent=request.headers.get("user-agent")
+        )
+    
+    # 更新最后登录时间
+    user_service.update_last_login(user.id)
+    
+    # 创建访问令牌
+    access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token = create_access_token(
+        data={"sub": user.username, "user_id": user.id},
+        expires_delta=access_token_expires
+    )
+    
+    # 创建刷新令牌
+    refresh_token = create_refresh_token(
+        data={"sub": user.username, "user_id": user.id}
+    )
+    
+    return Token(
+        access_token=access_token,
+        token_type="bearer",
+        expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        refresh_token=refresh_token,
+        user=user
     )
 
 @router.post("/refresh", response_model=Token)

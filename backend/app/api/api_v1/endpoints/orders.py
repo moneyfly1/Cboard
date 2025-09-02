@@ -13,7 +13,7 @@ from app.utils.security import get_current_user, generate_order_no
 
 router = APIRouter()
 
-@router.post("/", response_model=ResponseBase)
+@router.post("/create", response_model=ResponseBase)
 def create_order(
     order_data: OrderCreate,
     current_user = Depends(get_current_user),
@@ -53,50 +53,87 @@ def create_order(
         }
     )
 
-@router.get("/user-orders", response_model=ResponseBase)
+@router.post("/", response_model=ResponseBase)
+def create_order_general(
+    order_data: OrderCreate,
+    current_user = Depends(get_current_user),
+    db: Session = Depends(get_db)
+) -> Any:
+    """创建订单（通用端点）"""
+    return create_order(order_data, current_user, db)
+
+@router.get("/", response_model=ResponseBase)
 def get_user_orders(
     page: int = Query(1, ge=1),
     size: int = Query(20, ge=1, le=100),
+    status: str = Query("", description="订单状态筛选"),
+    payment_method: str = Query("", description="支付方式筛选"),
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user)
 ) -> Any:
     """获取用户订单列表"""
-    order_service = OrderService(db)
-    
-    # 计算偏移量
-    skip = (page - 1) * size
-    
-    # 获取订单列表
-    orders, total = order_service.get_user_orders(
-        user_id=current_user.id,
-        skip=skip,
-        limit=size
-    )
-    
-    return ResponseBase(
-        data={
-            "orders": [
-                {
+    try:
+        order_service = OrderService(db)
+        
+        # 计算偏移量
+        skip = (page - 1) * size
+        
+        # 获取订单列表
+        orders, total = order_service.get_user_orders(
+            user_id=current_user.id,
+            skip=skip,
+            limit=size
+        )
+        
+        # 应用筛选
+        if status:
+            orders = [order for order in orders if order.status == status]
+        if payment_method:
+            orders = [order for order in orders if getattr(order, 'payment_method_name', '') == payment_method]
+        
+        order_list = []
+        for order in orders:
+            try:
+                order_data = {
                     "id": order.id,
                     "order_no": order.order_no,
                     "package_name": order.package.name if order.package else "未知套餐",
-                    "package_duration": order.package.duration if order.package else 0,
+                    "package_duration": order.package.duration_days if order.package else 0,
                     "package_device_limit": order.package.device_limit if order.package else 0,
-                    "amount": order.amount,
+                    "amount": float(order.amount) if order.amount else 0,
                     "status": order.status,
-                    "payment_method": order.payment_method,
-                    "created_at": order.created_at.isoformat(),
+                    "payment_method": getattr(order, 'payment_method_name', '未知'),
+                    "created_at": order.created_at.isoformat() if order.created_at else None,
                     "payment_time": order.payment_time.isoformat() if order.payment_time else None,
                     "expire_time": order.expire_time.isoformat() if order.expire_time else None
                 }
-                for order in orders
-            ],
-            "total": total,
-            "page": page,
-            "size": size,
-            "pages": (total + size - 1) // size
-        }
-    )
+                order_list.append(order_data)
+            except Exception as e:
+                # 如果单个订单处理失败，跳过它
+                print(f"处理订单 {order.id} 时出错: {e}")
+                continue
+        
+        return ResponseBase(
+            data={
+                "orders": order_list,
+                "total": total,
+                "page": page,
+                "size": size,
+                "pages": (total + size - 1) // size
+            }
+        )
+    except Exception as e:
+        # 如果发生错误，返回空订单列表
+        print(f"获取用户订单失败: {e}")
+        return ResponseBase(
+            data={
+                "orders": [],
+                "total": 0,
+                "page": page,
+                "size": size,
+                "pages": 0
+            }
+        )
 
 @router.get("/{order_no}/status", response_model=ResponseBase)
 def get_order_status(
@@ -183,4 +220,38 @@ def payment_notify(
     # 这里应该处理第三方支付平台的回调
     # 验证签名、更新订单状态等
     
-    return ResponseBase(message="success") 
+    return ResponseBase(message="success")
+
+@router.get("/stats", response_model=ResponseBase)
+def get_user_order_stats(
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+) -> Any:
+    """获取用户订单统计信息"""
+    try:
+        order_service = OrderService(db)
+        
+        # 获取所有用户订单
+        orders, total = order_service.get_user_orders(
+            user_id=current_user.id,
+            skip=0,
+            limit=1000  # 获取所有订单用于统计
+        )
+        
+        # 计算统计信息
+        total_amount = sum(float(order.amount) if order.amount else 0 for order in orders)
+        pending_count = len([order for order in orders if order.status == 'pending'])
+        paid_count = len([order for order in orders if order.status == 'paid'])
+        cancelled_count = len([order for order in orders if order.status == 'cancelled'])
+        
+        return ResponseBase(
+            data={
+                "total": total,
+                "pending": pending_count,
+                "paid": paid_count,
+                "cancelled": cancelled_count,
+                "totalAmount": total_amount
+            }
+        )
+    except Exception as e:
+        return ResponseBase(success=False, message=f"获取订单统计失败: {str(e)}") 

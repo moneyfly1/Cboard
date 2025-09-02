@@ -19,6 +19,7 @@ class Subscription(Base):
     # 关系
     user = relationship("User", back_populates="subscriptions")
     devices = relationship("Device", back_populates="subscription")
+    resets = relationship("SubscriptionReset", back_populates="subscription")
     
     def __repr__(self):
         return f"<Subscription(id={self.id}, user_id={self.user_id}, url='{self.subscription_url}')>"

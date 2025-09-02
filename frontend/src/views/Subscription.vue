@@ -43,7 +43,7 @@
       </div>
 
       <!-- 订阅地址 -->
-      <div class="subscription-urls">
+      <div class="subscription-urls" v-if="subscription && subscription.subscription_id">
         <h3>订阅地址</h3>
         <div class="url-list">
           <div class="url-item">
@@ -96,8 +96,53 @@
         </div>
       </div>
 
+      <!-- 无订阅状态提示 -->
+      <div class="no-subscription" v-else>
+        <el-empty description="您还没有订阅">
+          <el-button type="primary" @click="$router.push('/packages')">
+            立即订阅
+          </el-button>
+        </el-empty>
+      </div>
+
+      <!-- 订阅设置对话框 -->
+      <el-dialog v-model="showSettingsDialog" title="订阅设置" width="500px">
+        <el-form :model="subscriptionForm" label-width="120px">
+          <el-form-item label="设备数量限制">
+            <el-input-number 
+              v-model="subscriptionForm.device_limit" 
+              :min="1" 
+              :max="20"
+              :disabled="subscriptionForm.device_limit < subscription.currentDevices"
+            />
+            <div class="form-tip">
+              当前已使用 {{ subscription.currentDevices }} 个设备
+            </div>
+          </el-form-item>
+          
+          <el-form-item label="到期时间">
+            <el-date-picker
+              v-model="subscriptionForm.expire_time"
+              type="datetime"
+              placeholder="选择到期时间"
+              format="YYYY-MM-DD HH:mm:ss"
+              value-format="YYYY-MM-DD HH:mm:ss"
+            />
+          </el-form-item>
+        </el-form>
+        
+        <template #footer>
+          <span class="dialog-footer">
+            <el-button @click="showSettingsDialog = false">取消</el-button>
+            <el-button type="primary" @click="saveSubscriptionSettings" :loading="savingSettings">
+              保存设置
+            </el-button>
+          </span>
+        </template>
+      </el-dialog>
+
       <!-- 操作按钮 -->
-      <div class="subscription-actions">
+      <div class="subscription-actions" v-if="subscription && subscription.subscription_id">
         <el-button
           type="primary"
           size="large"
@@ -105,6 +150,14 @@
           :loading="resetLoading"
         >
           重置订阅地址
+        </el-button>
+        
+        <el-button
+          type="warning"
+          size="large"
+          @click="showSettingsDialog = true"
+        >
+          订阅设置
         </el-button>
         
         <el-button
@@ -165,12 +218,25 @@ export default {
     const devices = ref([])
     const resetLoading = ref(false)
     const devicesLoading = ref(false)
+    const showSettingsDialog = ref(false)
+    const savingSettings = ref(false)
+    const subscriptionForm = ref({
+      device_limit: 3,
+      expire_time: ''
+    })
 
     // 获取订阅信息
     const fetchSubscription = async () => {
       try {
         const response = await subscriptionAPI.getCurrentSubscription()
         subscription.value = response.data
+        
+        // 初始化订阅表单
+        if (subscription.value && subscription.value.subscription_id) {
+          subscriptionForm.value.device_limit = subscription.value.maxDevices || 3
+          subscriptionForm.value.expire_time = subscription.value.expiryDate || ''
+        }
+        
         generateQRCodes()
       } catch (error) {
         ElMessage.error('获取订阅信息失败')
@@ -226,6 +292,26 @@ export default {
         ElMessage.success('链接已复制到剪贴板')
       } catch (error) {
         ElMessage.error('复制失败')
+      }
+    }
+
+    // 保存订阅设置
+    const saveSubscriptionSettings = async () => {
+      try {
+        savingSettings.value = true
+        
+        await api.put('/subscriptions/user-subscription', subscriptionForm.value)
+        
+        ElMessage.success('订阅设置保存成功')
+        showSettingsDialog.value = false
+        
+        // 重新获取订阅信息
+        await fetchSubscription()
+      } catch (error) {
+        ElMessage.error('保存设置失败')
+        console.error('保存订阅设置失败:', error)
+      } finally {
+        savingSettings.value = false
       }
     }
 

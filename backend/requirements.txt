@@ -1,73 +1,35 @@
-# ================================
-# XBoard Modern 后端依赖包 (ARM兼容版)
-# ================================
-
-# Web框架
-fastapi
-uvicorn[standard]
-gunicorn
-
-# 数据库
-sqlalchemy
-alembic
+# 基础依赖
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+sqlalchemy==2.0.23
+alembic==1.12.1
+python-multipart==0.0.6
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+python-dotenv==1.0.0
+pydantic==2.5.0
+pydantic-settings==2.1.0
 
 # 数据库驱动
-pymysql
-psycopg2-binary
-aiosqlite
+pymysql==1.1.2
+psycopg2-binary==2.9.10
+aiosqlite==0.21.0
 
-# 认证和安全
-python-jose[cryptography]
-passlib[bcrypt]
-python-multipart
+# 邮件和模板相关
+jinja2==3.1.2
+email-validator==2.1.0
 
-# 邮件
-aiosmtplib
-email-validator
-
-# 缓存
-redis
-aioredis
-
-# 数据处理
-pydantic
-pydantic-settings
-
-# HTTP客户端
-httpx
-aiohttp
+# 异步和队列支持
+celery==5.3.4
+redis==6.4.0
 
 # 工具库
-python-dotenv
-python-dateutil
-pytz
+httpx==0.25.2
+watchfiles==0.21.0
+websockets==12.0
 
-# 日志
-loguru
-
-# 文件处理
-aiofiles
-Pillow
-
-# 支付相关
-cryptography
-pycryptodome
-
-# 二维码
-qrcode[pil]
-
-# 配置管理
-pyyaml
-
-# 开发工具
-pytest
-pytest-asyncio
-black
-flake8
-isort
-
-# 监控和性能
-prometheus-client
-
-# 用户代理解析
-user-agents 
+# 开发和测试
+pytest==7.4.3
+black==23.11.0
+flake8==6.1.0
+isort==5.12.0

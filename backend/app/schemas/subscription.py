@@ -7,6 +7,10 @@ class SubscriptionBase(BaseModel):
 
 class SubscriptionCreate(SubscriptionBase):
     user_id: int
+    package_name: Optional[str] = None
+    duration_days: Optional[int] = None
+    status: Optional[str] = "active"
+    expire_time: Optional[datetime] = None
 
 class SubscriptionUpdate(BaseModel):
     device_limit: Optional[int] = None

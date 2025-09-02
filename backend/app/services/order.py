@@ -3,8 +3,10 @@ from typing import Optional, List, Tuple
 from sqlalchemy.orm import Session
 from sqlalchemy import func, and_, or_
 
-from app.models.order import Order, Package
+from app.models.order import Order
+from app.models.package import Package
 from app.models.user import User
+from app.models.payment_config import PaymentConfig
 from app.schemas.order import OrderCreate, OrderUpdate
 from app.utils.security import generate_order_no
 
@@ -21,24 +23,41 @@ class OrderService:
         return self.db.query(Order).filter(Order.order_no == order_no).first()
 
     def create_order(
-        self, 
-        user_id: int, 
-        package_id: int, 
-        payment_method: str, 
-        amount: float
+        self,
+        user_id: int,
+        package_id: int,
+        payment_config_id: Optional[int] = None,
+        amount: float = None
     ) -> Order:
         """创建订单"""
         order_no = generate_order_no()
-        
+
+        # 获取套餐信息
+        package = self.db.query(Package).filter(Package.id == package_id).first()
+        if not package:
+            raise ValueError("套餐不存在")
+
+        # 如果没有指定金额，使用套餐价格
+        if amount is None:
+            amount = float(package.price)
+
+        # 获取支付配置信息
+        payment_method_name = None
+        if payment_config_id:
+            payment_config = self.db.query(PaymentConfig).filter(PaymentConfig.id == payment_config_id).first()
+            if payment_config:
+                payment_method_name = f"{payment_config.pay_type}({payment_config.app_id or '未配置'})"
+
         order = Order(
             order_no=order_no,
             user_id=user_id,
             package_id=package_id,
             amount=amount,
             status="pending",
-            payment_method=payment_method
+            payment_method_id=payment_config_id,
+            payment_method_name=payment_method_name
         )
-        
+
         self.db.add(order)
         self.db.commit()
         self.db.refresh(order)

@@ -22,30 +22,30 @@
           :rules="profileRules"
           label-width="120px"
         >
-          <el-form-item label="QQ号码" prop="username">
+          <el-form-item label="用户名" prop="username">
             <el-input 
               v-model="profileForm.username" 
               disabled
-              placeholder="QQ号码"
+              placeholder="用户名"
             >
               <template #prepend>
                 <i class="el-icon-user"></i>
               </template>
             </el-input>
-            <div class="form-tip">QQ号码不可修改</div>
+            <div class="form-tip">用户名不可修改</div>
           </el-form-item>
 
-          <el-form-item label="QQ邮箱" prop="email">
+          <el-form-item label="邮箱" prop="email">
             <el-input 
               v-model="profileForm.email" 
               disabled
-              placeholder="QQ邮箱"
+              placeholder="邮箱"
             >
               <template #prepend>
                 <i class="el-icon-message"></i>
               </template>
             </el-input>
-            <div class="form-tip">QQ邮箱不可修改</div>
+            <div class="form-tip">邮箱不可修改</div>
           </el-form-item>
 
           <el-form-item label="注册时间">
@@ -165,10 +165,10 @@
             <div class="security-info">
               <div class="security-title">
                 <i class="el-icon-message"></i>
-                QQ邮箱验证
+                邮箱验证
               </div>
               <div class="security-desc">
-                {{ userInfo.is_verified ? '您的QQ邮箱已验证' : '请验证您的QQ邮箱' }}
+                {{ userInfo.is_verified ? '您的邮箱已验证' : '请验证您的邮箱' }}
               </div>
             </div>
             <div class="security-action">
@@ -286,11 +286,11 @@ export default {
     // 表单验证规则
     const profileRules = {
       username: [
-        { required: true, message: '请输入QQ号码', trigger: 'blur' }
+        { required: true, message: '请输入用户名', trigger: 'blur' }
       ],
       email: [
-        { required: true, message: '请输入QQ邮箱', trigger: 'blur' },
-        { type: 'email', message: '请输入正确的QQ邮箱格式', trigger: 'blur' }
+        { required: true, message: '请输入邮箱', trigger: 'blur' },
+        { type: 'email', message: '请输入正确的邮箱格式', trigger: 'blur' }
       ]
     }
 
@@ -369,7 +369,7 @@ export default {
       emailLoading.value = true
       try {
         await authStore.sendVerificationEmail()
-        ElMessage.success('验证邮件已发送，请查收QQ邮箱')
+        ElMessage.success('验证邮件已发送，请查收邮箱')
       } catch (error) {
         ElMessage.error('发送验证邮件失败')
       } finally {

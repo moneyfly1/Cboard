@@ -1,45 +1,90 @@
 <template>
   <div class="orders-container">
-    <!-- 页面头部 -->
     <div class="page-header">
-      <h1>订单管理</h1>
-      <p>查看您的订单历史</p>
+      <h1>订单记录</h1>
+      <p>查看您的所有订单记录</p>
     </div>
 
     <!-- 订单统计 -->
-    <el-card class="stats-card">
-      <div class="stats-content">
-        <div class="stat-item">
-          <div class="stat-number">{{ orderStats.total }}</div>
-          <div class="stat-label">总订单数</div>
-        </div>
-        <div class="stat-item">
-          <div class="stat-number">{{ orderStats.paid }}</div>
-          <div class="stat-label">已支付</div>
-        </div>
-        <div class="stat-item">
-          <div class="stat-number">{{ orderStats.pending }}</div>
-          <div class="stat-label">待支付</div>
-        </div>
-        <div class="stat-item">
-          <div class="stat-number">{{ orderStats.cancelled }}</div>
-          <div class="stat-label">已取消</div>
-        </div>
-      </div>
+    <el-row :gutter="20" class="order-stats">
+      <el-col :span="6">
+        <el-card class="stat-card">
+          <div class="stat-content">
+            <div class="stat-number">{{ orderStats.total }}</div>
+            <div class="stat-label">总订单数</div>
+          </div>
+        </el-card>
+      </el-col>
+      <el-col :span="6">
+        <el-card class="stat-card">
+          <div class="stat-content">
+            <div class="stat-number">{{ orderStats.pending }}</div>
+            <div class="stat-label">待支付</div>
+          </div>
+        </el-card>
+      </el-col>
+      <el-col :span="6">
+        <el-card class="stat-card">
+          <div class="stat-content">
+            <div class="stat-number">{{ orderStats.paid }}</div>
+            <div class="stat-label">已支付</div>
+          </div>
+        </el-card>
+      </el-col>
+      <el-col :span="6">
+        <el-card class="stat-card">
+          <div class="stat-content">
+            <div class="stat-number">{{ orderStats.totalAmount }}</div>
+            <div class="stat-label">总金额(元)</div>
+          </div>
+        </el-card>
+      </el-col>
+    </el-row>
+
+    <!-- 筛选和搜索 -->
+    <el-card class="filter-card">
+      <el-row :gutter="20" align="middle">
+        <el-col :span="6">
+          <el-select v-model="filters.status" placeholder="订单状态" clearable>
+            <el-option label="全部状态" value="" />
+            <el-option label="待支付" value="pending" />
+            <el-option label="已支付" value="paid" />
+            <el-option label="已取消" value="cancelled" />
+            <el-option label="已退款" value="refunded" />
+            <el-option label="支付失败" value="failed" />
+          </el-select>
+        </el-col>
+        <el-col :span="6">
+          <el-select v-model="filters.payment_method" placeholder="支付方式" clearable>
+            <el-option label="全部方式" value="" />
+            <el-option label="支付宝" value="alipay" />
+            <el-option label="微信支付" value="wechat" />
+          </el-select>
+        </el-col>
+        <el-col :span="8">
+          <el-date-picker
+            v-model="filters.date_range"
+            type="daterange"
+            range-separator="至"
+            start-placeholder="开始日期"
+            end-placeholder="结束日期"
+            format="YYYY-MM-DD"
+            value-format="YYYY-MM-DD"
+          />
+        </el-col>
+        <el-col :span="4">
+          <el-button type="primary" @click="applyFilters">筛选</el-button>
+          <el-button @click="resetFilters">重置</el-button>
+        </el-col>
+      </el-row>
     </el-card>
 
     <!-- 订单列表 -->
-    <el-card class="orders-card">
+    <el-card class="orders-list">
       <template #header>
         <div class="card-header">
-          <i class="el-icon-document"></i>
-          订单列表
-          <el-button 
-            type="primary" 
-            size="small" 
-            @click="refreshOrders"
-            :loading="loading"
-          >
+          <span>订单列表</span>
+          <el-button type="primary" @click="refreshOrders">
             <i class="el-icon-refresh"></i>
             刷新
           </el-button>
@@ -48,72 +93,93 @@
 
       <el-table 
         :data="orders" 
-        v-loading="loading"
         style="width: 100%"
+        v-loading="isLoading"
+        :empty-text="emptyText"
       >
         <el-table-column prop="order_no" label="订单号" width="180">
-          <template #default="{ row }">
-            <span class="order-no">{{ row.order_no }}</span>
+          <template #default="scope">
+            <el-tag size="small" type="info">{{ scope.row.order_no }}</el-tag>
           </template>
         </el-table-column>
-
-        <el-table-column prop="package_name" label="套餐名称" min-width="150">
-          <template #default="{ row }">
-            <div class="package-info">
-              <span class="package-name">{{ row.package_name }}</span>
-              <span class="package-duration">{{ row.package_duration }}天</span>
-            </div>
-          </template>
-        </el-table-column>
-
+        
+        <el-table-column prop="package_name" label="套餐名称" />
+        
         <el-table-column prop="amount" label="金额" width="120">
-          <template #default="{ row }">
-            <span class="amount">¥{{ row.amount }}</span>
+          <template #default="scope">
+            <span class="amount">¥{{ scope.row.amount }}</span>
           </template>
         </el-table-column>
-
-        <el-table-column prop="status" label="状态" width="120">
-          <template #default="{ row }">
-            <el-tag :type="getStatusType(row.status)">
-              {{ getStatusName(row.status) }}
+        
+        <el-table-column prop="payment_method" label="支付方式" width="120">
+          <template #default="scope">
+            <el-tag 
+              :type="getPaymentMethodType(scope.row.payment_method)"
+              size="small"
+            >
+              {{ getPaymentMethodText(scope.row.payment_method) }}
             </el-tag>
           </template>
         </el-table-column>
-
-        <el-table-column prop="payment_method" label="支付方式" width="120">
-          <template #default="{ row }">
-            <span class="payment-method">{{ getPaymentMethodName(row.payment_method) }}</span>
+        
+        <el-table-column prop="status" label="状态" width="120">
+          <template #default="scope">
+            <el-tag 
+              :type="getOrderStatusType(scope.row.status)"
+              size="small"
+            >
+              {{ getOrderStatusText(scope.row.status) }}
+            </el-tag>
           </template>
         </el-table-column>
-
+        
         <el-table-column prop="created_at" label="创建时间" width="180">
-          <template #default="{ row }">
-            <span>{{ formatTime(row.created_at) }}</span>
+          <template #default="scope">
+            {{ formatDateTime(scope.row.created_at) }}
           </template>
         </el-table-column>
-
-        <el-table-column prop="payment_time" label="支付时间" width="180">
-          <template #default="{ row }">
-            <span>{{ row.payment_time ? formatTime(row.payment_time) : '-' }}</span>
+        
+        <el-table-column prop="paid_at" label="支付时间" width="180">
+          <template #default="scope">
+            {{ scope.row.paid_at ? formatDateTime(scope.row.paid_at) : '-' }}
           </template>
         </el-table-column>
-
-        <el-table-column label="操作" width="120" fixed="right">
-          <template #default="{ row }">
+        
+        <el-table-column label="操作" width="200" fixed="right">
+          <template #default="scope">
             <el-button 
-              type="primary" 
+              v-if="scope.row.status === 'pending'"
               size="small" 
-              @click="viewOrderDetail(row)"
+              type="primary"
+              @click="payOrder(scope.row)"
             >
-              详情
+              立即支付
             </el-button>
+            
             <el-button 
-              v-if="row.status === 'pending'"
-              type="warning" 
+              v-if="scope.row.status === 'pending'"
               size="small" 
-              @click="cancelOrder(row.id)"
+              @click="cancelOrder(scope.row)"
             >
-              取消
+              取消订单
+            </el-button>
+            
+            <el-button 
+              v-if="scope.row.status === 'paid'"
+              size="small" 
+              type="success"
+              @click="viewOrderDetail(scope.row)"
+            >
+              查看详情
+            </el-button>
+            
+            <el-button 
+              v-if="scope.row.status === 'paid'"
+              size="small" 
+              type="warning"
+              @click="applyRefund(scope.row)"
+            >
+              申请退款
             </el-button>
           </template>
         </el-table-column>
@@ -122,25 +188,15 @@
       <!-- 分页 -->
       <div class="pagination-wrapper">
         <el-pagination
-          v-model:current-page="currentPage"
-          v-model:page-size="pageSize"
+          v-model:current-page="pagination.current"
+          v-model:page-size="pagination.size"
           :page-sizes="[10, 20, 50, 100]"
-          :total="total"
+          :total="pagination.total"
           layout="total, sizes, prev, pager, next, jumper"
           @size-change="handleSizeChange"
           @current-change="handleCurrentChange"
         />
       </div>
-
-      <!-- 空状态 -->
-      <el-empty 
-        v-if="!loading && orders.length === 0" 
-        description="暂无订单记录"
-      >
-        <el-button type="primary" @click="$router.push('/packages')">
-          去购买套餐
-        </el-button>
-      </el-empty>
     </el-card>
 
     <!-- 订单详情对话框 -->
@@ -149,122 +205,226 @@
       title="订单详情"
       width="600px"
     >
-      <div class="order-detail" v-if="selectedOrder">
-        <div class="detail-item">
-          <span class="label">订单号：</span>
-          <span class="value">{{ selectedOrder.order_no }}</span>
-        </div>
-        <div class="detail-item">
-          <span class="label">套餐名称：</span>
-          <span class="value">{{ selectedOrder.package_name }}</span>
-        </div>
-        <div class="detail-item">
-          <span class="label">套餐时长：</span>
-          <span class="value">{{ selectedOrder.package_duration }} 天</span>
-        </div>
-        <div class="detail-item">
-          <span class="label">设备限制：</span>
-          <span class="value">{{ selectedOrder.package_device_limit }} 个</span>
-        </div>
-        <div class="detail-item">
-          <span class="label">订单金额：</span>
-          <span class="value amount">¥{{ selectedOrder.amount }}</span>
-        </div>
-        <div class="detail-item">
-          <span class="label">支付方式：</span>
-          <span class="value">{{ getPaymentMethodName(selectedOrder.payment_method) }}</span>
-        </div>
-        <div class="detail-item">
-          <span class="label">订单状态：</span>
-          <span class="value">
-            <el-tag :type="getStatusType(selectedOrder.status)">
-              {{ getStatusName(selectedOrder.status) }}
+      <div v-if="selectedOrder" class="order-detail">
+        <el-descriptions :column="2" border>
+          <el-descriptions-item label="订单号">{{ selectedOrder.order_no }}</el-descriptions-item>
+          <el-descriptions-item label="套餐名称">{{ selectedOrder.package_name }}</el-descriptions-item>
+          <el-descriptions-item label="订单金额">¥{{ selectedOrder.amount }}</el-descriptions-item>
+          <el-descriptions-item label="支付方式">{{ getPaymentMethodText(selectedOrder.payment_method) }}</el-descriptions-item>
+          <el-descriptions-item label="订单状态">
+            <el-tag :type="getOrderStatusType(selectedOrder.status)">
+              {{ getOrderStatusText(selectedOrder.status) }}
             </el-tag>
-          </span>
-        </div>
-        <div class="detail-item">
-          <span class="label">创建时间：</span>
-          <span class="value">{{ formatTime(selectedOrder.created_at) }}</span>
-        </div>
-        <div class="detail-item" v-if="selectedOrder.payment_time">
-          <span class="label">支付时间：</span>
-          <span class="value">{{ formatTime(selectedOrder.payment_time) }}</span>
-        </div>
-        <div class="detail-item" v-if="selectedOrder.expire_time">
-          <span class="label">到期时间：</span>
-          <span class="value">{{ formatTime(selectedOrder.expire_time) }}</span>
-        </div>
+          </el-descriptions-item>
+          <el-descriptions-item label="创建时间">{{ formatDateTime(selectedOrder.created_at) }}</el-descriptions-item>
+          <el-descriptions-item v-if="selectedOrder.paid_at" label="支付时间" :span="2">
+            {{ formatDateTime(selectedOrder.paid_at) }}
+          </el-descriptions-item>
+          <el-descriptions-item v-if="selectedOrder.payment_id" label="支付ID" :span="2">
+            {{ selectedOrder.payment_id }}
+          </el-descriptions-item>
+        </el-descriptions>
       </div>
+    </el-dialog>
+
+    <!-- 退款申请对话框 -->
+    <el-dialog
+      v-model="refundDialogVisible"
+      title="申请退款"
+      width="500px"
+    >
+      <el-form :model="refundForm" :rules="refundRules" ref="refundFormRef" label-width="100px">
+        <el-form-item label="退款金额" prop="amount">
+          <el-input 
+            v-model="refundForm.amount" 
+            type="number" 
+            :min="0" 
+            :max="selectedOrder?.amount"
+            step="0.01"
+          >
+            <template #prepend>¥</template>
+          </el-input>
+        </el-form-item>
+        
+        <el-form-item label="退款原因" prop="reason">
+          <el-select v-model="refundForm.reason" placeholder="请选择退款原因">
+            <el-option label="商品质量问题" value="quality_issue" />
+            <el-option label="服务不满意" value="service_unsatisfactory" />
+            <el-option label="重复购买" value="duplicate_purchase" />
+            <el-option label="其他原因" value="other" />
+          </el-select>
+        </el-form-item>
+        
+        <el-form-item label="详细说明" prop="description">
+          <el-input 
+            v-model="refundForm.description" 
+            type="textarea" 
+            :rows="4"
+            placeholder="请详细描述退款原因"
+          />
+        </el-form-item>
+      </el-form>
+      
+      <template #footer>
+        <span class="dialog-footer">
+          <el-button @click="refundDialogVisible = false">取消</el-button>
+          <el-button type="primary" @click="submitRefund" :loading="isSubmitting">
+            提交申请
+          </el-button>
+        </span>
+      </template>
     </el-dialog>
   </div>
 </template>
 
 <script>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { orderAPI } from '@/utils/api'
-import dayjs from 'dayjs'
+import { useApi } from '@/utils/api'
+import { formatDateTime } from '@/utils/date'
 
 export default {
   name: 'Orders',
   setup() {
-    const loading = ref(false)
+    const api = useApi()
+    
+    // 响应式数据
     const orders = ref([])
-    const currentPage = ref(1)
-    const pageSize = ref(20)
-    const total = ref(0)
-    const detailDialogVisible = ref(false)
-    const selectedOrder = ref(null)
-
-    const orderStats = reactive({
+    const isLoading = ref(false)
+    const orderStats = ref({
       total: 0,
-      paid: 0,
       pending: 0,
-      cancelled: 0
+      paid: 0,
+      totalAmount: 0
     })
-
-    // 获取订单列表
-    const fetchOrders = async () => {
-      loading.value = true
+    
+    // 筛选条件
+    const filters = reactive({
+      status: '',
+      payment_method: '',
+      date_range: []
+    })
+    
+    // 分页
+    const pagination = reactive({
+      current: 1,
+      size: 20,
+      total: 0
+    })
+    
+    // 对话框状态
+    const detailDialogVisible = ref(false)
+    const refundDialogVisible = ref(false)
+    const selectedOrder = ref(null)
+    
+    // 退款表单
+    const refundForm = reactive({
+      amount: 0,
+      reason: '',
+      description: ''
+    })
+    const refundRules = {
+      amount: [
+        { required: true, message: '请输入退款金额', trigger: 'blur' },
+        { type: 'number', min: 0, message: '退款金额不能小于0', trigger: 'blur' }
+      ],
+      reason: [
+        { required: true, message: '请选择退款原因', trigger: 'change' }
+      ],
+      description: [
+        { required: true, message: '请输入详细说明', trigger: 'blur' },
+        { min: 10, message: '详细说明至少10个字符', trigger: 'blur' }
+      ]
+    }
+    const refundFormRef = ref()
+    const isSubmitting = ref(false)
+    
+    // 计算属性
+    const emptyText = computed(() => {
+      if (isLoading.value) return '加载中...'
+      if (filters.status || filters.payment_method || filters.date_range.length > 0) {
+        return '没有找到符合条件的订单'
+      }
+      return '暂无订单记录'
+    })
+    
+    // 方法
+    const loadOrders = async () => {
       try {
-        const params = {
-          page: currentPage.value,
-          size: pageSize.value
-        }
-        const response = await orderAPI.getUserOrders(params)
-        orders.value = response.data.orders || []
-        total.value = response.data.total || 0
+        isLoading.value = true
         
-        // 计算统计数据
-        updateOrderStats()
+        const params = {
+          page: pagination.current,
+          size: pagination.size,
+          ...filters
+        }
+        
+        if (filters.date_range && filters.date_range.length === 2) {
+          params.start_date = filters.date_range[0]
+          params.end_date = filters.date_range[1]
+        }
+        
+        const response = await api.get('/orders/', { params })
+        orders.value = response.data.items || []
+        pagination.total = response.data.total || 0
+        
+        // 更新统计信息
+        await loadOrderStats()
+        
       } catch (error) {
-        ElMessage.error('获取订单列表失败')
+        ElMessage.error('加载订单列表失败')
+        console.error('加载订单失败:', error)
       } finally {
-        loading.value = false
+        isLoading.value = false
       }
     }
-
-    // 更新订单统计
-    const updateOrderStats = () => {
-      orderStats.total = orders.value.length
-      orderStats.paid = orders.value.filter(o => o.status === 'paid').length
-      orderStats.pending = orders.value.filter(o => o.status === 'pending').length
-      orderStats.cancelled = orders.value.filter(o => o.status === 'cancelled').length
+    
+    const loadOrderStats = async () => {
+      try {
+        const response = await api.get('/orders/stats')
+        orderStats.value = response.data
+      } catch (error) {
+        console.error('加载订单统计失败:', error)
+      }
     }
-
-    // 刷新订单列表
+    
+    const applyFilters = () => {
+      pagination.current = 1
+      loadOrders()
+    }
+    
+    const resetFilters = () => {
+      filters.status = ''
+      filters.payment_method = ''
+      filters.date_range = []
+      pagination.current = 1
+      loadOrders()
+    }
+    
     const refreshOrders = () => {
-      fetchOrders()
+      loadOrders()
     }
-
-    // 查看订单详情
-    const viewOrderDetail = (order) => {
-      selectedOrder.value = order
-      detailDialogVisible.value = true
+    
+    const handleSizeChange = (size) => {
+      pagination.size = size
+      pagination.current = 1
+      loadOrders()
     }
-
-    // 取消订单
-    const cancelOrder = async (orderId) => {
+    
+    const handleCurrentChange = (page) => {
+      pagination.current = page
+      loadOrders()
+    }
+    
+    const payOrder = (order) => {
+      // 跳转到支付页面
+      this.$router.push({
+        path: '/packages',
+        query: { order_id: order.id }
+      })
+    }
+    
+    const cancelOrder = async (order) => {
       try {
         await ElMessageBox.confirm(
           '确定要取消这个订单吗？取消后无法恢复。',
@@ -275,92 +435,136 @@ export default {
             type: 'warning'
           }
         )
-
-        await orderAPI.cancelOrder(orderId)
-        ElMessage.success('订单取消成功')
         
-        // 重新获取订单列表
-        await fetchOrders()
+        await api.post(`/orders/${order.id}/cancel`)
+        ElMessage.success('订单已取消')
+        loadOrders()
+        
       } catch (error) {
         if (error !== 'cancel') {
           ElMessage.error('取消订单失败')
+          console.error('取消订单失败:', error)
         }
       }
     }
-
-    // 分页处理
-    const handleSizeChange = (val) => {
-      pageSize.value = val
-      currentPage.value = 1
-      fetchOrders()
+    
+    const viewOrderDetail = (order) => {
+      selectedOrder.value = order
+      detailDialogVisible.value = true
     }
-
-    const handleCurrentChange = (val) => {
-      currentPage.value = val
-      fetchOrders()
+    
+    const applyRefund = (order) => {
+      selectedOrder.value = order
+      refundForm.amount = order.amount
+      refundForm.reason = ''
+      refundForm.description = ''
+      refundDialogVisible.value = true
     }
-
-    // 获取状态类型
-    const getStatusType = (status) => {
-      const types = {
+    
+    const submitRefund = async () => {
+      try {
+        await refundFormRef.value.validate()
+        
+        isSubmitting.value = true
+        
+        const refundData = {
+          order_id: selectedOrder.value.id,
+          amount: refundForm.amount,
+          reason: refundForm.reason,
+          description: refundForm.description
+        }
+        
+        await api.post('/orders/refund', refundData)
+        
+        ElMessage.success('退款申请已提交，请等待审核')
+        refundDialogVisible.value = false
+        loadOrders()
+        
+      } catch (error) {
+        if (error !== 'cancel') {
+          ElMessage.error('提交退款申请失败')
+          console.error('提交退款申请失败:', error)
+        }
+      } finally {
+        isSubmitting.value = false
+      }
+    }
+    
+    // 工具方法
+    const getOrderStatusType = (status) => {
+      const statusMap = {
         pending: 'warning',
         paid: 'success',
         cancelled: 'info',
-        expired: 'danger'
+        refunded: 'danger',
+        failed: 'danger'
       }
-      return types[status] || 'info'
+      return statusMap[status] || 'info'
     }
-
-    // 获取状态名称
-    const getStatusName = (status) => {
-      const names = {
+    
+    const getOrderStatusText = (status) => {
+      const statusMap = {
         pending: '待支付',
         paid: '已支付',
         cancelled: '已取消',
-        expired: '已过期'
+        refunded: '已退款',
+        failed: '支付失败'
       }
-      return names[status] || '未知'
+      return statusMap[status] || status
     }
-
-    // 获取支付方式名称
-    const getPaymentMethodName = (method) => {
-      const names = {
+    
+    const getPaymentMethodType = (method) => {
+      const methodMap = {
+        alipay: 'primary',
+        wechat: 'success'
+      }
+      return methodMap[method] || 'info'
+    }
+    
+    const getPaymentMethodText = (method) => {
+      const methodMap = {
         alipay: '支付宝',
-        wechat: '微信支付',
-        bank: '银行转账'
+        wechat: '微信支付'
       }
-      return names[method] || '未知'
+      return methodMap[method] || method
     }
-
-    // 格式化时间
-    const formatTime = (time) => {
-      if (!time) return '-'
-      return dayjs(time).format('YYYY-MM-DD HH:mm:ss')
-    }
-
+    
+    // 生命周期
     onMounted(() => {
-      fetchOrders()
+      loadOrders()
     })
-
+    
     return {
-      loading,
       orders,
-      currentPage,
-      pageSize,
-      total,
-      detailDialogVisible,
-      selectedOrder,
+      isLoading,
       orderStats,
-      fetchOrders,
+      filters,
+      pagination,
+      detailDialogVisible,
+      refundDialogVisible,
+      selectedOrder,
+      refundForm,
+      refundRules,
+      refundFormRef,
+      isSubmitting,
+      emptyText,
+      loadOrders,
+      loadOrderStats,
+      applyFilters,
+      resetFilters,
       refreshOrders,
-      viewOrderDetail,
-      cancelOrder,
       handleSizeChange,
       handleCurrentChange,
-      getStatusType,
-      getStatusName,
-      getPaymentMethodName,
-      formatTime
+      payOrder,
+      cancelOrder,
+      viewOrderDetail,
+      applyRefund,
+      submitRefund,
+      getOrderStatusType,
+      getOrderStatusText,
+      getPaymentMethodType,
+      getPaymentMethodText,
+      formatDateTime
     }
   }
 }
@@ -369,160 +573,97 @@ export default {
 <style scoped>
 .orders-container {
   padding: 20px;
-  max-width: 1200px;
-  margin: 0 auto;
 }
 
 .page-header {
-  margin-bottom: 2rem;
   text-align: center;
+  margin-bottom: 30px;
 }
 
 .page-header h1 {
-  color: #1677ff;
-  font-size: 2rem;
-  margin-bottom: 0.5rem;
+  margin: 0 0 10px 0;
+  color: #303133;
+  font-size: 28px;
 }
 
 .page-header p {
-  color: #666;
-  font-size: 1rem;
+  margin: 0;
+  color: #909399;
+  font-size: 16px;
 }
 
-.stats-card {
-  margin-bottom: 2rem;
-  border-radius: 12px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+.order-stats {
+  margin-bottom: 20px;
 }
 
-.stats-content {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 2rem;
-  padding: 1rem 0;
-}
-
-.stat-item {
+.stat-card {
   text-align: center;
 }
 
+.stat-content {
+  padding: 20px;
+}
+
 .stat-number {
-  font-size: 2.5rem;
+  font-size: 24px;
   font-weight: bold;
-  color: #1677ff;
-  margin-bottom: 0.5rem;
+  color: #409EFF;
+  margin-bottom: 10px;
 }
 
 .stat-label {
-  color: #666;
-  font-size: 0.9rem;
+  color: #909399;
+  font-size: 14px;
 }
 
-.orders-card {
-  margin-bottom: 2rem;
-  border-radius: 12px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+.filter-card {
+  margin-bottom: 20px;
+}
+
+.orders-list {
+  margin-bottom: 20px;
 }
 
 .card-header {
   display: flex;
-  align-items: center;
   justify-content: space-between;
-  gap: 0.5rem;
-  font-weight: 600;
-}
-
-.order-no {
-  font-family: 'Courier New', monospace;
-  color: #1677ff;
-  font-weight: 500;
-}
-
-.package-info {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-}
-
-.package-name {
-  font-weight: 500;
-  color: #333;
-}
-
-.package-duration {
-  font-size: 0.9rem;
-  color: #666;
+  align-items: center;
 }
 
 .amount {
-  font-weight: 600;
-  color: #1677ff;
-}
-
-.payment-method {
-  color: #666;
+  color: #f56c6c;
+  font-weight: bold;
 }
 
 .pagination-wrapper {
-  display: flex;
-  justify-content: center;
-  margin-top: 2rem;
-  padding-top: 1rem;
-  border-top: 1px solid #f0f0f0;
+  text-align: center;
+  margin-top: 20px;
 }
 
 .order-detail {
-  padding: 1rem 0;
+  padding: 20px 0;
 }
 
-.detail-item {
-  display: flex;
-  margin-bottom: 1rem;
-  padding: 0.5rem 0;
-  border-bottom: 1px solid #f0f0f0;
+.dialog-footer {
+  text-align: right;
 }
 
-.detail-item:last-child {
-  border-bottom: none;
+.dialog-footer .el-button {
+  margin-left: 10px;
 }
 
-.detail-item .label {
-  width: 120px;
-  font-weight: 500;
-  color: #666;
-}
-
-.detail-item .value {
-  flex: 1;
-  color: #333;
-}
-
-.detail-item .value.amount {
-  color: #1677ff;
-  font-weight: 600;
-}
-
+/* 响应式设计 */
 @media (max-width: 768px) {
-  .orders-container {
-    padding: 10px;
+  .order-stats .el-col {
+    margin-bottom: 10px;
   }
   
-  .stats-content {
-    grid-template-columns: repeat(2, 1fr);
-    gap: 1rem;
+  .filter-card .el-col {
+    margin-bottom: 10px;
   }
   
-  .stat-number {
-    font-size: 2rem;
-  }
-  
-  .detail-item {
-    flex-direction: column;
-    gap: 0.5rem;
-  }
-  
-  .detail-item .label {
-    width: auto;
+  .page-header h1 {
+    font-size: 24px;
   }
 }
 </style> 

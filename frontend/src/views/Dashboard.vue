@@ -51,7 +51,7 @@
           </el-button>
           <el-button type="primary" @click="sendSubscriptionEmail">
             <i class="el-icon-message"></i>
-            发送订阅地址到QQ邮箱
+            发送订阅地址到邮箱
           </el-button>
         </div>
         
@@ -300,7 +300,7 @@ export default {
     const sendSubscriptionEmail = async () => {
       try {
         await subscriptionAPI.sendSubscriptionEmail()
-        ElMessage.success('订阅地址已发送到您的QQ邮箱，请注意查收')
+        ElMessage.success('订阅地址已发送到您的邮箱，请注意查收')
       } catch (error) {
         ElMessage.error('发送失败')
       }

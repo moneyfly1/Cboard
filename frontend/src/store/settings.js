@@ -55,8 +55,8 @@ export const useSettingsStore = defineStore('settings', {
     // 检查是否需要邮箱验证
     needsEmailVerification: (state) => state.requireEmailVerification,
     
-    // 检查是否仅允许QQ邮箱
-    qqEmailOnly: (state) => state.allowQqEmailOnly,
+    // 检查是否仅允许特定邮箱
+    emailRestriction: (state) => state.allowQqEmailOnly,
     
     // 检查支付是否启用
     paymentEnabled: (state) => state.enablePayment,
@@ -222,10 +222,8 @@ export const useSettingsStore = defineStore('settings', {
       const emailPattern = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/
       if (!emailPattern.test(email)) return false
       
-      // QQ邮箱验证
-      if (this.qqEmailOnly) {
-        return email.endsWith('@qq.com')
-      }
+      // 邮箱验证 - 支持所有邮箱格式
+      return true
       
       return true
     },
@@ -270,9 +268,8 @@ export const useSettingsStore = defineStore('settings', {
       const emailPattern = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/
       if (!emailPattern.test(email)) return '邮箱格式不正确'
       
-      if (this.qqEmailOnly && !email.endsWith('@qq.com')) {
-        return '仅支持QQ邮箱注册'
-      }
+      // 支持所有邮箱格式
+      return null
       
       return null
     },
@@ -286,7 +283,7 @@ export const useSettingsStore = defineStore('settings', {
       this.siteFavicon = ''
       this.allowRegistration = true
       this.requireEmailVerification = true
-      this.allowQqEmailOnly = true
+      this.allowQqEmailOnly = false
       this.minPasswordLength = 8
       this.defaultTheme = 'default'
       this.allowUserTheme = true

@@ -139,6 +139,18 @@ const routes = [
             { title: '个人资料', path: '/profile' }
           ]
         }
+      },
+      {
+        path: 'settings',
+        name: 'UserSettings',
+        component: () => import('@/views/UserSettings.vue'),
+        meta: { 
+          title: '用户设置',
+          breadcrumb: [
+            { title: '首页', path: '/dashboard' },
+            { title: '用户设置', path: '/settings' }
+          ]
+        }
       }
     ]
   },
@@ -159,7 +171,11 @@ const routes = [
       { path: 'settings', name: 'AdminSettings', component: () => import('@/views/admin/Settings.vue'), meta: { title: '系统设置', breadcrumb: [{ title: '管理后台', path: '/admin/dashboard' }, { title: '系统设置', path: '/admin/settings' }] } },
       { path: 'notifications', name: 'AdminNotifications', component: () => import('@/views/admin/Notifications.vue'), meta: { title: '通知管理', breadcrumb: [{ title: '管理后台', path: '/admin/dashboard' }, { title: '通知管理', path: '/admin/notifications' }] } },
       { path: 'config', name: 'AdminConfig', component: () => import('@/views/admin/Config.vue'), meta: { title: '配置管理', breadcrumb: [{ title: '管理后台', path: '/admin/dashboard' }, { title: '配置管理', path: '/admin/config' }] } },
-      { path: 'statistics', name: 'AdminStatistics', component: () => import('@/views/admin/Statistics.vue'), meta: { title: '数据统计', breadcrumb: [{ title: '管理后台', path: '/admin/dashboard' }, { title: '数据统计', path: '/admin/statistics' }] } }
+      { path: 'statistics', name: 'AdminStatistics', component: () => import('@/views/admin/Statistics.vue'), meta: { title: '数据统计', breadcrumb: [{ title: '管理后台', path: '/admin/dashboard' }, { title: '数据统计', path: '/admin/statistics' }] } },
+      { path: 'email-queue', name: 'AdminEmailQueue', component: () => import('@/views/admin/EmailQueue.vue'), meta: { title: '邮件队列管理', breadcrumb: [{ title: '管理后台', path: '/admin/dashboard' }, { title: '邮件队列管理', path: '/admin/email-queue' }] } },
+              { path: 'email-detail/:id', name: 'AdminEmailDetail', component: () => import('@/views/admin/EmailDetail.vue'), meta: { title: '邮件详情', breadcrumb: [{ title: '管理后台', path: '/admin/dashboard' }, { title: '邮件队列管理', path: '/admin/email-queue' }, { title: '邮件详情', path: '/admin/email-detail' }] } },
+        { path: 'profile', name: 'AdminProfile', component: () => import('@/views/admin/Profile.vue'), meta: { title: '个人资料', breadcrumb: [{ title: '管理后台', path: '/admin/dashboard' }, { title: '个人资料', path: '/admin/profile' }] } },
+        { path: 'system-logs', name: 'AdminSystemLogs', component: () => import('@/views/admin/SystemLogs.vue'), meta: { title: '系统日志', breadcrumb: [{ title: '管理后台', path: '/admin/dashboard' }, { title: '系统日志', path: '/admin/system-logs' }] } }
     ]
   },
   
@@ -192,13 +208,29 @@ router.beforeEach((to, from, next) => {
   
   // 需要管理员权限的页面
   if (to.meta.requiresAdmin && !authStore.isAdmin) {
+    // 如果不是管理员，重定向到普通用户仪表盘
     next('/dashboard')
     return
   }
   
   // 已登录用户不能访问登录/注册页面
   if (to.meta.requiresGuest && authStore.isAuthenticated) {
-    next('/dashboard')
+    // 根据用户权限重定向
+    if (authStore.isAdmin) {
+      next('/admin/dashboard')
+    } else {
+      next('/dashboard')
+    }
+    return
+  }
+  
+  // 如果用户访问根路径，根据权限重定向
+  if (to.path === '/') {
+    if (authStore.isAdmin) {
+      next('/admin/dashboard')
+    } else {
+      next('/dashboard')
+    }
     return
   }
   

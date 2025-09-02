@@ -8,14 +8,17 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.base import MIMEBase
 from email import encoders
 import ssl
+import json
 
 from app.models.email import EmailQueue
 from app.schemas.email import EmailQueueCreate, EmailQueueUpdate
+from app.services.email_template import EmailTemplateService
 from app.core.settings_manager import settings_manager
 
 class EmailService:
     def __init__(self, db: Session):
         self.db = db
+        self.template_service = EmailTemplateService(db)
 
     def get_smtp_config(self) -> Dict[str, Any]:
         """获取SMTP配置"""
@@ -55,22 +58,27 @@ class EmailService:
             
             # 添加邮件内容
             if email_queue.content_type == 'html':
-                msg.attach(MIMEText(email_queue.content, 'html'))
+                msg.attach(MIMEText(email_queue.content, 'html', 'utf-8'))
             else:
-                msg.attach(MIMEText(email_queue.content, 'plain'))
+                msg.attach(MIMEText(email_queue.content, 'plain', 'utf-8'))
             
             # 添加附件
             if email_queue.attachments:
-                for attachment in email_queue.attachments:
-                    if isinstance(attachment, dict) and 'filename' in attachment and 'content' in attachment:
-                        part = MIMEBase('application', 'octet-stream')
-                        part.set_payload(attachment['content'])
-                        encoders.encode_base64(part)
-                        part.add_header(
-                            'Content-Disposition',
-                            f'attachment; filename= {attachment["filename"]}'
-                        )
-                        msg.attach(part)
+                try:
+                    attachments_data = json.loads(email_queue.attachments)
+                    for attachment in attachments_data:
+                        if isinstance(attachment, dict) and 'filename' in attachment and 'content' in attachment:
+                            part = MIMEBase('application', 'octet-stream')
+                            part.set_payload(attachment['content'])
+                            encoders.encode_base64(part)
+                            part.add_header(
+                                'Content-Disposition',
+                                f'attachment; filename= {attachment["filename"]}'
+                            )
+                            msg.attach(part)
+                except json.JSONDecodeError:
+                    # 附件数据格式错误，跳过附件
+                    pass
             
             # 发送邮件
             context = ssl.create_default_context()
@@ -100,11 +108,176 @@ class EmailService:
             self.db.commit()
             return False
 
+    def send_template_email(self, template_name: str, to_email: str, variables: Dict[str, Any], 
+                          email_type: str = None, attachments: List[Dict] = None) -> bool:
+        """使用模板发送邮件"""
+        try:
+            # 渲染模板
+            subject, content = self.template_service.render_template(template_name, variables)
+            
+            # 创建邮件队列
+            email_data = EmailQueueCreate(
+                to_email=to_email,
+                subject=subject,
+                content=content,
+                content_type='html',
+                email_type=email_type or template_name,
+                attachments=json.dumps(attachments) if attachments else None
+            )
+            
+            email_queue = self.create_email_queue(email_data)
+            return self.send_email(email_queue)
+            
+        except Exception as e:
+            # 记录错误日志
+            print(f"发送模板邮件失败: {e}")
+            return False
+
     def send_verification_email(self, user_email: str, token: str) -> bool:
         """发送验证邮件"""
         if not self.is_email_enabled():
             return False
         
+        try:
+            # 使用模板发送验证邮件
+            variables = {
+                "verification_url": f"http://localhost:3000/verify-email?token={token}",
+                "site_name": settings_manager.get_site_name(self.db)
+            }
+            
+            return self.send_template_email("verification", user_email, variables, "verification")
+            
+        except Exception as e:
+            # 如果模板不存在，使用默认内容
+            print(f"使用模板发送验证邮件失败，使用默认内容: {e}")
+            return self._send_default_verification_email(user_email, token)
+
+    def send_reset_password_email(self, user_email: str, token: str) -> bool:
+        """发送重置密码邮件"""
+        if not self.is_email_enabled():
+            return False
+        
+        try:
+            # 使用模板发送重置密码邮件
+            variables = {
+                "reset_url": f"http://localhost:3000/reset-password?token={token}",
+                "site_name": settings_manager.get_site_name(self.db)
+            }
+            
+            return self.send_template_email("reset_password", user_email, variables, "reset_password")
+            
+        except Exception as e:
+            # 如果模板不存在，使用默认内容
+            print(f"使用模板发送重置密码邮件失败，使用默认内容: {e}")
+            return self._send_default_reset_password_email(user_email, token)
+
+    def send_welcome_email(self, user_email: str, username: str) -> bool:
+        """发送欢迎邮件"""
+        if not self.is_email_enabled():
+            return False
+        
+        try:
+            # 使用模板发送欢迎邮件
+            variables = {
+                "username": username,
+                "site_name": settings_manager.get_site_name(self.db)
+            }
+            
+            return self.send_template_email("welcome", user_email, variables, "welcome")
+            
+        except Exception as e:
+            # 如果模板不存在，使用默认内容
+            print(f"使用模板发送欢迎邮件失败，使用默认内容: {e}")
+            return self._send_default_welcome_email(user_email, username)
+
+    def send_subscription_email(self, user_email: str, subscription_data: Dict[str, Any]) -> bool:
+        """发送订阅相关邮件"""
+        if not self.is_email_enabled():
+            return False
+        
+        try:
+            # 使用模板发送订阅邮件
+            variables = {
+                "site_name": settings_manager.get_site_name(self.db),
+                **subscription_data
+            }
+            
+            return self.send_template_email("subscription", user_email, variables, "subscription")
+            
+        except Exception as e:
+            # 如果模板不存在，使用默认内容
+            print(f"使用模板发送订阅邮件失败，使用默认内容: {e}")
+            return self._send_default_subscription_email(user_email, subscription_data)
+
+    def send_subscription_expiry_reminder(self, user_email: str, username: str, days_left: int, 
+                                       package_name: str, expiry_date: str) -> bool:
+        """发送订阅到期提醒"""
+        if not self.is_email_enabled():
+            return False
+        
+        try:
+            # 使用模板发送到期提醒
+            variables = {
+                "username": username,
+                "days_left": days_left,
+                "package_name": package_name,
+                "expiry_date": expiry_date,
+                "site_name": settings_manager.get_site_name(self.db)
+            }
+            
+            return self.send_template_email("subscription_expiry", user_email, variables, "subscription_expiry")
+            
+        except Exception as e:
+            # 如果模板不存在，使用默认内容
+            print(f"使用模板发送到期提醒失败，使用默认内容: {e}")
+            return self._send_default_expiry_reminder(user_email, username, days_left, package_name, expiry_date)
+
+    def send_subscription_reset_notification(self, user_email: str, username: str, 
+                                           new_subscription_url: str, reset_time: str, 
+                                           reset_reason: str) -> bool:
+        """发送订阅重置通知"""
+        if not self.is_email_enabled():
+            return False
+        
+        try:
+            # 使用模板发送重置通知
+            variables = {
+                "username": username,
+                "new_subscription_url": new_subscription_url,
+                "reset_time": reset_time,
+                "reset_reason": reset_reason,
+                "site_name": settings_manager.get_site_name(self.db)
+            }
+            
+            return self.send_template_email("subscription_reset", user_email, variables, "subscription_reset")
+            
+        except Exception as e:
+            # 如果模板不存在，使用默认内容
+            print(f"使用模板发送重置通知失败，使用默认内容: {e}")
+            return self._send_default_reset_notification(user_email, username, new_subscription_url, reset_time, reset_reason)
+
+    def send_announcement_email(self, user_email: str, announcement_data: Dict[str, Any]) -> bool:
+        """发送公告邮件"""
+        if not self.is_email_enabled():
+            return False
+        
+        try:
+            # 使用模板发送公告邮件
+            variables = {
+                "site_name": settings_manager.get_site_name(self.db),
+                **announcement_data
+            }
+            
+            return self.send_template_email("announcement", user_email, variables, "announcement")
+            
+        except Exception as e:
+            # 如果模板不存在，使用默认内容
+            print(f"使用模板发送公告邮件失败，使用默认内容: {e}")
+            return self._send_default_announcement_email(user_email, announcement_data)
+
+    # 默认邮件内容（模板不存在时的备用方案）
+    def _send_default_verification_email(self, user_email: str, token: str) -> bool:
+        """发送默认验证邮件"""
         site_name = settings_manager.get_site_name(self.db)
         verification_url = f"http://localhost:3000/verify-email?token={token}"
         
@@ -132,11 +305,8 @@ class EmailService:
         email_queue = self.create_email_queue(email_data)
         return self.send_email(email_queue)
 
-    def send_reset_password_email(self, user_email: str, token: str) -> bool:
-        """发送重置密码邮件"""
-        if not self.is_email_enabled():
-            return False
-        
+    def _send_default_reset_password_email(self, user_email: str, token: str) -> bool:
+        """发送默认重置密码邮件"""
         site_name = settings_manager.get_site_name(self.db)
         reset_url = f"http://localhost:3000/reset-password?token={token}"
         
@@ -165,11 +335,8 @@ class EmailService:
         email_queue = self.create_email_queue(email_data)
         return self.send_email(email_queue)
 
-    def send_welcome_email(self, user_email: str, username: str) -> bool:
-        """发送欢迎邮件"""
-        if not self.is_email_enabled():
-            return False
-        
+    def _send_default_welcome_email(self, user_email: str, username: str) -> bool:
+        """发送默认欢迎邮件"""
         site_name = settings_manager.get_site_name(self.db)
         
         subject = f"欢迎使用 {site_name}"
@@ -197,11 +364,8 @@ class EmailService:
         email_queue = self.create_email_queue(email_data)
         return self.send_email(email_queue)
 
-    def send_subscription_email(self, user_email: str, subscription_data: Dict[str, Any]) -> bool:
-        """发送订阅相关邮件"""
-        if not self.is_email_enabled():
-            return False
-        
+    def _send_default_subscription_email(self, user_email: str, subscription_data: Dict[str, Any]) -> bool:
+        """发送默认订阅邮件"""
         site_name = settings_manager.get_site_name(self.db)
         
         subject = f"您的 {site_name} 订阅信息"
@@ -232,11 +396,70 @@ class EmailService:
         email_queue = self.create_email_queue(email_data)
         return self.send_email(email_queue)
 
-    def send_announcement_email(self, user_email: str, announcement_data: Dict[str, Any]) -> bool:
-        """发送公告邮件"""
-        if not self.is_email_enabled():
-            return False
+    def _send_default_expiry_reminder(self, user_email: str, username: str, days_left: int, 
+                                    package_name: str, expiry_date: str) -> bool:
+        """发送默认到期提醒"""
+        site_name = settings_manager.get_site_name(self.db)
         
+        subject = f"{site_name} - 订阅到期提醒"
+        content = f"""
+        <html>
+        <body>
+            <h2>订阅到期提醒</h2>
+            <p>亲爱的 {username}，</p>
+            <p>您的订阅将在 {expiry_date} 到期，剩余 {days_left} 天。</p>
+            <p>当前套餐：{package_name}</p>
+            <p>为了避免服务中断，请及时续费。</p>
+            <p>感谢您使用 {site_name}！</p>
+        </body>
+        </html>
+        """
+        
+        email_data = EmailQueueCreate(
+            to_email=user_email,
+            subject=subject,
+            content=content,
+            content_type='html',
+            email_type='subscription_expiry'
+        )
+        
+        email_queue = self.create_email_queue(email_data)
+        return self.send_email(email_queue)
+
+    def _send_default_reset_notification(self, user_email: str, username: str, 
+                                       new_subscription_url: str, reset_time: str, 
+                                       reset_reason: str) -> bool:
+        """发送默认重置通知"""
+        site_name = settings_manager.get_site_name(self.db)
+        
+        subject = f"{site_name} - 订阅重置通知"
+        content = f"""
+        <html>
+        <body>
+            <h2>订阅重置通知</h2>
+            <p>亲爱的 {username}，</p>
+            <p>您的订阅已重置，新的订阅地址：</p>
+            <p><a href="{new_subscription_url}">{new_subscription_url}</a></p>
+            <p>重置时间：{reset_time}</p>
+            <p>重置原因：{reset_reason}</p>
+            <p>感谢您使用 {site_name}！</p>
+        </body>
+        </html>
+        """
+        
+        email_data = EmailQueueCreate(
+            to_email=user_email,
+            subject=subject,
+            content=content,
+            content_type='html',
+            email_type='subscription_reset'
+        )
+        
+        email_queue = self.create_email_queue(email_data)
+        return self.send_email(email_queue)
+
+    def _send_default_announcement_email(self, user_email: str, announcement_data: Dict[str, Any]) -> bool:
+        """发送默认公告邮件"""
         site_name = settings_manager.get_site_name(self.db)
         
         subject = f"{site_name} - {announcement_data.get('title')}"
@@ -304,4 +527,50 @@ class EmailService:
             "pending": pending,
             "sent": sent,
             "failed": failed
+        }
+
+    def get_daily_email_stats(self, days: int = 7) -> List[Dict[str, Any]]:
+        """获取每日邮件发送统计"""
+        stats = []
+        for i in range(days):
+            date = datetime.now() - timedelta(days=i)
+            start_date = date.replace(hour=0, minute=0, second=0, microsecond=0)
+            end_date = start_date + timedelta(days=1)
+            
+            total = self.db.query(EmailQueue).filter(
+                EmailQueue.created_at >= start_date,
+                EmailQueue.created_at < end_date
+            ).count()
+            
+            sent = self.db.query(EmailQueue).filter(
+                EmailQueue.created_at >= start_date,
+                EmailQueue.created_at < end_date,
+                EmailQueue.status == 'sent'
+            ).count()
+            
+            failed = self.db.query(EmailQueue).filter(
+                EmailQueue.created_at >= start_date,
+                EmailQueue.created_at < end_date,
+                EmailQueue.status == 'failed'
+            ).count()
+            
+            stats.append({
+                "date": start_date.strftime('%Y-%m-%d'),
+                "total": total,
+                "sent": sent,
+                "failed": failed
+            })
+        
+        return stats
+
+    def get_email_stats_by_type(self) -> Dict[str, Any]:
+        """按邮件类型统计"""
+        type_stats = self.db.query(
+            EmailQueue.email_type,
+            func.count(EmailQueue.id).label('count')
+        ).group_by(EmailQueue.email_type).all()
+        
+        return {
+            "by_type": {stat.email_type or 'unknown': stat.count for stat in type_stats},
+            "total_types": len(type_stats)
         } 

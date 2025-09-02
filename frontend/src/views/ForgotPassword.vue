@@ -3,7 +3,7 @@
     <div class="forgot-password-card">
       <div class="card-header">
         <h2>忘记密码</h2>
-        <p>请输入您的QQ邮箱，我们将发送重置密码的链接</p>
+        <p>请输入您的邮箱，我们将发送重置密码的链接</p>
       </div>
 
       <el-form
@@ -16,7 +16,7 @@
         <el-form-item prop="email">
           <el-input
             v-model="form.email"
-            placeholder="请输入QQ邮箱"
+            placeholder="请输入邮箱"
             type="email"
             size="large"
             prefix-icon="Message"
@@ -65,8 +65,8 @@ export default {
         { required: true, message: '请输入邮箱地址', trigger: 'blur' },
         { type: 'email', message: '请输入正确的邮箱格式', trigger: 'blur' },
         { 
-          pattern: /^[1-9][0-9]{4,}@qq\.com$/,
-          message: '请输入正确的QQ邮箱格式',
+          type: 'email',
+          message: '请输入正确的邮箱格式',
           trigger: 'blur'
         }
       ]
@@ -81,7 +81,7 @@ export default {
 
         await authAPI.forgotPassword({ email: form.email })
         
-        ElMessage.success('重置邮件已发送，请检查您的QQ邮箱')
+        ElMessage.success('重置邮件已发送，请检查您的邮箱')
         form.email = ''
       } catch (error) {
         if (error.response?.data?.message) {

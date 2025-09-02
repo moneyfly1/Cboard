@@ -11,6 +11,7 @@ from pathlib import Path
 from app.models.subscription import Subscription, Device
 from app.models.user import User
 from app.models.node import Node
+from app.models.user_activity import SubscriptionReset
 from app.schemas.subscription import SubscriptionCreate, SubscriptionUpdate
 from app.utils.security import generate_subscription_url
 
@@ -28,11 +29,18 @@ class SubscriptionService:
 
     def create(self, subscription_in: SubscriptionCreate) -> Subscription:
         """创建订阅"""
+        from app.utils.security import generate_subscription_url
+        
+        # 生成唯一的订阅URL
+        subscription_url = generate_subscription_url()
+        
         subscription = Subscription(
             user_id=subscription_in.user_id,
-            subscription_url=subscription_in.subscription_url,
+            subscription_url=subscription_url,
             device_limit=subscription_in.device_limit,
-            expire_time=subscription_in.expire_time
+            expire_time=subscription_in.expire_time,
+            is_active=True,
+            current_devices=0
         )
         
         self.db.add(subscription)
@@ -181,6 +189,60 @@ class SubscriptionService:
             "active_rate": (active / total * 100) if total > 0 else 0
         }
 
+    def get_subscriptions_with_pagination(self, skip: int = 0, limit: int = 20) -> Tuple[List[Subscription], int]:
+        """获取订阅列表（分页）"""
+        total = self.db.query(Subscription).count()
+        subscriptions = self.db.query(Subscription).offset(skip).limit(limit).all()
+        return subscriptions, total
+
+    # 新增方法：重置订阅
+    def reset_subscription(self, subscription_id: int, user_id: int, reset_type: str = "manual", reason: str = None) -> bool:
+        """重置订阅"""
+        subscription = self.get(subscription_id)
+        if not subscription:
+            return False
+        
+        # 记录重置前的信息
+        old_subscription_url = subscription.subscription_url
+        device_count_before = self.db.query(Device).filter(Device.subscription_id == subscription_id).count()
+        
+        # 生成新的订阅密钥
+        new_key = generate_subscription_url()
+        subscription.subscription_url = new_key
+        
+        # 删除所有设备记录
+        self.delete_devices_by_subscription_id(subscription_id)
+        
+        # 重置设备计数
+        subscription.current_devices = 0
+        
+        self.db.commit()
+        
+        # 记录订阅重置操作
+        reset_record = SubscriptionReset(
+            user_id=user_id,
+            subscription_id=subscription_id,
+            reset_type=reset_type,
+            reason=reason,
+            old_subscription_url=old_subscription_url,
+            new_subscription_url=new_key,
+            device_count_before=device_count_before,
+            device_count_after=0,
+            reset_by="user"
+        )
+        
+        self.db.add(reset_record)
+        self.db.commit()
+        
+        return True
+
+    # 新增方法：获取订阅重置记录
+    def get_subscription_resets(self, subscription_id: int, limit: int = 50) -> List[SubscriptionReset]:
+        """获取订阅重置记录"""
+        return self.db.query(SubscriptionReset).filter(
+            SubscriptionReset.subscription_id == subscription_id
+        ).order_by(SubscriptionReset.created_at.desc()).limit(limit).all()
+
     def generate_ssr_subscription(self, subscription: Subscription) -> str:
         """生成SSR订阅内容"""
         # 获取所有可用节点
@@ -292,4 +354,24 @@ class SubscriptionService:
             "rules": [
                 "MATCH,Proxy"
             ]
-        } 
+        }
+
+    def count(self) -> int:
+        """统计订阅总数"""
+        return self.db.query(Subscription).count()
+    
+    def count_active(self) -> int:
+        """统计活跃订阅数量"""
+        return self.db.query(Subscription).filter(Subscription.is_active == True).count()
+    
+    def count_expiring_soon(self, days: int = 7) -> int:
+        """统计即将过期的订阅数量"""
+        from datetime import datetime, timedelta
+        cutoff_date = datetime.utcnow() + timedelta(days=days)
+        return self.db.query(Subscription).filter(
+            and_(
+                Subscription.is_active == True,
+                Subscription.expire_time <= cutoff_date,
+                Subscription.expire_time > datetime.utcnow()
+            )
+        ).count() 

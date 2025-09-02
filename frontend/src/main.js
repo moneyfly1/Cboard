@@ -39,22 +39,27 @@ app.config.globalProperties.$auth = null
 // 初始化应用
 async function initializeApp() {
   try {
-    // 初始化设置
-    const settingsStore = useSettingsStore()
-    await settingsStore.loadSettings()
-    settingsStore.initTheme()
-    
     // 设置全局属性
-    app.config.globalProperties.$settings = settingsStore
     app.config.globalProperties.$auth = useAuthStore()
     
-    // 挂载应用
+    // 先挂载应用
     app.mount('#app')
+    
+    // 异步加载设置（不阻塞应用启动）
+    try {
+      const settingsStore = useSettingsStore()
+      await settingsStore.loadSettings()
+      settingsStore.initTheme()
+      app.config.globalProperties.$settings = settingsStore
+      console.log('设置加载完成')
+    } catch (settingsError) {
+      console.warn('设置加载失败，使用默认设置:', settingsError)
+    }
     
     console.log('应用初始化完成')
   } catch (error) {
     console.error('应用初始化失败:', error)
-    // 即使设置加载失败，也要挂载应用
+    // 最后的兜底方案
     app.mount('#app')
   }
 }

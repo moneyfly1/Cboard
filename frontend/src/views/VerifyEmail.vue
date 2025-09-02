@@ -6,7 +6,7 @@
           <i class="el-icon-message"></i>
         </div>
         <h2>邮箱验证</h2>
-        <p>请检查您的QQ邮箱并点击验证链接</p>
+        <p>请检查您的邮箱并点击验证链接</p>
       </div>
 
       <div class="verify-content">
@@ -18,7 +18,7 @@
         <div class="verify-tips">
           <h4>验证步骤：</h4>
           <ol>
-            <li>打开您的QQ邮箱</li>
+            <li>打开您的邮箱</li>
             <li>查找来自我们的验证邮件</li>
             <li>点击邮件中的验证链接</li>
             <li>验证成功后即可登录</li>

@@ -3,8 +3,15 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 import uvicorn
 
-from app.core.config import settings
-from app.api.api_v1.api import api_router
+from .core.config import settings
+from .api.api_v1.api import api_router
+from .core.database import init_database
+from .models import (
+    User, Subscription, Device, Order, Package, EmailQueue, 
+    EmailTemplate, Notification, Node, PaymentTransaction, 
+    PaymentConfig, PaymentCallback, SystemConfig, Announcement, 
+    ThemeConfig, UserActivity, SubscriptionReset, LoginHistory
+)
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
@@ -27,6 +34,15 @@ app.include_router(api_router, prefix=settings.API_V1_STR)
 
 # 挂载静态文件
 app.mount("/static", StaticFiles(directory="static"), name="static")
+
+# 应用启动事件
+@app.on_event("startup")
+async def startup_event():
+    """应用启动时初始化数据库"""
+    try:
+        init_database()
+    except Exception as e:
+        print(f"数据库初始化失败: {e}")
 
 @app.get("/")
 async def root():

@@ -63,15 +63,19 @@ export const userAPI = {
   getProfile: () => api.get('/users/profile'),
   updateProfile: (data) => api.put('/users/profile', data),
   changePassword: (data) => api.post('/users/change-password', data),
-  getLoginHistory: () => api.get('/users/login-history')
+  getLoginHistory: () => api.get('/users/login-history'),
+  getUserActivities: () => api.get('/users/activities'),
+  getSubscriptionResets: () => api.get('/users/subscription-resets')
 }
 
 // 订阅相关API
 export const subscriptionAPI = {
-  getCurrentSubscription: () => api.get('/subscriptions/current'),
-  resetSubscription: () => api.post('/subscriptions/reset'),
-  sendSubscriptionEmail: () => api.post('/subscriptions/send-email'),
+  getCurrentSubscription: () => api.get('/subscriptions/user-subscription'),
+  getUserSubscription: () => api.get('/subscriptions/user-subscription'),
+  resetSubscription: () => api.post('/subscriptions/reset-subscription'),
+  sendSubscriptionEmail: () => api.post('/subscriptions/send-subscription-email'),
   getDevices: () => api.get('/subscriptions/devices'),
+  getUserDevices: () => api.get('/subscriptions/devices'),
   removeDevice: (deviceId) => api.delete(`/subscriptions/devices/${deviceId}`),
   getSSRSubscription: (key) => api.get(`/subscriptions/ssr/${key}`),
   getClashSubscription: (key) => api.get(`/subscriptions/clash/${key}`)
@@ -158,7 +162,28 @@ export const adminAPI = {
   
   // 邮件队列管理
   getEmailQueue: (params) => api.get('/admin/email-queue', { params }),
-  resendEmail: (emailId) => api.post(`/admin/email-queue/${emailId}/resend`)
+  resendEmail: (emailId) => api.post(`/admin/email-queue/${emailId}/resend`),
+  getEmailDetail: (emailId) => api.get(`/admin/email-queue/${emailId}`),
+  retryEmail: (emailId) => api.post(`/admin/email-queue/${emailId}/retry`),
+  deleteEmailFromQueue: (emailId) => api.delete(`/admin/email-queue/${emailId}`),
+  clearEmailQueue: (status) => api.post('/admin/email-queue/clear', { status }),
+  getEmailQueueStatistics: () => api.get('/admin/email-queue/statistics'),
+  
+  // 个人资料管理
+  getProfile: () => api.get('/admin/profile'),
+  updateProfile: (data) => api.put('/admin/profile', data),
+  changePassword: (data) => api.post('/admin/change-password', data),
+  getLoginHistory: () => api.get('/admin/login-history'),
+  getSecuritySettings: () => api.get('/admin/security-settings'),
+  updateSecuritySettings: (data) => api.put('/admin/security-settings', data),
+  getNotificationSettings: () => api.get('/admin/notification-settings'),
+  updateNotificationSettings: (data) => api.put('/admin/notification-settings', data),
+  
+  // 系统日志管理
+  getSystemLogs: (params) => api.get('/admin/system-logs', { params }),
+  getLogsStats: () => api.get('/admin/logs-stats'),
+  exportLogs: (params) => api.get('/admin/export-logs', { params }),
+  clearLogs: () => api.post('/admin/clear-logs')
 }
 
 // 通知相关API
@@ -200,7 +225,12 @@ export const configAPI = {
   saveClashConfig: (content) => api.post('/admin/clash-config', { content }),
   getV2rayConfig: () => api.get('/admin/v2ray-config'),
   saveV2rayConfig: (content) => api.post('/admin/v2ray-config', { content }),
-  exportConfig: () => api.get('/admin/export-config')
+  exportConfig: () => api.get('/admin/export-config'),
+  
+  // 支付设置管理
+  getPaymentSettings: () => api.get('/admin/payment-configs'),
+  savePaymentSettings: (data) => api.put('/admin/payment-configs', data),
+  testPaymentConfig: (data) => api.post('/admin/payment-configs/test', data)
 }
 
 // 统计相关API
@@ -239,8 +269,8 @@ export const paymentAPI = {
 // 系统设置相关API
 export const settingsAPI = {
   // 用户端设置API
-  getPublicSettings: () => api.get('/public-settings'),
-  getAnnouncements: (params) => api.get('/announcements', { params }),
+  getPublicSettings: () => api.get('/settings/public-settings'),
+  getAnnouncements: (params) => api.get('/settings/announcements', { params }),
   
   // 管理端设置API
   getSystemSettings: () => api.get('/admin/settings'),

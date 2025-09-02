@@ -49,13 +49,25 @@
 
 ## 快速开始
 
-### 系统要求
+### VPS一键部署（推荐）
+```bash
+# 在您的VPS上执行（需要root权限）
+git clone https://github.com/moneyfly1/xboard.git
+cd xboard/xboard-modern
 
+# 自动安装
+sudo ./install_vps_complete.sh --auto
+
+# 或手动配置安装
+sudo ./install_vps_complete.sh
+```
+
+### 本地开发环境
+
+#### 系统要求
 - Python 3.8+
 - Node.js 16+
 - 数据库（SQLite/MySQL/PostgreSQL）
-
-### 自动安装
 
 #### Linux/macOS
 ```bash
@@ -78,6 +90,16 @@ cd xboard\xboard-modern
 install_windows.bat
 ```
 
+### 数据库配置（重要）
+
+XBoard Modern 支持多种数据库：
+
+- ✅ **SQLite** - 推荐用于开发环境
+- ✅ **MySQL/MariaDB** - 推荐用于生产环境
+- ✅ **PostgreSQL** - 适用于大型应用
+
+📖 [详细的数据库配置指南](README_DATABASE.md)
+
 ### 手动安装
 
 1. **克隆项目**
@@ -86,7 +108,17 @@ git clone https://github.com/moneyfly1/xboard.git
 cd xboard/xboard-modern
 ```
 
-2. **安装后端依赖**
+2. **配置数据库**
+```bash
+# 运行数据库配置脚本
+python3 setup_database.py
+
+# 或手动配置
+cp .env.example .env
+# 编辑 .env 文件配置数据库连接
+```
+
+3. **安装后端依赖**
 ```bash
 # 创建虚拟环境
 python3 -m venv venv
@@ -209,6 +241,9 @@ EMAIL_PASSWORD=your-authorization-code
 ```
 
 ## 部署指南
+
+### VPS 生产环境部署
+📖 [详细的VPS部署指南](README_VPS.md) - 推荐阅读
 
 ### Docker部署
 

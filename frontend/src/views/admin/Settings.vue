@@ -61,70 +61,6 @@
           </el-form>
         </el-tab-pane>
 
-        <!-- 邮件设置 -->
-        <el-tab-pane label="邮件设置" name="email">
-          <el-form :model="emailSettings" :rules="emailRules" ref="emailFormRef" label-width="120px">
-            <el-form-item label="SMTP服务器" prop="smtp_host">
-              <el-input v-model="emailSettings.smtp_host" />
-            </el-form-item>
-            <el-form-item label="SMTP端口" prop="smtp_port">
-              <el-input-number v-model="emailSettings.smtp_port" />
-            </el-form-item>
-            <el-form-item label="邮箱地址" prop="smtp_user">
-              <el-input v-model="emailSettings.smtp_user" />
-            </el-form-item>
-            <el-form-item label="邮箱密码" prop="smtp_password">
-              <el-input v-model="emailSettings.smtp_password" type="password" />
-            </el-form-item>
-            <el-form-item label="启用TLS">
-              <el-switch v-model="emailSettings.smtp_tls" />
-            </el-form-item>
-            <el-form-item>
-              <el-button type="primary" @click="saveEmailSettings">保存邮件设置</el-button>
-              <el-button @click="testEmail">测试邮件</el-button>
-            </el-form-item>
-          </el-form>
-        </el-tab-pane>
-
-        <!-- 支付设置 -->
-        <el-tab-pane label="支付设置" name="payment">
-          <el-form :model="paymentSettings" label-width="120px">
-            <el-form-item label="启用支付">
-              <el-switch v-model="paymentSettings.payment_enabled" />
-            </el-form-item>
-            <el-form-item label="默认支付方式" prop="default_payment_method">
-              <el-select v-model="paymentSettings.default_payment_method">
-                <el-option label="支付宝" value="alipay" />
-                <el-option label="微信支付" value="wechat" />
-                <el-option label="PayPal" value="paypal" />
-              </el-select>
-            </el-form-item>
-            <el-form-item label="货币单位" prop="currency">
-              <el-select v-model="paymentSettings.currency">
-                <el-option label="人民币 (CNY)" value="CNY" />
-                <el-option label="美元 (USD)" value="USD" />
-                <el-option label="欧元 (EUR)" value="EUR" />
-              </el-select>
-            </el-form-item>
-            
-            <!-- 支付宝设置 -->
-            <el-divider content-position="left">支付宝设置</el-divider>
-            <el-form-item label="支付宝AppID" prop="alipay_app_id">
-              <el-input v-model="paymentSettings.alipay_app_id" />
-            </el-form-item>
-            <el-form-item label="支付宝私钥" prop="alipay_private_key">
-              <el-input v-model="paymentSettings.alipay_private_key" type="textarea" rows="4" />
-            </el-form-item>
-            <el-form-item label="支付宝公钥" prop="alipay_public_key">
-              <el-input v-model="paymentSettings.alipay_public_key" type="textarea" rows="4" />
-            </el-form-item>
-            
-            <el-form-item>
-              <el-button type="primary" @click="savePaymentSettings">保存支付设置</el-button>
-            </el-form-item>
-          </el-form>
-        </el-tab-pane>
-
         <!-- 通知设置 -->
         <el-tab-pane label="通知设置" name="notification">
           <el-form :model="notificationSettings" label-width="120px">
@@ -195,7 +131,6 @@ export default {
     const api = useApi()
     const activeTab = ref('general')
     const generalFormRef = ref()
-    const emailFormRef = ref()
     const uploadUrl = '/api/v1/admin/upload'
 
     // 基本设置
@@ -218,34 +153,6 @@ export default {
       email_verification_required: true,
       min_password_length: 8,
       invite_code_required: false
-    })
-
-    // 邮件设置
-    const emailSettings = reactive({
-      smtp_host: '',
-      smtp_port: 587,
-      smtp_user: '',
-      smtp_password: '',
-      smtp_tls: true
-    })
-
-    const emailRules = {
-      smtp_host: [
-        { required: true, message: '请输入SMTP服务器', trigger: 'blur' }
-      ],
-      smtp_user: [
-        { required: true, message: '请输入邮箱地址', trigger: 'blur' }
-      ]
-    }
-
-    // 支付设置
-    const paymentSettings = reactive({
-      payment_enabled: true,
-      default_payment_method: 'alipay',
-      currency: 'CNY',
-      alipay_app_id: '',
-      alipay_private_key: '',
-      alipay_public_key: ''
     })
 
     // 通知设置
@@ -275,8 +182,6 @@ export default {
         // 加载各项设置
         Object.assign(generalSettings, settings.general || {})
         Object.assign(registrationSettings, settings.registration || {})
-        Object.assign(emailSettings, settings.email || {})
-        Object.assign(paymentSettings, settings.payment || {})
         Object.assign(notificationSettings, settings.notification || {})
         Object.assign(securitySettings, settings.security || {})
       } catch (error) {
@@ -303,25 +208,6 @@ export default {
       }
     }
 
-    const saveEmailSettings = async () => {
-      try {
-        await emailFormRef.value.validate()
-        await api.put('/admin/settings/email', emailSettings)
-        ElMessage.success('邮件设置保存成功')
-      } catch (error) {
-        ElMessage.error('保存失败')
-      }
-    }
-
-    const savePaymentSettings = async () => {
-      try {
-        await api.put('/admin/settings/payment', paymentSettings)
-        ElMessage.success('支付设置保存成功')
-      } catch (error) {
-        ElMessage.error('保存失败')
-      }
-    }
-
     const saveNotificationSettings = async () => {
       try {
         await api.put('/admin/settings/notification', notificationSettings)
@@ -337,15 +223,6 @@ export default {
         ElMessage.success('安全设置保存成功')
       } catch (error) {
         ElMessage.error('保存失败')
-      }
-    }
-
-    const testEmail = async () => {
-      try {
-        await api.post('/admin/settings/test-email', emailSettings)
-        ElMessage.success('测试邮件发送成功')
-      } catch (error) {
-        ElMessage.error('测试邮件发送失败')
       }
     }
 
@@ -378,21 +255,14 @@ export default {
       generalSettings,
       generalRules,
       registrationSettings,
-      emailSettings,
-      emailRules,
-      paymentSettings,
       notificationSettings,
       securitySettings,
       generalFormRef,
-      emailFormRef,
       uploadUrl,
       saveGeneralSettings,
       saveRegistrationSettings,
-      saveEmailSettings,
-      savePaymentSettings,
       saveNotificationSettings,
       saveSecuritySettings,
-      testEmail,
       handleLogoSuccess,
       beforeLogoUpload
     }

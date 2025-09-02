@@ -6,45 +6,48 @@
         <p>现代化订阅管理系统</p>
       </div>
       
-      <el-form
-        ref="loginForm"
-        :model="loginForm"
-        :rules="loginRules"
-        class="login-form"
-        @submit.prevent="handleLogin"
-      >
-        <el-form-item prop="username">
-          <el-input
-            v-model="loginForm.username"
-            placeholder="QQ号码或QQ邮箱"
-            prefix-icon="User"
-            size="large"
-          />
-        </el-form-item>
+      <div class="login-form">
+        <div class="form-item">
+                  <input
+          v-model="loginForm.username"
+          type="text"
+          placeholder="用户名或邮箱"
+          class="login-input"
+          autocomplete="username"
+        />
+        </div>
         
-        <el-form-item prop="password">
-          <el-input
+        <div class="form-item">
+          <input
             v-model="loginForm.password"
             type="password"
             placeholder="密码"
-            prefix-icon="Lock"
-            size="large"
-            show-password
+            class="login-input"
+            autocomplete="current-password"
             @keyup.enter="handleLogin"
           />
-        </el-form-item>
+        </div>
         
-        <el-form-item>
-          <el-button
-            type="primary"
-            size="large"
-            :loading="loading"
+        <div class="form-item">
+          <button
+            type="button"
+            :disabled="loading"
             class="login-button"
             @click="handleLogin"
           >
-            登录
-          </el-button>
-        </el-form-item>
+            {{ loading ? '登录中...' : '登录' }}
+          </button>
+        </div>
+        
+        <div class="form-item">
+          <button
+            type="button"
+            class="debug-button"
+            @click="checkState"
+          >
+            检查状态
+          </button>
+        </div>
         
         <div class="login-actions">
           <el-link type="primary" @click="$router.push('/register')">
@@ -54,7 +57,7 @@
             忘记密码？
           </el-link>
         </div>
-      </el-form>
+      </div>
     </div>
     
     <!-- 忘记密码对话框 -->
@@ -69,11 +72,11 @@
         :rules="forgotRules"
       >
         <el-form-item prop="email">
-          <el-input
-            v-model="forgotForm.email"
-            placeholder="请输入QQ邮箱地址"
-            type="email"
-          />
+                  <el-input
+          v-model="forgotForm.email"
+          placeholder="请输入邮箱地址"
+          type="email"
+        />
         </el-form-item>
       </el-form>
       
@@ -118,7 +121,7 @@ export default {
     
     const loginRules = {
       username: [
-        { required: true, message: '请输入QQ号码或QQ邮箱', trigger: 'blur' }
+        { required: true, message: '请输入用户名或邮箱', trigger: 'blur' }
       ],
       password: [
         { required: true, message: '请输入密码', trigger: 'blur' },
@@ -128,13 +131,8 @@ export default {
     
     const forgotRules = {
       email: [
-        { required: true, message: '请输入QQ邮箱地址', trigger: 'blur' },
-        { type: 'email', message: '请输入正确的QQ邮箱格式', trigger: 'blur' },
-        { 
-          pattern: /^\d+@qq\.com$/,
-          message: '请输入正确的QQ邮箱地址',
-          trigger: 'blur'
-        }
+        { required: true, message: '请输入邮箱地址', trigger: 'blur' },
+        { type: 'email', message: '请输入正确的邮箱格式', trigger: 'blur' }
       ]
     }
     
@@ -142,14 +140,38 @@ export default {
       loading.value = true
       
       try {
+        console.log('开始登录，用户名:', loginForm.username)
+        console.log('开始登录，密码:', loginForm.password)
+        
         const result = await authStore.login(loginForm)
+        console.log('登录结果:', result)
+        
         if (result.success) {
           ElMessage.success('登录成功')
-          router.push('/dashboard')
+          
+          // 添加调试信息
+          console.log('登录成功，用户数据:', authStore.user)
+          console.log('用户权限状态:', authStore.isAdmin)
+          console.log('用户ID:', authStore.user?.id)
+          console.log('用户名:', authStore.user?.username)
+          console.log('邮箱:', authStore.user?.email)
+          console.log('is_admin字段:', authStore.user?.is_admin)
+          console.log('localStorage中的用户数据:', localStorage.getItem('user'))
+          
+          // 根据用户权限跳转到不同页面
+          if (authStore.isAdmin) {
+            console.log('跳转到管理员界面')
+            router.push('/admin/dashboard')
+          } else {
+            console.log('跳转到普通用户界面')
+            router.push('/dashboard')
+          }
         } else {
+          console.log('登录失败:', result.message)
           ElMessage.error(result.message)
         }
       } catch (error) {
+        console.error('登录异常:', error)
         ElMessage.error('登录失败，请重试')
       } finally {
         loading.value = false
@@ -174,6 +196,17 @@ export default {
         forgotLoading.value = false
       }
     }
+
+    const checkState = () => {
+      console.log('当前用户状态:')
+      console.log('用户数据:', authStore.user)
+      console.log('用户权限状态:', authStore.isAdmin)
+      console.log('用户ID:', authStore.user?.id)
+      console.log('用户名:', authStore.user?.username)
+      console.log('邮箱:', authStore.user?.email)
+      console.log('is_admin字段:', authStore.user?.is_admin)
+      console.log('localStorage中的用户数据:', localStorage.getItem('user'))
+    }
     
     return {
       loginForm,
@@ -184,7 +217,8 @@ export default {
       loginRules,
       forgotRules,
       handleLogin,
-      handleForgotPassword
+      handleForgotPassword,
+      checkState
     }
   }
 }
@@ -231,11 +265,72 @@ export default {
   margin-top: 20px;
 }
 
+.form-item {
+  margin-bottom: 20px;
+}
+
+.login-input {
+  width: 100%;
+  height: 44px;
+  padding: 0 16px;
+  border: 1px solid #dcdfe6;
+  border-radius: 6px;
+  font-size: 16px;
+  outline: none;
+  transition: border-color 0.3s;
+}
+
+.login-input:focus {
+  border-color: #1677ff;
+  box-shadow: 0 0 0 2px rgba(22, 119, 255, 0.1);
+}
+
+.login-input::placeholder {
+  color: #a8abb2;
+}
+
 .login-button {
   width: 100%;
   height: 44px;
   font-size: 16px;
   font-weight: 500;
+  background: #1677ff;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background-color 0.3s;
+}
+
+.login-button:hover:not(:disabled) {
+  background: #0958d9;
+}
+
+.login-button:disabled {
+  background: #a8abb2;
+  cursor: not-allowed;
+}
+
+.debug-button {
+  width: 100%;
+  height: 44px;
+  font-size: 16px;
+  font-weight: 500;
+  background: #409eff; /* A different color for debugging */
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background-color 0.3s;
+}
+
+.debug-button:hover:not(:disabled) {
+  background: #3a8ee6;
+}
+
+.debug-button:disabled {
+  background: #a8abb2;
+  cursor: not-allowed;
 }
 
 .login-actions {

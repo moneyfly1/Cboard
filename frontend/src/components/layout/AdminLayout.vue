@@ -167,6 +167,14 @@
             <span class="nav-text" v-show="!sidebarCollapsed">配置管理</span>
           </router-link>
           <router-link 
+            to="/admin/email-queue"
+            class="nav-item"
+            :class="{ active: $route.path === '/admin/email-queue' }"
+          >
+            <i class="el-icon-message"></i>
+            <span class="nav-text" v-show="!sidebarCollapsed">邮件队列</span>
+          </router-link>
+          <router-link 
             to="/admin/statistics"
             class="nav-item"
             :class="{ active: $route.path === '/admin/statistics' }"
@@ -271,7 +279,7 @@ const handleAdminCommand = (command) => {
       router.push('/admin/settings')
       break
     case 'logs':
-      router.push('/admin/logs')
+      router.push('/admin/system-logs')
       break
     case 'logout':
       authStore.logout()

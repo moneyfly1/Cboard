@@ -1,10 +1,11 @@
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any
 from sqlalchemy.orm import Session
-from fastapi import HTTPException, status
+from fastapi import HTTPException, status, Request
 import re
 
 from app.models.user import User
+from app.models.user_activity import LoginHistory
 from app.schemas.user import UserCreate, UserUpdate
 from app.utils.security import get_password_hash, verify_password, create_access_token
 from app.core.settings_manager import settings_manager
@@ -67,16 +68,25 @@ class AuthService:
         
         return user
 
-    def authenticate_user(self, email: str, password: str) -> Optional[User]:
+    def authenticate_user(self, email: str, password: str, request: Request = None) -> Optional[User]:
         """用户认证"""
         user = self.db.query(User).filter(User.email == email).first()
         if not user:
+            # 记录失败的登录尝试
+            if request:
+                self._log_login_attempt(email, "failed", "用户不存在", request)
             return None
         
         if not verify_password(password, user.hashed_password):
+            # 记录失败的登录尝试
+            if request:
+                self._log_login_attempt(email, "failed", "密码错误", request)
             return None
         
         if not user.is_active:
+            # 记录失败的登录尝试
+            if request:
+                self._log_login_attempt(email, "failed", "账户已被禁用", request)
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="账户已被禁用"
@@ -84,12 +94,46 @@ class AuthService:
         
         # 检查邮箱验证
         if settings_manager.is_email_verification_required(self.db) and not user.is_verified:
+            # 记录失败的登录尝试
+            if request:
+                self._log_login_attempt(email, "failed", "邮箱未验证", request)
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="请先验证邮箱"
             )
         
+        # 记录成功的登录
+        if request:
+            self._log_login_attempt(user.email, "success", None, request, user.id)
+        
+        # 更新最后登录时间
+        user.last_login = datetime.utcnow()
+        self.db.commit()
+        
         return user
+
+    def _log_login_attempt(
+        self, 
+        email: str, 
+        status: str, 
+        failure_reason: str = None, 
+        request: Request = None,
+        user_id: int = None
+    ):
+        """记录登录尝试"""
+        try:
+            login_record = LoginHistory(
+                user_id=user_id,
+                ip_address=request.client.host if request and request.client else None,
+                user_agent=request.headers.get("user-agent") if request else None,
+                login_status=status,
+                failure_reason=failure_reason
+            )
+            self.db.add(login_record)
+            self.db.commit()
+        except Exception as e:
+            # 记录登录历史失败不应该影响主要功能
+            print(f"记录登录历史失败: {e}")
 
     def create_user_token(self, user: User) -> Dict[str, Any]:
         """创建用户访问令牌"""

@@ -25,45 +25,64 @@ class Settings(BaseSettings):
             return v
         raise ValueError(v)
 
-    # 数据库配置
-    DATABASE_URL: str = "sqlite:///./xboard.db"
-    POSTGRES_SERVER: str = "localhost"
-    POSTGRES_USER: str = "postgres"
-    POSTGRES_PASSWORD: str = "password"
-    POSTGRES_DB: str = "xboard"
+    # 数据库配置 - 支持多种数据库
+    DATABASE_URL: str = os.getenv("DATABASE_URL", "sqlite:///./xboard.db")
+    
+    # MySQL配置
+    MYSQL_HOST: str = os.getenv("MYSQL_HOST", "localhost")
+    MYSQL_PORT: int = int(os.getenv("MYSQL_PORT", "3306"))
+    MYSQL_USER: str = os.getenv("MYSQL_USER", "xboard_user")
+    MYSQL_PASSWORD: str = os.getenv("MYSQL_PASSWORD", "xboard_password_2024")
+    MYSQL_DATABASE: str = os.getenv("MYSQL_DATABASE", "xboard_db")
+    
+    # PostgreSQL配置
+    POSTGRES_SERVER: str = os.getenv("POSTGRES_SERVER", "localhost")
+    POSTGRES_USER: str = os.getenv("POSTGRES_USER", "postgres")
+    POSTGRES_PASSWORD: str = os.getenv("POSTGRES_PASSWORD", "password")
+    POSTGRES_DB: str = os.getenv("POSTGRES_DB", "xboard")
     
     # JWT配置
-    SECRET_KEY: str = "your-secret-key-here"
-    ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
-    REFRESH_TOKEN_EXPIRE_DAYS: int = 7
+    SECRET_KEY: str = os.getenv("SECRET_KEY", "your-secret-key-here")
+    ALGORITHM: str = os.getenv("JWT_ALGORITHM", "HS256")
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = int(os.getenv("JWT_EXPIRE_HOURS", "24")) * 60
+    REFRESH_TOKEN_EXPIRE_DAYS: int = int(os.getenv("REFRESH_TOKEN_EXPIRE_DAYS", "7"))
     
     # 邮件配置
-    SMTP_TLS: bool = True
-    SMTP_PORT: int = 587
-    SMTP_HOST: str = "smtp.qq.com"
-    SMTP_USER: str = "your-email@qq.com"
-    SMTP_PASSWORD: str = "your-smtp-password"
-    EMAILS_FROM_EMAIL: str = "your-email@qq.com"
-    EMAILS_FROM_NAME: str = "XBoard Modern"
+    SMTP_TLS: bool = os.getenv("SMTP_ENCRYPTION", "tls") in ["tls", "ssl"]
+    SMTP_PORT: int = int(os.getenv("SMTP_PORT", "587"))
+    SMTP_HOST: str = os.getenv("SMTP_HOST", "smtp.qq.com")
+    SMTP_USER: str = os.getenv("SMTP_USERNAME", "your-email@qq.com")
+    SMTP_PASSWORD: str = os.getenv("SMTP_PASSWORD", "your-smtp-password")
+    EMAILS_FROM_EMAIL: str = os.getenv("SMTP_FROM_EMAIL", "your-email@qq.com")
+    EMAILS_FROM_NAME: str = os.getenv("SMTP_FROM_NAME", "XBoard Modern")
     
     # Redis配置
-    REDIS_URL: str = "redis://localhost:6379"
+    REDIS_HOST: str = os.getenv("REDIS_HOST", "localhost")
+    REDIS_PORT: int = int(os.getenv("REDIS_PORT", "6379"))
+    REDIS_PASSWORD: str = os.getenv("REDIS_PASSWORD", "")
+    REDIS_DB: int = int(os.getenv("REDIS_DB", "0"))
+    REDIS_URL: str = os.getenv("REDIS_URL", f"redis://{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB}")
     
     # 支付宝配置
-    ALIPAY_APP_ID: str = "your-alipay-app-id"
-    ALIPAY_PRIVATE_KEY: str = "your-private-key"
-    ALIPAY_PUBLIC_KEY: str = "alipay-public-key"
-    ALIPAY_NOTIFY_URL: str = "https://yourdomain.com/api/v1/payment/alipay/notify"
-    ALIPAY_RETURN_URL: str = "https://yourdomain.com/api/v1/payment/alipay/return"
+    ALIPAY_APP_ID: str = os.getenv("ALIPAY_APP_ID", "your-alipay-app-id")
+    ALIPAY_PRIVATE_KEY: str = os.getenv("ALIPAY_PRIVATE_KEY", "your-private-key")
+    ALIPAY_PUBLIC_KEY: str = os.getenv("ALIPAY_PUBLIC_KEY", "alipay-public-key")
+    ALIPAY_NOTIFY_URL: str = os.getenv("ALIPAY_NOTIFY_URL", "https://yourdomain.com/api/v1/payment/alipay/notify")
+    ALIPAY_RETURN_URL: str = os.getenv("ALIPAY_RETURN_URL", "https://yourdomain.com/api/v1/payment/alipay/return")
     
     # 文件上传配置
-    UPLOAD_DIR: str = "uploads"
-    MAX_FILE_SIZE: int = 10 * 1024 * 1024  # 10MB
+    UPLOAD_DIR: str = os.getenv("UPLOAD_DIR", "uploads")
+    MAX_FILE_SIZE: int = int(os.getenv("MAX_FILE_SIZE", "10485760"))  # 10MB
     
     # 订阅配置
-    SUBSCRIPTION_URL_PREFIX: str = "https://yourdomain.com/sub"
-    DEVICE_LIMIT_DEFAULT: int = 3
+    SUBSCRIPTION_URL_PREFIX: str = os.getenv("SUBSCRIPTION_URL_PREFIX", "https://yourdomain.com/sub")
+    DEVICE_LIMIT_DEFAULT: int = int(os.getenv("DEVICE_LIMIT_DEFAULT", "3"))
+    
+    # 应用配置
+    DEBUG: bool = os.getenv("DEBUG", "True").lower() == "true"
+    HOST: str = os.getenv("HOST", "0.0.0.0")
+    PORT: int = int(os.getenv("PORT", "8000"))
+    WORKERS: int = int(os.getenv("WORKERS", "4"))
     
     class Config:
         env_file = ".env"

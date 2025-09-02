@@ -6,16 +6,21 @@ import hmac
 import json
 import requests
 from urllib.parse import urlencode
+from sqlalchemy import desc
 
-from app.models.payment import PaymentConfig, PaymentTransaction, PaymentCallback
+from app.models.payment import PaymentTransaction, PaymentCallback
+from app.models.payment_config import PaymentConfig
 from app.schemas.payment import (
     PaymentConfigCreate, PaymentConfigUpdate,
     PaymentTransactionCreate, PaymentTransactionUpdate,
     PaymentCallbackCreate, PaymentCallbackUpdate,
-    AlipayConfig, WechatPayConfig, PayPalConfig, StripeConfig, CryptoConfig,
-    PaymentRequest, PaymentResponse, PaymentCallbackRequest
+    AlipayConfig, WechatConfig, PayPalConfig, StripeConfig, CryptoConfig,
+    PaymentCreate, PaymentResponse, PaymentCallback,
+    BankTransferConfig, PaymentMethod, PaymentMethodCreate, PaymentMethodUpdate
 )
 from app.core.settings_manager import settings_manager
+from app.utils.security import get_password_hash, verify_password
+import xml.etree.ElementTree as ET
 
 class PaymentService:
     def __init__(self, db: Session):
@@ -128,7 +133,7 @@ class PaymentService:
         return transaction
 
     # 支付网关实现
-    def create_payment(self, payment_request: PaymentRequest) -> PaymentResponse:
+    def create_payment(self, payment_request: PaymentCreate) -> PaymentResponse:
         """创建支付"""
         # 检查支付功能是否启用
         if not self.is_payment_enabled():
@@ -138,34 +143,43 @@ class PaymentService:
                 error_code="PAYMENT_DISABLED"
             )
         
-        # 获取支付配置
-        config = self.get_payment_config_by_name(payment_request.payment_method)
-        if not config or not config.is_active:
+        # 获取支付方式配置
+        payment_method = self.db.query(PaymentMethod).filter(PaymentMethod.id == payment_request.payment_method_id).first()
+        if not payment_method:
             return PaymentResponse(
                 success=False,
-                message="支付方式不可用",
-                error_code="PAYMENT_METHOD_UNAVAILABLE"
+                message="支付方式不存在",
+                error_code="PAYMENT_METHOD_NOT_FOUND"
+            )
+        
+        if payment_method.status != "active":
+            return PaymentResponse(
+                success=False,
+                message="支付方式已禁用",
+                error_code="PAYMENT_METHOD_DISABLED"
             )
         
         # 使用设置中的货币
         currency = payment_request.currency or self.get_payment_currency()
         
         try:
-            # 根据支付类型创建支付
-            if config.type == "alipay":
-                return self._create_alipay_payment(config, payment_request, currency)
-            elif config.type == "wechat":
-                return self._create_wechat_payment(config, payment_request, currency)
-            elif config.type == "paypal":
-                return self._create_paypal_payment(config, payment_request, currency)
-            elif config.type == "stripe":
-                return self._create_stripe_payment(config, payment_request, currency)
-            elif config.type == "crypto":
-                return self._create_crypto_payment(config, payment_request, currency)
+            # 根据支付方式类型创建支付
+            if payment_method.type == "alipay":
+                return self._create_alipay_payment_with_config(payment_method.config, payment_request, currency)
+            elif payment_method.type == "wechat":
+                return self._create_wechat_payment_with_config(payment_method.config, payment_request, currency)
+            elif payment_method.type == "paypal":
+                return self._create_paypal_payment_with_config(payment_method.config, payment_request, currency)
+            elif payment_method.type == "stripe":
+                return self._create_stripe_payment_with_config(payment_method.config, payment_request, currency)
+            elif payment_method.type == "bank_transfer":
+                return self._create_bank_transfer_payment(payment_method.config, payment_request, currency)
+            elif payment_method.type == "crypto":
+                return self._create_crypto_payment_with_config(payment_method.config, payment_request, currency)
             else:
                 return PaymentResponse(
                     success=False,
-                    message="不支持的支付方式",
+                    message=f"不支持的支付方式类型: {payment_method.type}",
                     error_code="UNSUPPORTED_PAYMENT_METHOD"
                 )
         except Exception as e:
@@ -175,7 +189,7 @@ class PaymentService:
                 error_code="PAYMENT_CREATION_FAILED"
             )
 
-    def _create_alipay_payment(self, config: PaymentConfig, request: PaymentRequest, currency: str) -> PaymentResponse:
+    def _create_alipay_payment(self, config: PaymentConfig, request: PaymentCreate, currency: str) -> PaymentResponse:
         """创建支付宝支付"""
         try:
             alipay_config = AlipayConfig(**config.config)
@@ -231,10 +245,10 @@ class PaymentService:
                 error_code="ALIPAY_CREATION_FAILED"
             )
 
-    def _create_wechat_payment(self, config: PaymentConfig, request: PaymentRequest, currency: str) -> PaymentResponse:
+    def _create_wechat_payment(self, config: PaymentConfig, request: PaymentCreate, currency: str) -> PaymentResponse:
         """创建微信支付"""
         try:
-            wechat_config = WechatPayConfig(**config.config)
+            wechat_config = WechatConfig(**config.config)
             
             # 生成交易ID
             transaction_id = f"WX{datetime.now().strftime('%Y%m%d%H%M%S')}{request.order_id}"
@@ -298,7 +312,7 @@ class PaymentService:
                 error_code="WECHAT_CREATION_FAILED"
             )
 
-    def _create_paypal_payment(self, config: PaymentConfig, request: PaymentRequest, currency: str) -> PaymentResponse:
+    def _create_paypal_payment(self, config: PaymentConfig, request: PaymentCreate, currency: str) -> PaymentResponse:
         """创建PayPal支付"""
         try:
             paypal_config = PayPalConfig(**config.config)
@@ -373,7 +387,7 @@ class PaymentService:
                 error_code="PAYPAL_CREATION_FAILED"
             )
 
-    def _create_stripe_payment(self, config: PaymentConfig, request: PaymentRequest, currency: str) -> PaymentResponse:
+    def _create_stripe_payment(self, config: PaymentConfig, request: PaymentCreate, currency: str) -> PaymentResponse:
         """创建Stripe支付"""
         try:
             stripe_config = StripeConfig(**config.config)
@@ -441,7 +455,7 @@ class PaymentService:
                 error_code="STRIPE_CREATION_FAILED"
             )
 
-    def _create_crypto_payment(self, config: PaymentConfig, request: PaymentRequest, currency: str) -> PaymentResponse:
+    def _create_crypto_payment(self, config: PaymentConfig, request: PaymentCreate, currency: str) -> PaymentResponse:
         """创建加密货币支付"""
         try:
             crypto_config = CryptoConfig(**config.config)
@@ -555,6 +569,270 @@ class PaymentService:
 
     def _xml_to_dict(self, xml: str) -> Dict[str, Any]:
         """XML转字典"""
-        import xml.etree.ElementTree as ET
         root = ET.fromstring(xml)
         return {child.tag: child.text for child in root} 
+
+class PaymentMethodService:
+    def __init__(self, db: Session):
+        self.db = db
+
+    def get_payment_methods(
+        self, 
+        skip: int = 0, 
+        limit: int = 100,
+        type_filter: Optional[str] = None,
+        status_filter: Optional[str] = None
+    ) -> List[PaymentMethod]:
+        """获取支付方式列表"""
+        query = self.db.query(PaymentMethod)
+        
+        if type_filter:
+            query = query.filter(PaymentMethod.type == type_filter)
+        
+        if status_filter:
+            query = query.filter(PaymentMethod.status == status_filter)
+        
+        return query.order_by(PaymentMethod.sort_order, PaymentMethod.id).offset(skip).limit(limit).all()
+
+    def get_payment_method(self, payment_method_id: int) -> Optional[PaymentMethod]:
+        """根据ID获取支付方式"""
+        return self.db.query(PaymentMethod).filter(PaymentMethod.id == payment_method_id).first()
+
+    def get_active_payment_methods(self) -> List[PaymentMethod]:
+        """获取所有启用的支付方式"""
+        return self.db.query(PaymentMethod).filter(
+            PaymentMethod.status == "active"
+        ).order_by(PaymentMethod.sort_order, PaymentMethod.id).all()
+
+    def create_payment_method(self, payment_method: PaymentMethodCreate) -> PaymentMethod:
+        """创建支付方式"""
+        db_payment_method = PaymentMethod(**payment_method.dict())
+        self.db.add(db_payment_method)
+        self.db.commit()
+        self.db.refresh(db_payment_method)
+        return db_payment_method
+
+    def update_payment_method(
+        self, 
+        payment_method_id: int, 
+        payment_method: PaymentMethodUpdate
+    ) -> Optional[PaymentMethod]:
+        """更新支付方式"""
+        db_payment_method = self.get_payment_method(payment_method_id)
+        if not db_payment_method:
+            return None
+        
+        update_data = payment_method.dict(exclude_unset=True)
+        for field, value in update_data.items():
+            setattr(db_payment_method, field, value)
+        
+        self.db.commit()
+        self.db.refresh(db_payment_method)
+        return db_payment_method
+
+    def delete_payment_method(self, payment_method_id: int) -> bool:
+        """删除支付方式"""
+        db_payment_method = self.get_payment_method(payment_method_id)
+        if not db_payment_method:
+            return False
+        
+        self.db.delete(db_payment_method)
+        self.db.commit()
+        return True
+
+    def update_payment_method_status(self, payment_method_id: int, status: str) -> Optional[PaymentMethod]:
+        """更新支付方式状态"""
+        db_payment_method = self.get_payment_method(payment_method_id)
+        if not db_payment_method:
+            return None
+        
+        db_payment_method.status = status
+        self.db.commit()
+        self.db.refresh(db_payment_method)
+        return db_payment_method
+
+    def update_payment_method_config(
+        self, 
+        payment_method_id: int, 
+        config: Dict[str, Any]
+    ) -> Optional[PaymentMethod]:
+        """更新支付方式配置"""
+        db_payment_method = self.get_payment_method(payment_method_id)
+        if not db_payment_method:
+            return None
+        
+        db_payment_method.config = config
+        self.db.commit()
+        self.db.refresh(db_payment_method)
+        return db_payment_method
+
+    def get_payment_method_config(self, payment_method_id: int) -> Optional[Dict[str, Any]]:
+        """获取支付方式配置"""
+        db_payment_method = self.get_payment_method(payment_method_id)
+        return db_payment_method.config if db_payment_method else None
+
+    def test_payment_method_config(self, payment_method_id: int) -> Dict[str, Any]:
+        """测试支付方式配置"""
+        db_payment_method = self.get_payment_method(payment_method_id)
+        if not db_payment_method:
+            return {"success": False, "message": "支付方式不存在"}
+        
+        try:
+            # 根据支付类型进行不同的测试
+            if db_payment_method.type == "alipay":
+                return self._test_alipay_config(db_payment_method.config)
+            elif db_payment_method.type == "wechat":
+                return self._test_wechat_config(db_payment_method.config)
+            elif db_payment_method.type == "paypal":
+                return self._test_paypal_config(db_payment_method.config)
+            elif db_payment_method.type == "stripe":
+                return self._test_stripe_config(db_payment_method.config)
+            else:
+                return {"success": True, "message": "配置验证通过"}
+        except Exception as e:
+            return {"success": False, "message": f"配置测试失败: {str(e)}"}
+
+    def _test_alipay_config(self, config: Dict[str, Any]) -> Dict[str, Any]:
+        """测试支付宝配置"""
+        required_fields = ["app_id", "merchant_private_key", "alipay_public_key"]
+        for field in required_fields:
+            if not config.get(field):
+                return {"success": False, "message": f"缺少必要配置: {field}"}
+        
+        # 这里可以添加实际的支付宝API测试
+        return {"success": True, "message": "支付宝配置验证通过"}
+
+    def _test_wechat_config(self, config: Dict[str, Any]) -> Dict[str, Any]:
+        """测试微信支付配置"""
+        required_fields = ["mch_id", "app_id", "api_key"]
+        for field in required_fields:
+            if not config.get(field):
+                return {"success": False, "message": f"缺少必要配置: {field}"}
+        
+        return {"success": True, "message": "微信支付配置验证通过"}
+
+    def _test_paypal_config(self, config: Dict[str, Any]) -> Dict[str, Any]:
+        """测试PayPal配置"""
+        required_fields = ["client_id", "secret"]
+        for field in required_fields:
+            if not config.get(field):
+                return {"success": False, "message": f"缺少必要配置: {field}"}
+        
+        return {"success": True, "message": "PayPal配置验证通过"}
+
+    def _test_stripe_config(self, config: Dict[str, Any]) -> Dict[str, Any]:
+        """测试Stripe配置"""
+        required_fields = ["publishable_key", "secret_key"]
+        for field in required_fields:
+            if not config.get(field):
+                return {"success": False, "message": f"缺少必要配置: {field}"}
+        
+        return {"success": True, "message": "Stripe配置验证通过"}
+
+    def bulk_update_status(self, payment_method_ids: List[int], status: str) -> int:
+        """批量更新支付方式状态"""
+        result = self.db.query(PaymentMethod).filter(
+            PaymentMethod.id.in_(payment_method_ids)
+        ).update({"status": status}, synchronize_session=False)
+        
+        self.db.commit()
+        return result
+
+    def bulk_delete(self, payment_method_ids: List[int]) -> int:
+        """批量删除支付方式"""
+        result = self.db.query(PaymentMethod).filter(
+            PaymentMethod.id.in_(payment_method_ids)
+        ).delete(synchronize_session=False)
+        
+        self.db.commit()
+        return result
+
+class PaymentTransactionService:
+    def __init__(self, db: Session):
+        self.db = db
+
+    def get_transactions(
+        self, 
+        skip: int = 0, 
+        limit: int = 100,
+        user_id: Optional[int] = None,
+        order_id: Optional[int] = None,
+        status: Optional[str] = None
+    ) -> List[PaymentTransaction]:
+        """获取支付交易列表"""
+        query = self.db.query(PaymentTransaction)
+        
+        if user_id:
+            query = query.filter(PaymentTransaction.user_id == user_id)
+        
+        if order_id:
+            query = query.filter(PaymentTransaction.order_id == order_id)
+        
+        if status:
+            query = query.filter(PaymentTransaction.status == status)
+        
+        return query.order_by(desc(PaymentTransaction.created_at)).offset(skip).limit(limit).all()
+
+    def get_transaction(self, transaction_id: int) -> Optional[PaymentTransaction]:
+        """根据ID获取支付交易"""
+        return self.db.query(PaymentTransaction).filter(
+            PaymentTransaction.id == transaction_id
+        ).first()
+
+    def get_transaction_by_external_id(self, external_id: str) -> Optional[PaymentTransaction]:
+        """根据外部交易号获取支付交易"""
+        return self.db.query(PaymentTransaction).filter(
+            PaymentTransaction.external_transaction_id == external_id
+        ).first()
+
+    def create_transaction(self, transaction: PaymentTransactionCreate) -> PaymentTransaction:
+        """创建支付交易"""
+        db_transaction = PaymentTransaction(
+            **transaction.dict(),
+            transaction_id=generate_transaction_id()
+        )
+        self.db.add(db_transaction)
+        self.db.commit()
+        self.db.refresh(db_transaction)
+        return db_transaction
+
+    def update_transaction(
+        self, 
+        transaction_id: int, 
+        transaction: PaymentTransactionUpdate
+    ) -> Optional[PaymentTransaction]:
+        """更新支付交易"""
+        db_transaction = self.get_transaction(transaction_id)
+        if not db_transaction:
+            return None
+        
+        update_data = transaction.dict(exclude_unset=True)
+        for field, value in update_data.items():
+            setattr(db_transaction, field, value)
+        
+        self.db.commit()
+        self.db.refresh(db_transaction)
+        return db_transaction
+
+    def update_transaction_status(self, transaction_id: int, status: str) -> Optional[PaymentTransaction]:
+        """更新支付交易状态"""
+        db_transaction = self.get_transaction(transaction_id)
+        if not db_transaction:
+            return None
+        
+        db_transaction.status = status
+        self.db.commit()
+        self.db.refresh(db_transaction)
+        return db_transaction
+
+    def get_user_transactions(self, user_id: int, limit: int = 50) -> List[PaymentTransaction]:
+        """获取用户支付交易历史"""
+        return self.db.query(PaymentTransaction).filter(
+            PaymentTransaction.user_id == user_id
+        ).order_by(desc(PaymentTransaction.created_at)).limit(limit).all()
+
+    def get_order_transactions(self, order_id: int) -> List[PaymentTransaction]:
+        """获取订单相关的支付交易"""
+        return self.db.query(PaymentTransaction).filter(
+            PaymentTransaction.order_id == order_id
+        ).order_by(desc(PaymentTransaction.created_at)).all() 

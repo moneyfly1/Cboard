@@ -25,52 +25,83 @@ def get_user_subscription(
     db: Session = Depends(get_db)
 ) -> Any:
     """获取用户订阅信息"""
-    subscription_service = SubscriptionService(db)
-    
-    # 获取用户订阅
-    subscription = subscription_service.get_by_user_id(current_user.id)
-    if not subscription:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="未找到订阅信息"
+    try:
+        subscription_service = SubscriptionService(db)
+        
+        # 获取用户订阅
+        subscription = subscription_service.get_by_user_id(current_user.id)
+        if not subscription:
+            # 如果没有订阅信息，返回默认数据
+            return ResponseBase(
+                data={
+                    "subscription_id": None,
+                    "status": "expired",
+                    "remainingDays": 0,
+                    "expiryDate": "未订阅",
+                    "is_expiring": False,
+                    "currentDevices": 0,
+                    "maxDevices": 0,
+                    "is_device_limit_reached": False,
+                    "mobileUrl": "",
+                    "clashUrl": "",
+                    "qrcodeUrl": ""
+                }
+            )
+        
+        # 计算剩余天数
+        now = datetime.utcnow()
+        if subscription.expire_time:
+            remaining_days = max(0, (subscription.expire_time - now).days)
+            is_expiring = remaining_days <= 7
+            expiry_date = subscription.expire_time.strftime('%Y-%m-%d %H:%M:%S')
+        else:
+            remaining_days = 0
+            is_expiring = False
+            expiry_date = "未设置"
+        
+        # 获取设备数量
+        devices = subscription_service.get_devices_by_subscription_id(subscription.id)
+        current_devices = len(devices)
+        max_devices = subscription.device_limit
+        
+        # 生成订阅URL
+        base_url = settings.BASE_URL.rstrip('/')
+        ssr_url = f"{base_url}/api/v1/subscriptions/{subscription.id}/ssr"
+        clash_url = f"{base_url}/api/v1/subscriptions/{subscription.id}/clash"
+        qrcode_url = f"sub://{base64_encode(ssr_url)}#{urlencode(expiry_date)}"
+        
+        return ResponseBase(
+            data={
+                "subscription_id": subscription.id,
+                "status": "active" if remaining_days > 0 else "expired",
+                "remainingDays": remaining_days,
+                "expiryDate": expiry_date,
+                "is_expiring": is_expiring,
+                "currentDevices": current_devices,
+                "maxDevices": max_devices,
+                "is_device_limit_reached": current_devices >= max_devices,
+                "mobileUrl": ssr_url,
+                "clashUrl": clash_url,
+                "qrcodeUrl": qrcode_url
+            }
         )
-    
-    # 计算剩余天数
-    now = datetime.utcnow()
-    if subscription.expire_time:
-        remaining_days = max(0, (subscription.expire_time - now).days)
-        is_expiring = remaining_days <= 7
-        expiry_date = subscription.expire_time.strftime('%Y-%m-%d %H:%M:%S')
-    else:
-        remaining_days = 0
-        is_expiring = False
-        expiry_date = "未设置"
-    
-    # 获取设备数量
-    devices = subscription_service.get_devices_by_subscription_id(subscription.id)
-    current_devices = len(devices)
-    max_devices = subscription.device_limit
-    
-    # 生成订阅URL
-    base_url = settings.BASE_URL.rstrip('/')
-    ssr_url = f"{base_url}/api/v1/subscriptions/{subscription.id}/ssr"
-    clash_url = f"{base_url}/api/v1/subscriptions/{subscription.id}/clash"
-    qrcode_url = f"sub://{base64_encode(ssr_url)}#{urlencode(expiry_date)}"
-    
-    return ResponseBase(
-        data={
-            "subscription_id": subscription.id,
-            "remaining_days": remaining_days,
-            "expiry_date": expiry_date,
-            "is_expiring": is_expiring,
-            "current_devices": current_devices,
-            "max_devices": max_devices,
-            "is_device_limit_reached": current_devices >= max_devices,
-            "ssr_url": ssr_url,
-            "clash_url": clash_url,
-            "qrcode_url": qrcode_url
-        }
-    )
+    except Exception as e:
+        # 如果发生错误，返回默认数据
+        return ResponseBase(
+            data={
+                "subscription_id": None,
+                "status": "expired",
+                "remainingDays": 0,
+                "expiryDate": "加载失败",
+                "is_expiring": False,
+                "currentDevices": 0,
+                "maxDevices": 0,
+                "is_device_limit_reached": False,
+                "mobileUrl": "",
+                "clashUrl": "",
+                "qrcodeUrl": ""
+            }
+        )
 
 @router.post("/reset-subscription", response_model=ResponseBase)
 def reset_subscription(
@@ -165,30 +196,32 @@ def get_user_devices(
     db: Session = Depends(get_db)
 ) -> Any:
     """获取用户设备列表"""
-    subscription_service = SubscriptionService(db)
-    
-    # 获取用户订阅
-    subscription = subscription_service.get_by_user_id(current_user.id)
-    if not subscription:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="未找到订阅信息"
-        )
-    
-    # 获取设备列表
-    devices = subscription_service.get_devices_by_subscription_id(subscription.id)
-    
-    device_list = []
-    for device in devices:
-        device_list.append({
-            "id": device.id,
-            "name": device.name,
-            "type": device.type,
-            "ip": device.ip,
-            "last_access": device.last_access.strftime('%Y-%m-%d %H:%M:%S') if device.last_access else None
-        })
-    
-    return ResponseBase(data={"devices": device_list})
+    try:
+        subscription_service = SubscriptionService(db)
+        
+        # 获取用户订阅
+        subscription = subscription_service.get_by_user_id(current_user.id)
+        if not subscription:
+            # 如果没有订阅，返回空设备列表
+            return ResponseBase(data={"devices": []})
+        
+        # 获取设备列表
+        devices = subscription_service.get_devices_by_subscription_id(subscription.id)
+        
+        device_list = []
+        for device in devices:
+            device_list.append({
+                "id": device.id,
+                "name": device.name,
+                "type": device.type,
+                "ip": device.ip,
+                "last_access": device.last_access.strftime('%Y-%m-%d %H:%M:%S') if device.last_access else None
+            })
+        
+        return ResponseBase(data={"devices": device_list})
+    except Exception as e:
+        # 如果发生错误，返回空设备列表
+        return ResponseBase(data={"devices": []})
 
 @router.delete("/devices/{device_id}", response_model=ResponseBase)
 def remove_device(
@@ -313,4 +346,125 @@ def record_device_access(subscription, request: Request, db: Session):
             "ip": client_ip,
             "user_agent": user_agent
         }
-    ) 
+    )
+
+@router.put("/user-subscription", response_model=ResponseBase)
+def update_user_subscription(
+    subscription_data: dict,
+    current_user = Depends(get_current_user),
+    db: Session = Depends(get_db)
+) -> Any:
+    """更新用户订阅设置"""
+    try:
+        subscription_service = SubscriptionService(db)
+        
+        subscription = subscription_service.get_by_user_id(current_user.id)
+        if not subscription:
+            raise HTTPException(status_code=404, detail="用户没有订阅")
+        
+        # 更新设备限制
+        if "device_limit" in subscription_data:
+            new_limit = subscription_data["device_limit"]
+            if new_limit < subscription.current_devices:
+                raise HTTPException(status_code=400, detail="设备限制不能小于当前设备数量")
+            subscription.device_limit = new_limit
+        
+        # 更新到期时间
+        if "expire_time" in subscription_data:
+            from datetime import datetime
+            try:
+                new_expire_time = datetime.fromisoformat(subscription_data["expire_time"])
+                subscription.expire_time = new_expire_time
+            except ValueError:
+                raise HTTPException(status_code=400, detail="日期格式错误")
+        
+        subscription_service.db.commit()
+        
+        return ResponseBase(message="订阅设置更新成功")
+    except HTTPException:
+        raise
+    except Exception as e:
+        return ResponseBase(success=False, message=f"更新订阅设置失败: {str(e)}")
+
+@router.post("/user-subscription/reset-url", response_model=ResponseBase)
+def reset_user_subscription_url(
+    current_user = Depends(get_current_user),
+    db: Session = Depends(get_db)
+) -> Any:
+    """重置用户订阅地址"""
+    try:
+        subscription_service = SubscriptionService(db)
+        
+        subscription = subscription_service.get_by_user_id(current_user.id)
+        if not subscription:
+            raise HTTPException(status_code=400, detail="用户没有订阅")
+        
+        # 生成新的订阅URL
+        from app.utils.security import generate_subscription_url
+        new_url = generate_subscription_url()
+        subscription.subscription_url = new_url
+        
+        # 清理所有设备
+        devices = subscription_service.get_devices_by_subscription_id(subscription.id)
+        for device in devices:
+            subscription_service.db.delete(device)
+        
+        subscription.current_devices = 0
+        subscription_service.db.commit()
+        
+        return ResponseBase(message="订阅地址重置成功", data={"new_subscription_url": new_url})
+    except Exception as e:
+        return ResponseBase(success=False, message=f"重置订阅地址失败: {str(e)}")
+
+@router.delete("/devices/{device_id}", response_model=ResponseBase)
+def remove_user_device(
+    device_id: int,
+    current_user = Depends(get_current_user),
+    db: Session = Depends(get_db)
+) -> Any:
+    """移除用户设备"""
+    try:
+        subscription_service = SubscriptionService(db)
+        
+        subscription = subscription_service.get_by_user_id(current_user.id)
+        if not subscription:
+            raise HTTPException(status_code=404, detail="用户没有订阅")
+        
+        device = subscription_service.get_device(device_id)
+        if not device or device.subscription_id != subscription.id:
+            raise HTTPException(status_code=400, detail="设备不存在")
+        
+        subscription_service.db.delete(device)
+        subscription.current_devices = max(0, subscription.current_devices - 1)
+        subscription_service.db.commit()
+        
+        return ResponseBase(message="设备移除成功")
+    except HTTPException:
+        raise
+    except Exception as e:
+        return ResponseBase(success=False, message=f"移除设备失败: {str(e)}")
+
+@router.post("/devices/clear", response_model=ResponseBase)
+def clear_user_devices(
+    current_user = Depends(get_current_user),
+    db: Session = Depends(get_db)
+) -> Any:
+    """清理用户所有设备"""
+    try:
+        subscription_service = SubscriptionService(db)
+        
+        subscription = subscription_service.get_by_user_id(current_user.id)
+        if not subscription:
+            raise HTTPException(status_code=400, detail="用户没有订阅")
+        
+        # 清理所有设备
+        devices = subscription_service.get_devices_by_subscription_id(subscription.id)
+        for device in devices:
+            subscription_service.db.delete(device)
+        
+        subscription.current_devices = 0
+        subscription_service.db.commit()
+        
+        return ResponseBase(message="所有设备清理成功")
+    except Exception as e:
+        return ResponseBase(success=False, message=f"清理设备失败: {str(e)}") 

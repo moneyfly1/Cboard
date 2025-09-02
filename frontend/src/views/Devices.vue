@@ -51,26 +51,26 @@
         v-loading="loading"
         style="width: 100%"
       >
-        <el-table-column prop="name" label="设备名称" min-width="150">
+        <el-table-column prop="device_name" label="设备名称" min-width="150">
           <template #default="{ row }">
             <div class="device-name">
-              <i :class="getDeviceIcon(row.type)"></i>
-              <span>{{ row.name || '未知设备' }}</span>
+              <i :class="getDeviceIcon(row.device_type)"></i>
+              <span>{{ row.device_name || '未知设备' }}</span>
             </div>
           </template>
         </el-table-column>
 
-        <el-table-column prop="type" label="设备类型" width="120">
+        <el-table-column prop="device_type" label="设备类型" width="120">
           <template #default="{ row }">
-            <el-tag :type="getDeviceTypeColor(row.type)">
-              {{ getDeviceTypeName(row.type) }}
+            <el-tag :type="getDeviceTypeColor(row.device_type)">
+              {{ getDeviceTypeName(row.device_type) }}
             </el-tag>
           </template>
         </el-table-column>
 
-        <el-table-column prop="ip" label="IP地址" width="140">
+        <el-table-column prop="ip_address" label="IP地址" width="140">
           <template #default="{ row }">
-            <span class="ip-address">{{ row.ip }}</span>
+            <span class="ip-address">{{ row.ip_address }}</span>
           </template>
         </el-table-column>
 
@@ -186,8 +186,8 @@ export default {
     const updateDeviceStats = () => {
       deviceStats.total = devices.value.length
       deviceStats.online = devices.value.filter(d => isOnline(d.last_access)).length
-      deviceStats.mobile = devices.value.filter(d => d.type === 'mobile').length
-      deviceStats.desktop = devices.value.filter(d => d.type === 'desktop').length
+      deviceStats.mobile = devices.value.filter(d => d.device_type === 'mobile').length
+      deviceStats.desktop = devices.value.filter(d => d.device_type === 'desktop').length
     }
 
     // 刷新设备列表
@@ -227,7 +227,7 @@ export default {
     }
 
     // 获取设备图标
-    const getDeviceIcon = (type) => {
+    const getDeviceIcon = (deviceType) => {
       const icons = {
         mobile: 'el-icon-mobile-phone',
         desktop: 'el-icon-monitor',
@@ -235,31 +235,31 @@ export default {
         tv: 'el-icon-video-camera',
         unknown: 'el-icon-question'
       }
-      return icons[type] || icons.unknown
+      return icons[deviceType] || icons.unknown
     }
 
     // 获取设备类型名称
-    const getDeviceTypeName = (type) => {
+    const getDeviceTypeName = (deviceType) => {
       const names = {
         mobile: '移动设备',
         desktop: '桌面设备',
         tablet: '平板设备',
         tv: '电视设备',
-        unknown: '未知设备'
+            unknown: '未知设备'
       }
-      return names[type] || names.unknown
+      return names[deviceType] || names.unknown
     }
 
     // 获取设备类型颜色
-    const getDeviceTypeColor = (type) => {
+    const getDeviceTypeColor = (deviceType) => {
       const colors = {
         mobile: 'success',
         desktop: 'primary',
         tablet: 'warning',
         tv: 'info',
-        unknown: 'info'
+        unknown: 'default'
       }
-      return colors[type] || colors.unknown
+      return colors[deviceType] || colors.unknown
     }
 
     // 格式化时间

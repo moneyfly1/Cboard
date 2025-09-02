@@ -40,6 +40,9 @@ class SystemConfig(SystemConfigBase):
     class Config:
         from_attributes = True
 
+class SystemConfigInDB(SystemConfig):
+    pass
+
 class GeneralConfig(BaseModel):
     site_name: str = "XBoard Modern"
     site_description: str = "现代化订阅管理系统"
@@ -217,13 +220,23 @@ class ThemeConfigInDB(ThemeConfigBase):
 class ThemeConfig(ThemeConfigInDB):
     pass
 
+# 系统设置专用的主题配置schema
+class SystemThemeConfig(BaseModel):
+    default_theme: str = "default"
+    available_themes: List[str] = ["default", "dark", "light"]
+    custom_css: Optional[str] = None
+    logo_url: Optional[str] = None
+    favicon_url: Optional[str] = None
+    primary_color: str = "#1677ff"
+    secondary_color: str = "#52c41a"
+
 # System Settings
 class SystemSettings(BaseModel):
     general: GeneralConfig
     registration: RegistrationConfig
     email: EmailConfig
     notification: NotificationConfig
-    theme: ThemeConfig
+    theme: SystemThemeConfig  # 使用SystemThemeConfig
     payment: PaymentConfig
     announcement: AnnouncementConfig
     security: SecurityConfig

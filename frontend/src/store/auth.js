@@ -16,18 +16,21 @@ export const useAuthStore = defineStore('auth', () => {
   const login = async (credentials) => {
     loading.value = true
     try {
-      // 使用表单数据格式发送登录请求
-      const formData = new FormData()
-      formData.append('username', credentials.username)
-      formData.append('password', credentials.password)
+      console.log('认证存储：开始登录请求')
+      console.log('认证存储：用户名:', credentials.username)
       
-      const response = await api.post('/auth/login', formData, {
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded'
-        }
+      // 使用新的JSON登录端点
+      const response = await api.post('/auth/login-json', {
+        username: credentials.username,
+        password: credentials.password
       })
       
+      console.log('认证存储：收到响应:', response.data)
+      
       const { access_token, refresh_token, user: userData } = response.data
+      
+      console.log('认证存储：解析的用户数据:', userData)
+      console.log('认证存储：is_admin字段:', userData?.is_admin)
       
       // 保存令牌和用户信息
       token.value = access_token
@@ -36,8 +39,12 @@ export const useAuthStore = defineStore('auth', () => {
       localStorage.setItem('refresh_token', refresh_token)
       localStorage.setItem('user', JSON.stringify(userData))
       
+      console.log('认证存储：保存后的用户状态:', user.value)
+      console.log('认证存储：保存后的isAdmin状态:', isAdmin.value)
+      
       return { success: true }
     } catch (error) {
+      console.error('认证存储：登录错误:', error)
       return { 
         success: false, 
         message: error.response?.data?.detail || '登录失败' 
@@ -51,7 +58,7 @@ export const useAuthStore = defineStore('auth', () => {
     loading.value = true
     try {
       await api.post('/auth/register', userData)
-      return { success: true, message: '注册成功，请查收QQ邮箱验证邮件' }
+      return { success: true, message: '注册成功，请查收邮箱验证邮件' }
     } catch (error) {
       return { 
         success: false, 
@@ -94,7 +101,7 @@ export const useAuthStore = defineStore('auth', () => {
     loading.value = true
     try {
       await api.post('/auth/forgot-password', { email })
-      return { success: true, message: '重置链接已发送到您的QQ邮箱，请查收' }
+      return { success: true, message: '重置链接已发送到您的邮箱，请查收' }
     } catch (error) {
       return { 
         success: false, 
@@ -124,7 +131,7 @@ export const useAuthStore = defineStore('auth', () => {
     loading.value = true
     try {
       await api.post('/auth/verify-email', { token })
-      return { success: true, message: 'QQ邮箱验证成功' }
+      return { success: true, message: '邮箱验证成功' }
     } catch (error) {
       return { 
         success: false, 
@@ -138,6 +145,35 @@ export const useAuthStore = defineStore('auth', () => {
   const updateUser = (userData) => {
     user.value = { ...user.value, ...userData }
     localStorage.setItem('user', JSON.stringify(user.value))
+  }
+
+  const changePassword = async (oldPassword, newPassword) => {
+    loading.value = true
+    try {
+      await api.post('/users/change-password', {
+        old_password: oldPassword,
+        new_password: newPassword
+      })
+      return { success: true, message: '密码修改成功' }
+    } catch (error) {
+      return { 
+        success: false, 
+        message: error.response?.data?.detail || '密码修改失败' 
+      }
+    } finally {
+      loading.value = false
+    }
+  }
+
+  const getCurrentState = () => {
+    return {
+      token: token.value,
+      user: user.value,
+      isAuthenticated: isAuthenticated.value,
+      isAdmin: isAdmin.value,
+      localStorageUser: localStorage.getItem('user'),
+      localStorageToken: localStorage.getItem('token')
+    }
   }
 
   return {
@@ -158,6 +194,8 @@ export const useAuthStore = defineStore('auth', () => {
     forgotPassword,
     resetPassword,
     verifyEmail,
-    updateUser
+    updateUser,
+    changePassword,
+    getCurrentState
   }
 }) 

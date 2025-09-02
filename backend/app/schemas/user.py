@@ -11,11 +11,11 @@ class UserCreate(UserBase):
     username: Optional[str] = None  # 可选，会自动从QQ邮箱提取
     
     @validator('email')
-    def validate_qq_email(cls, v):
-        """验证是否为QQ邮箱"""
-        qq_pattern = r'^\d+@qq\.com$'
-        if not re.match(qq_pattern, v):
-            raise ValueError('只允许使用QQ邮箱注册')
+    def validate_email(cls, v):
+        """验证邮箱格式"""
+        email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+        if not re.match(email_pattern, v):
+            raise ValueError('请输入正确的邮箱地址')
         return v
     
     @validator('password')
@@ -51,7 +51,7 @@ class User(UserInDB):
     pass
 
 class UserLogin(BaseModel):
-    username: str  # 可以是QQ号码或QQ邮箱
+    username: str  # 可以是用户名或邮箱
     password: str
 
 class UserPasswordChange(BaseModel):
@@ -69,11 +69,11 @@ class UserPasswordReset(BaseModel):
     email: EmailStr
     
     @validator('email')
-    def validate_qq_email(cls, v):
-        """验证是否为QQ邮箱"""
-        qq_pattern = r'^\d+@qq\.com$'
-        if not re.match(qq_pattern, v):
-            raise ValueError('请输入正确的QQ邮箱地址')
+    def validate_email(cls, v):
+        """验证邮箱格式"""
+        email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+        if not re.match(email_pattern, v):
+            raise ValueError('请输入正确的邮箱地址')
         return v
 
 class UserPasswordResetConfirm(BaseModel):

@@ -2,6 +2,8 @@ from datetime import datetime
 from typing import Optional, List, Dict
 from sqlalchemy.orm import Session
 from sqlalchemy import func
+import json
+import base64
 
 from app.models.node import Node
 
@@ -31,7 +33,26 @@ class NodeService:
 
     def create(self, node_data: dict) -> Node:
         """创建节点"""
-        node = Node(**node_data)
+        # 处理配置信息
+        config = self._build_node_config(node_data)
+        
+        # 创建节点对象，只使用模型中存在的字段
+        node_fields = {
+            "name": node_data.get("name"),
+            "region": node_data.get("region"),
+            "type": node_data.get("type"),
+            "status": node_data.get("status", "offline"),
+            "load": node_data.get("load", 0.0),
+            "speed": node_data.get("speed", 0.0),
+            "uptime": node_data.get("uptime", 0),
+            "latency": node_data.get("latency", 0),
+            "description": node_data.get("description", ""),
+            "config": config,
+            "is_recommended": node_data.get("is_recommended", False),
+            "is_active": node_data.get("is_active", True)
+        }
+        
+        node = Node(**node_fields)
         
         self.db.add(node)
         self.db.commit()
@@ -44,8 +65,20 @@ class NodeService:
         if not node:
             return None
         
-        for field, value in node_data.items():
-            setattr(node, field, value)
+        # 处理配置信息更新
+        if "config" in node_data:
+            node_data["config"] = self._build_node_config(node_data)
+        
+        # 只更新模型中存在的字段
+        valid_fields = [
+            "name", "region", "type", "status", "load", "speed", 
+            "uptime", "latency", "description", "config", 
+            "is_recommended", "is_active"
+        ]
+        
+        for field in valid_fields:
+            if field in node_data:
+                setattr(node, field, node_data[field])
         
         self.db.commit()
         self.db.refresh(node)
@@ -60,6 +93,81 @@ class NodeService:
         self.db.delete(node)
         self.db.commit()
         return True
+
+    def _build_node_config(self, node_data: dict) -> str:
+        """根据节点数据构建配置字符串"""
+        node_type = node_data.get("type", "ssr")
+        
+        if node_type == "vmess":
+            return self._build_vmess_config(node_data)
+        elif node_type == "trojan":
+            return self._build_trojan_config(node_data)
+        elif node_type == "ssr":
+            return self._build_ssr_config(node_data)
+        elif node_type == "ss":
+            return self._build_ss_config(node_data)
+        else:
+            # 默认返回SSR配置
+            return self._build_ssr_config(node_data)
+
+    def _build_vmess_config(self, node_data: dict) -> str:
+        """构建vmess配置"""
+        config = {
+            "v": "2",
+            "ps": node_data.get("name", "vmess节点"),
+            "add": node_data.get("server", ""),
+            "port": node_data.get("port", ""),
+            "id": node_data.get("uuid", ""),
+            "aid": node_data.get("alterId", "0"),
+            "net": node_data.get("network", "tcp"),
+            "type": "none",
+            "host": "",
+            "path": "",
+            "tls": node_data.get("tls", "none")
+        }
+        
+        config_str = json.dumps(config, ensure_ascii=False)
+        return f"vmess://{base64.b64encode(config_str.encode()).decode()}"
+
+    def _build_trojan_config(self, node_data: dict) -> str:
+        """构建trojan配置"""
+        server = node_data.get("server", "")
+        port = node_data.get("port", "")
+        password = node_data.get("password", "")
+        name = node_data.get("name", "trojan节点")
+        
+        return f"trojan://{password}@{server}:{port}#{name}"
+
+    def _build_ssr_config(self, node_data: dict) -> str:
+        """构建SSR配置"""
+        server = node_data.get("server", "")
+        port = node_data.get("port", "")
+        protocol = node_data.get("protocol", "origin")
+        method = node_data.get("method", "chacha20")
+        obfs = node_data.get("obfs", "plain")
+        password = node_data.get("password", "")
+        obfs_param = node_data.get("obfs_param", "")
+        protocol_param = node_data.get("protocol_param", "")
+        remarks = node_data.get("name", "ssr节点")
+        group = "XBoard"
+        
+        # 构建SSR字符串
+        ssr_str = f"{server}:{port}:{protocol}:{method}:{obfs}:{password}/?obfsparam={obfs_param}&protoparam={protocol_param}&remarks={remarks}&group={group}"
+        
+        return f"ssr://{base64.b64encode(ssr_str.encode()).decode()}"
+
+    def _build_ss_config(self, node_data: dict) -> str:
+        """构建SS配置"""
+        method = node_data.get("method", "chacha20")
+        password = node_data.get("password", "")
+        server = node_data.get("server", "")
+        port = node_data.get("port", "")
+        name = node_data.get("name", "ss节点")
+        
+        # 构建SS字符串
+        ss_str = f"{method}:{password}@{server}:{port}#{name}"
+        
+        return f"ss://{base64.b64encode(ss_str.encode()).decode()}"
 
     def test_node_connection(self, node_id: int) -> Dict:
         """测试节点连接"""
@@ -99,67 +207,75 @@ class NodeService:
 
     def get_nodes_stats(self) -> Dict:
         """获取节点统计信息"""
-        # 总节点数
-        total = self.db.query(Node).count()
+        total_nodes = self.db.query(Node).count()
+        online_nodes = self.db.query(Node).filter(Node.status == "online").count()
+        offline_nodes = self.db.query(Node).filter(Node.status == "offline").count()
         
-        # 在线节点数
-        online = self.db.query(Node).filter(Node.status == "online").count()
-        
-        # 地区统计
-        regions = self.db.query(Node.region).distinct().all()
-        regions = [r[0] for r in regions if r[0]]
-        
-        # 类型统计
-        types = self.db.query(Node.type).distinct().all()
-        types = [t[0] for t in types if t[0]]
-        
-        # 平均延迟
+        # 计算平均延迟
         avg_latency = self.db.query(func.avg(Node.latency)).scalar() or 0
         
-        # 平均负载
-        avg_load = self.db.query(func.avg(Node.load)).scalar() or 0
-        
         return {
-            "total": total,
-            "online": online,
-            "regions": regions,
-            "types": types,
-            "avg_latency": float(avg_latency),
-            "avg_load": float(avg_load)
+            "total": total_nodes,
+            "online": online_nodes,
+            "offline": offline_nodes,
+            "avg_latency": round(avg_latency, 2)
         }
 
-    def update_node_status(self, node_id: int, status: str, load: float = None, latency: int = None):
+    def get_nodes_by_status(self, status: str) -> List[Node]:
+        """根据状态获取节点"""
+        return self.db.query(Node).filter(Node.status == status).all()
+
+    def update_node_status(self, node_id: int, status: str) -> bool:
         """更新节点状态"""
         node = self.get(node_id)
         if not node:
             return False
         
         node.status = status
-        if load is not None:
-            node.load = load
-        if latency is not None:
-            node.latency = latency
         node.last_update = datetime.utcnow()
-        
         self.db.commit()
         return True
 
-    def get_recommended_nodes(self) -> List[Node]:
-        """获取推荐节点"""
-        return self.db.query(Node).filter(
-            Node.status == "online",
-            Node.is_recommended == True
-        ).order_by(Node.load.asc()).limit(5).all()
+    def update_node_load(self, node_id: int, load: float) -> bool:
+        """更新节点负载"""
+        node = self.get(node_id)
+        if not node:
+            return False
+        
+        node.load = load
+        node.last_update = datetime.utcnow()
+        self.db.commit()
+        return True
 
-    def get_fastest_nodes(self, limit: int = 10) -> List[Node]:
-        """获取最快的节点"""
-        return self.db.query(Node).filter(
-            Node.status == "online"
-        ).order_by(Node.latency.asc()).limit(limit).all()
+    def update_node_speed(self, node_id: int, speed: float) -> bool:
+        """更新节点速度"""
+        node = self.get(node_id)
+        if not node:
+            return False
+        
+        node.speed = speed
+        node.last_update = datetime.utcnow()
+        self.db.commit()
+        return True
 
-    def get_nodes_by_load(self, max_load: float = 50.0) -> List[Node]:
-        """获取负载较低的节点"""
-        return self.db.query(Node).filter(
-            Node.status == "online",
-            Node.load <= max_load
-        ).order_by(Node.load.asc()).all() 
+    def update_node_uptime(self, node_id: int, uptime: int) -> bool:
+        """更新节点在线时间"""
+        node = self.get(node_id)
+        if not node:
+            return False
+        
+        node.uptime = uptime
+        node.last_update = datetime.utcnow()
+        self.db.commit()
+        return True
+
+    def update_node_latency(self, node_id: int, latency: int) -> bool:
+        """更新节点延迟"""
+        node = self.get(node_id)
+        if not node:
+            return False
+        
+        node.latency = latency
+        node.last_update = datetime.utcnow()
+        self.db.commit()
+        return True 

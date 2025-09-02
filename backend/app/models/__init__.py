@@ -1,11 +1,14 @@
 from .user import User
 from .subscription import Subscription, Device
-from .order import Order, Package
+from .order import Order
+from .package import Package
 from .email import EmailQueue
 from .notification import EmailTemplate, Notification
 from .node import Node
-from .payment import PaymentTransaction, PaymentConfig, PaymentCallback
+from .payment import PaymentTransaction, PaymentCallback
+from .payment_config import PaymentConfig
 from .config import SystemConfig, Announcement, ThemeConfig
+from .user_activity import UserActivity, SubscriptionReset, LoginHistory
 
 # 设置关系
 from sqlalchemy.orm import relationship
@@ -15,6 +18,9 @@ User.subscriptions = relationship("Subscription", back_populates="user")
 User.orders = relationship("Order", back_populates="user")
 User.payments = relationship("PaymentTransaction", back_populates="user")
 User.notifications = relationship("Notification", back_populates="user")
+User.activities = relationship("UserActivity", back_populates="user")
+User.subscription_resets = relationship("SubscriptionReset", back_populates="user")
+User.login_history = relationship("LoginHistory", back_populates="user")
 
 # Subscription关系
 Subscription.user = relationship("User", back_populates="subscriptions")
@@ -53,5 +59,8 @@ __all__ = [
     "Notification",
     "SystemConfig",
     "Announcement",
-    "ThemeConfig"
+    "ThemeConfig",
+    "UserActivity",
+    "SubscriptionReset",
+    "LoginHistory"
 ] 

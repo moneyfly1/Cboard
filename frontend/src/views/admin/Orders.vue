@@ -2,7 +2,23 @@
   <div class="admin-orders">
     <el-card>
       <template #header>
-        <span>订单管理</span>
+        <div class="header-content">
+          <span>订单管理</span>
+          <div class="header-actions">
+            <el-button type="success" @click="exportOrders">
+              <el-icon><Download /></el-icon>
+              导出订单
+            </el-button>
+            <el-button type="warning" @click="showBulkOperationsDialog = true">
+              <el-icon><Operation /></el-icon>
+              批量操作
+            </el-button>
+            <el-button type="info" @click="showStatisticsDialog = true">
+              <el-icon><DataAnalysis /></el-icon>
+              订单统计
+            </el-button>
+          </div>
+        </div>
       </template>
 
       <!-- 搜索栏 -->
@@ -57,21 +73,39 @@
         </el-table-column>
         <el-table-column prop="created_at" label="创建时间" />
         <el-table-column prop="paid_at" label="支付时间" />
-        <el-table-column label="操作" width="200">
+        <el-table-column label="操作" width="280">
           <template #default="scope">
-            <el-button size="small" @click="viewOrder(scope.row)">查看</el-button>
+            <el-button size="small" @click="viewOrder(scope.row)">
+              <el-icon><View /></el-icon>
+              查看
+            </el-button>
             <el-button 
               size="small" 
               type="success" 
               @click="markAsPaid(scope.row)"
               v-if="scope.row.status === 'pending'"
-            >标记已付</el-button>
+            >
+              <el-icon><Check /></el-icon>
+              标记已付
+            </el-button>
+            <el-button 
+              size="small" 
+              type="warning" 
+              @click="refundOrder(scope.row)"
+              v-if="scope.row.status === 'paid'"
+            >
+              <el-icon><Money /></el-icon>
+              退款
+            </el-button>
             <el-button 
               size="small" 
               type="danger" 
               @click="cancelOrder(scope.row)"
               v-if="scope.row.status === 'pending'"
-            >取消</el-button>
+            >
+              <el-icon><Close /></el-icon>
+              取消
+            </el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -112,16 +146,89 @@
         <img :src="selectedOrder.payment_proof" style="max-width: 100%;" />
       </div>
     </el-dialog>
+
+    <!-- 批量操作对话框 -->
+    <el-dialog v-model="showBulkOperationsDialog" title="批量操作" width="500px">
+      <el-form :model="bulkForm" label-width="100px">
+        <el-form-item label="操作类型">
+          <el-select v-model="bulkForm.operation" placeholder="选择操作">
+            <el-option label="批量标记已付" value="mark_paid" />
+            <el-option label="批量取消" value="cancel" />
+            <el-option label="批量退款" value="refund" />
+          </el-select>
+        </el-form-item>
+        
+        <el-form-item label="选择订单">
+          <el-checkbox-group v-model="bulkForm.selectedIds">
+            <el-checkbox 
+              v-for="order in orders" 
+              :key="order.id" 
+              :label="order.id"
+            >
+              {{ order.order_no }} - {{ order.user?.email }}
+            </el-checkbox>
+          </el-checkbox-group>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <span class="dialog-footer">
+          <el-button @click="showBulkOperationsDialog = false">取消</el-button>
+          <el-button type="primary" @click="executeBulkOperation" :loading="bulkLoading">
+            执行操作
+          </el-button>
+        </span>
+      </template>
+    </el-dialog>
+
+    <!-- 订单统计对话框 -->
+    <el-dialog v-model="showStatisticsDialog" title="订单统计" width="600px">
+      <div class="statistics-content">
+        <el-row :gutter="20">
+          <el-col :span="12">
+            <el-card class="stat-card">
+              <div class="stat-number">{{ statistics.totalOrders }}</div>
+              <div class="stat-label">总订单数</div>
+            </el-card>
+          </el-col>
+          <el-col :span="12">
+            <el-card class="stat-card">
+              <div class="stat-number">{{ statistics.pendingOrders }}</div>
+              <div class="stat-label">待支付</div>
+            </el-card>
+          </el-col>
+        </el-row>
+        <el-row :gutter="20" style="margin-top: 20px;">
+          <el-col :span="12">
+            <el-card class="stat-card">
+              <div class="stat-number">{{ statistics.paidOrders }}</div>
+              <div class="stat-label">已支付</div>
+            </el-card>
+          </el-col>
+          <el-col :span="12">
+            <el-card class="stat-card">
+              <div class="stat-number">¥{{ statistics.totalRevenue }}</div>
+              <div class="stat-label">总收入</div>
+            </el-card>
+          </el-col>
+        </el-row>
+      </div>
+    </el-dialog>
   </div>
 </template>
 
 <script>
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { 
+  Download, Operation, DataAnalysis, View, Check, Money, Close 
+} from '@element-plus/icons-vue'
 import { useApi } from '@/utils/api'
 
 export default {
   name: 'AdminOrders',
+  components: {
+    Download, Operation, DataAnalysis, View, Check, Money, Close
+  },
   setup() {
     const api = useApi()
     const loading = ref(false)
@@ -130,13 +237,28 @@ export default {
     const pageSize = ref(20)
     const total = ref(0)
     const showOrderDialog = ref(false)
+    const showBulkOperationsDialog = ref(false)
+    const showStatisticsDialog = ref(false)
     const selectedOrder = ref({})
+    const bulkLoading = ref(false)
 
     const searchForm = reactive({
       order_no: '',
       user_email: '',
       status: '',
       date_range: []
+    })
+
+    const bulkForm = reactive({
+      operation: '',
+      selectedIds: []
+    })
+
+    const statistics = reactive({
+      totalOrders: 0,
+      pendingOrders: 0,
+      paidOrders: 0,
+      totalRevenue: 0
     })
 
     const loadOrders = async () => {
@@ -228,6 +350,91 @@ export default {
       }
     }
 
+    const refundOrder = async (order) => {
+      try {
+        await ElMessageBox.confirm('确定要退款此订单吗？', '提示', {
+          confirmButtonText: '确定',
+          cancelButtonText: '取消',
+          type: 'warning'
+        })
+        await api.put(`/admin/orders/${order.id}/status`, { status: 'refunded' })
+        ElMessage.success('订单已退款')
+        loadOrders()
+      } catch (error) {
+        if (error !== 'cancel') {
+          ElMessage.error('操作失败')
+        }
+      }
+    }
+
+    const exportOrders = async () => {
+      try {
+        const response = await api.get('/admin/orders/export', { 
+          responseType: 'blob',
+          params: searchForm 
+        })
+        
+        const url = window.URL.createObjectURL(new Blob([response.data]))
+        const link = document.createElement('a')
+        link.href = url
+        link.setAttribute('download', `orders_${new Date().toISOString().split('T')[0]}.xlsx`)
+        document.body.appendChild(link)
+        link.click()
+        document.body.removeChild(link)
+        window.URL.revokeObjectURL(url)
+        
+        ElMessage.success('订单数据导出成功')
+      } catch (error) {
+        ElMessage.error('导出失败')
+      }
+    }
+
+    const executeBulkOperation = async () => {
+      if (bulkForm.selectedIds.length === 0) {
+        ElMessage.warning('请选择要操作的订单')
+        return
+      }
+
+      bulkLoading.value = true
+      try {
+        const { operation } = bulkForm
+        
+        if (operation === 'mark_paid') {
+          await api.post('/admin/orders/bulk-mark-paid', {
+            order_ids: bulkForm.selectedIds
+          })
+          ElMessage.success('批量标记已付成功')
+        } else if (operation === 'cancel') {
+          await api.post('/admin/orders/bulk-cancel', {
+            order_ids: bulkForm.selectedIds
+          })
+          ElMessage.success('批量取消成功')
+        } else if (operation === 'refund') {
+          await api.post('/admin/orders/bulk-refund', {
+            order_ids: bulkForm.selectedIds
+          })
+          ElMessage.success('批量退款成功')
+        }
+        
+        showBulkOperationsDialog.value = false
+        loadOrders()
+        bulkForm.selectedIds = []
+      } catch (error) {
+        ElMessage.error('批量操作失败')
+      } finally {
+        bulkLoading.value = false
+      }
+    }
+
+    const loadStatistics = async () => {
+      try {
+        const response = await api.get('/admin/orders/statistics')
+        Object.assign(statistics, response.data)
+      } catch (error) {
+        console.error('加载统计数据失败:', error)
+      }
+    }
+
     const getStatusType = (status) => {
       const statusMap = {
         'pending': 'warning',
@@ -250,6 +457,7 @@ export default {
 
     onMounted(() => {
       loadOrders()
+      loadStatistics()
     })
 
     return {
@@ -268,8 +476,18 @@ export default {
       viewOrder,
       markAsPaid,
       cancelOrder,
+      refundOrder,
+      exportOrders,
+      executeBulkOperation,
+      loadStatistics,
       getStatusType,
-      getStatusText
+      getStatusText,
+      // 新增的响应式变量
+      showBulkOperationsDialog,
+      showStatisticsDialog,
+      bulkForm,
+      bulkLoading,
+      statistics
     }
   }
 }
@@ -280,12 +498,47 @@ export default {
   padding: 20px;
 }
 
+.header-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.header-actions {
+  display: flex;
+  gap: 10px;
+}
+
 .search-form {
   margin-bottom: 20px;
+  padding: 20px;
+  background: #f5f7fa;
+  border-radius: 8px;
 }
 
 .pagination {
   margin-top: 20px;
   text-align: right;
+}
+
+.statistics-content {
+  padding: 20px 0;
+}
+
+.stat-card {
+  text-align: center;
+  padding: 20px;
+}
+
+.stat-number {
+  font-size: 2rem;
+  font-weight: bold;
+  color: #409eff;
+  margin-bottom: 10px;
+}
+
+.stat-label {
+  color: #606266;
+  font-size: 14px;
 }
 </style> 

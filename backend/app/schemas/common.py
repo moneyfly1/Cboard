@@ -1,11 +1,13 @@
 from pydantic import BaseModel
 from typing import Optional, Any, List
+from .user import User
 
 class Token(BaseModel):
     access_token: str
     token_type: str = "bearer"
     expires_in: int
     refresh_token: Optional[str] = None
+    user: Optional[User] = None
 
 class TokenData(BaseModel):
     username: Optional[str] = None

@@ -136,7 +136,7 @@
           <div class="contact-item">
             <i class="el-icon-message"></i>
             <div class="contact-details">
-              <h4>QQ邮箱</h4>
+              <h4>邮箱验证</h4>
               <p>support@example.com</p>
             </div>
           </div>
@@ -185,10 +185,10 @@ export default {
         content: `
           <ol>
             <li>点击页面右上角的"注册"按钮</li>
-            <li>输入您的QQ邮箱地址</li>
+            <li>输入您的邮箱地址</li>
             <li>设置密码（不少于6位）</li>
             <li>点击"注册"按钮</li>
-            <li>查收QQ邮箱验证邮件并点击验证链接</li>
+            <li>查收邮箱验证邮件并点击验证链接</li>
             <li>验证成功后即可登录使用</li>
           </ol>
         `
@@ -296,7 +296,7 @@ export default {
           <p>忘记密码可以通过以下方式找回：</p>
           <ol>
             <li>在登录页面点击"忘记密码？"</li>
-            <li>输入您的QQ邮箱地址</li>
+            <li>输入您的邮箱地址</li>
             <li>查收重置密码邮件</li>
             <li>点击邮件中的重置链接</li>
             <li>设置新密码</li>
