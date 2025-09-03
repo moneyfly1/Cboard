@@ -639,13 +639,76 @@ build_frontend() {
 configure_database() {
     log_info "配置数据库..."
     
-    # 创建数据库和用户
-    mysql -e "CREATE DATABASE IF NOT EXISTS xboard CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
-    mysql -e "CREATE USER IF NOT EXISTS 'xboard'@'localhost' IDENTIFIED BY 'xboard123';"
-    mysql -e "GRANT ALL PRIVILEGES ON xboard.* TO 'xboard'@'localhost';"
-    mysql -e "FLUSH PRIVILEGES;"
+    # 尝试不同的MySQL连接方式
+    MYSQL_CMD=""
     
-    log_success "数据库配置完成"
+    # 方法1: 尝试无密码连接
+    if mysql -u root -e "SELECT 1;" 2>/dev/null; then
+        log_info "MySQL root用户无需密码"
+        MYSQL_CMD="mysql -u root"
+    # 方法2: 尝试使用sudo mysql
+    elif sudo mysql -e "SELECT 1;" 2>/dev/null; then
+        log_info "使用sudo mysql连接成功"
+        MYSQL_CMD="sudo mysql"
+    # 方法3: 尝试使用mysql -u root -p（交互式）
+    else
+        log_info "MySQL root用户需要密码，尝试配置..."
+        
+        # 检查是否在非交互式环境中
+        if [ -t 0 ]; then
+            # 交互式环境，询问用户
+            log_warning "请手动配置数据库或提供root密码"
+            echo ""
+            echo "选项1: 手动执行SQL命令"
+            echo "mysql -u root -p"
+            echo "CREATE DATABASE IF NOT EXISTS xboard CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+            echo "CREATE USER IF NOT EXISTS 'xboard'@'localhost' IDENTIFIED BY 'xboard123';"
+            echo "GRANT ALL PRIVILEGES ON xboard.* TO 'xboard'@'localhost';"
+            echo "FLUSH PRIVILEGES;"
+            echo "EXIT;"
+            echo ""
+            
+            read -p "是否继续安装？(y/n): " -n 1 -r
+            echo
+            if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+                log_info "用户选择停止安装"
+                exit 0
+            fi
+            
+            log_warning "请确保在继续前手动创建数据库和用户"
+            log_info "稍后可以在.env文件中修改数据库连接信息"
+            return 0
+        else
+            # 非交互式环境，跳过数据库配置
+            log_warning "非交互式环境，跳过数据库配置"
+            log_info "请稍后在.env文件中手动配置数据库连接信息"
+            return 0
+        fi
+    fi
+    
+    if [ -n "$MYSQL_CMD" ]; then
+        # 检查数据库是否已存在
+        if $MYSQL_CMD -e "USE xboard;" 2>/dev/null; then
+            log_info "数据库 'xboard' 已存在"
+        else
+            log_info "创建数据库 'xboard'..."
+            $MYSQL_CMD -e "CREATE DATABASE IF NOT EXISTS xboard CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+        fi
+        
+        # 检查用户是否已存在
+        if $MYSQL_CMD -e "SELECT User FROM mysql.user WHERE User='xboard';" 2>/dev/null | grep -q "xboard"; then
+            log_info "用户 'xboard' 已存在"
+        else
+            log_info "创建用户 'xboard'..."
+            $MYSQL_CMD -e "CREATE USER IF NOT EXISTS 'xboard'@'localhost' IDENTIFIED BY 'xboard123';"
+            $MYSQL_CMD -e "GRANT ALL PRIVILEGES ON xboard.* TO 'xboard'@'localhost';"
+            $MYSQL_CMD -e "FLUSH PRIVILEGES;"
+        fi
+        
+        log_success "数据库配置完成"
+    else
+        log_warning "无法配置数据库，请稍后手动配置"
+    fi
 }
 
 # 配置Nginx
@@ -711,6 +774,22 @@ create_env_file() {
     SECRET_KEY=$(openssl rand -hex 32)
     JWT_SECRET=$(openssl rand -hex 32)
     
+    # 检测数据库配置
+    DB_CONFIG=""
+    if [ -n "$MYSQL_CMD" ]; then
+        # 检查xboard用户是否存在
+        if $MYSQL_CMD -e "SELECT User FROM mysql.user WHERE User='xboard';" 2>/dev/null | grep -q "xboard"; then
+            DB_CONFIG="mysql+pymysql://xboard:xboard123@localhost:3306/xboard"
+            log_info "使用xboard用户连接数据库"
+        else
+            DB_CONFIG="mysql+pymysql://root@localhost:3306/xboard"
+            log_info "使用root用户连接数据库"
+        fi
+    else
+        DB_CONFIG="mysql+pymysql://root@localhost:3306/xboard"
+        log_info "使用默认root用户连接数据库"
+    fi
+    
     # 创建.env文件
     cat > .env << EOF
 # ================================
@@ -718,7 +797,11 @@ create_env_file() {
 # ================================
 
 # 数据库配置
-DATABASE_URL=mysql+pymysql://xboard:xboard123@localhost:3306/xboard
+# 请根据您的实际数据库配置修改以下信息
+DATABASE_URL=$DB_CONFIG
+
+# 如果您的数据库需要密码，请修改为：
+# DATABASE_URL=mysql+pymysql://用户名:密码@localhost:3306/xboard
 
 # 应用配置
 DEBUG=False
@@ -764,6 +847,19 @@ SYSTEM_PYTHON_VERSION=$PYTHON_VERSION
 EOF
 
     log_success "环境变量文件创建完成"
+    
+    # 显示数据库配置信息
+    echo ""
+    echo "=========================================="
+    echo "📊 数据库配置信息"
+    echo "=========================================="
+    echo "当前配置: $DB_CONFIG"
+    echo ""
+    echo "⚠️  重要提醒:"
+    echo "1. 如果数据库需要密码，请修改 .env 文件中的 DATABASE_URL"
+    echo "2. 格式: mysql+pymysql://用户名:密码@localhost:3306/xboard"
+    echo "3. 例如: mysql+pymysql://root:your_password@localhost:3306/xboard"
+    echo ""
 }
 
 # 创建systemd服务
