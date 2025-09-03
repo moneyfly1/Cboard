@@ -22,6 +22,7 @@ export default defineConfig({
     outDir: 'dist',
     assetsDir: 'assets',
     sourcemap: false,
+    minify: 'terser',
     rollupOptions: {
       output: {
         manualChunks: {
@@ -31,4 +32,10 @@ export default defineConfig({
       },
     },
   },
+  optimizeDeps: {
+    include: ['vue', 'vue-router', 'pinia', 'element-plus']
+  },
+  esbuild: {
+    target: 'es2020'
+  }
 }) 

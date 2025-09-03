@@ -8,26 +8,26 @@
     <!-- 套餐列表 -->
     <div class="packages-grid">
       <el-card 
-        v-for="package in packages" 
-        :key="package.id" 
+        v-for="pkg in packages" 
+        :key="pkg.id" 
         class="package-card"
-        :class="{ 'popular': package.is_popular, 'recommended': package.is_recommended }"
+        :class="{ 'popular': pkg.is_popular, 'recommended': pkg.is_recommended }"
       >
         <div class="package-header">
-          <h3 class="package-name">{{ package.name }}</h3>
-          <div v-if="package.is_popular" class="popular-badge">热门</div>
-          <div v-if="package.is_recommended" class="recommended-badge">推荐</div>
+          <h3 class="package-name">{{ pkg.name }}</h3>
+          <div v-if="pkg.is_popular" class="popular-badge">热门</div>
+          <div v-if="pkg.is_recommended" class="recommended-badge">推荐</div>
         </div>
         
         <div class="package-price">
           <span class="currency">¥</span>
-          <span class="amount">{{ package.price }}</span>
-          <span class="period">/{{ package.duration_days }}天</span>
+          <span class="amount">{{ pkg.price }}</span>
+          <span class="period">/{{ pkg.duration_days }}天</span>
         </div>
         
         <div class="package-features">
           <ul>
-            <li v-for="feature in package.features" :key="feature">
+            <li v-for="feature in pkg.features" :key="feature">
               <i class="el-icon-check"></i>
               {{ feature }}
             </li>
@@ -38,7 +38,7 @@
           <el-button 
             type="primary" 
             size="large" 
-            @click="selectPackage(package)"
+            @click="selectPackage(pkg)"
             :loading="isProcessing"
             style="width: 100%"
           >
