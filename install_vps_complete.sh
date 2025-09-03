@@ -427,6 +427,12 @@ setup_python_environment() {
         fi
     fi
     
+    # 检查虚拟环境是否创建成功
+    if [ ! -f "venv/bin/activate" ]; then
+        log_error "虚拟环境创建失败，venv/bin/activate文件不存在"
+        exit 1
+    fi
+    
     # 激活虚拟环境
     source venv/bin/activate
     
