@@ -641,7 +641,10 @@ export default {
       try {
         await configAPI.saveSystemConfig(systemForm)
         ElMessage.success('系统配置保存成功')
+        // 重新加载配置以确保数据同步
+        await loadSystemConfig()
       } catch (error) {
+        console.error('保存系统配置失败:', error)
         ElMessage.error('保存失败')
       } finally {
         systemLoading.value = false
@@ -678,9 +681,20 @@ export default {
     const saveEmailConfig = async () => {
       emailLoading.value = true
       try {
-        await configAPI.saveEmailConfig(emailForm)
+        // 准备邮件配置数据
+        const emailConfigData = {
+          smtp_host: emailForm.smtp_host,
+          smtp_port: emailForm.smtp_port,
+          smtp_username: emailForm.email_username,
+          smtp_password: emailForm.email_password,
+          sender_name: emailForm.sender_name
+        }
+        await configAPI.saveEmailConfig(emailConfigData)
         ElMessage.success('邮件配置保存成功')
+        // 重新加载配置以确保数据同步
+        await loadEmailConfig()
       } catch (error) {
+        console.error('保存邮件配置失败:', error)
         ElMessage.error('保存失败')
       } finally {
         emailLoading.value = false
@@ -704,18 +718,38 @@ export default {
     const loadClashConfig = async () => {
       try {
         const response = await configAPI.getClashConfig()
-        clashConfig.value = response.data
+        console.log('Clash配置响应:', response)
+        if (response.data && response.data.data) {
+          // 如果返回的是嵌套对象，取内层的data字段
+          clashConfig.value = response.data.data
+          console.log('Clash配置已加载:', clashConfig.value)
+        } else if (response.data) {
+          // 如果直接返回数据
+          clashConfig.value = response.data
+          console.log('Clash配置已加载:', clashConfig.value)
+        }
       } catch (error) {
-        ElMessage.error('加载配置失败')
+        console.error('加载Clash配置失败:', error)
+        ElMessage.error('加载Clash配置失败')
       }
     }
 
     const loadV2rayConfig = async () => {
       try {
         const response = await configAPI.getV2rayConfig()
-        v2rayConfig.value = response.data
+        console.log('V2Ray配置响应:', response)
+        if (response.data && response.data.data) {
+          // 如果返回的是嵌套对象，取内层的data字段
+          v2rayConfig.value = response.data.data
+          console.log('V2Ray配置已加载:', v2rayConfig.value)
+        } else if (response.data) {
+          // 如果直接返回数据
+          v2rayConfig.value = response.data
+          console.log('V2Ray配置已加载:', v2rayConfig.value)
+        }
       } catch (error) {
-        ElMessage.error('加载配置失败')
+        console.error('加载V2Ray配置失败:', error)
+        ElMessage.error('加载V2Ray配置失败')
       }
     }
 
@@ -749,9 +783,19 @@ export default {
     const loadClashConfigInvalid = async () => {
       try {
         const response = await configAPI.getClashConfigInvalid()
-        clashConfigInvalid.value = response.data
+        console.log('Clash失效配置响应:', response)
+        if (response.data && response.data.data) {
+          // 如果返回的是嵌套对象，取内层的data字段
+          clashConfigInvalid.value = response.data.data
+          console.log('Clash失效配置已加载:', clashConfigInvalid.value)
+        } else if (response.data) {
+          // 如果直接返回数据
+          clashConfigInvalid.value = response.data
+          console.log('Clash失效配置已加载:', clashConfigInvalid.value)
+        }
       } catch (error) {
-        ElMessage.error('加载失效配置失败')
+        console.error('加载Clash失效配置失败:', error)
+        ElMessage.error('加载Clash失效配置失败')
       }
     }
 
@@ -759,9 +803,19 @@ export default {
     const loadV2rayConfigInvalid = async () => {
       try {
         const response = await configAPI.getV2rayConfigInvalid()
-        v2rayConfigInvalid.value = response.data
+        console.log('V2Ray失效配置响应:', response)
+        if (response.data && response.data.data) {
+          // 如果返回的是嵌套对象，取内层的data字段
+          v2rayConfigInvalid.value = response.data.data
+          console.log('V2Ray失效配置已加载:', v2rayConfigInvalid.value)
+        } else if (response.data) {
+          // 如果直接返回数据
+          v2rayConfigInvalid.value = response.data
+          console.log('V2Ray失效配置已加载:', v2rayConfigInvalid.value)
+        }
       } catch (error) {
-        ElMessage.error('加载失效配置失败')
+        console.error('加载V2Ray失效配置失败:', error)
+        ElMessage.error('加载V2Ray失效配置失败')
       }
     }
 
@@ -824,9 +878,16 @@ export default {
     const loadSystemConfig = async () => {
       try {
         const response = await configAPI.getSystemConfig()
-        Object.assign(systemForm, response.data)
+        console.log('系统配置响应:', response)
+        if (response.data && response.data.data) {
+          // 从ResponseBase的data字段中提取配置数据
+          const configData = response.data.data
+          Object.assign(systemForm, configData)
+          console.log('系统配置已加载:', systemForm)
+        }
       } catch (error) {
         console.error('加载系统配置失败:', error)
+        ElMessage.error('加载系统配置失败')
       }
     }
 
@@ -834,9 +895,21 @@ export default {
     const loadEmailConfig = async () => {
       try {
         const response = await configAPI.getEmailConfig()
-        Object.assign(emailForm, response.data)
+        console.log('邮件配置响应:', response)
+        if (response.data && response.data.data) {
+          // 从ResponseBase的data字段中提取配置数据
+          const configData = response.data.data
+          // 映射字段名称
+          emailForm.smtp_host = configData.smtp_host || ''
+          emailForm.smtp_port = configData.smtp_port || 587
+          emailForm.email_username = configData.email_username || configData.smtp_username || ''
+          emailForm.email_password = configData.email_password || configData.smtp_password || ''
+          emailForm.sender_name = configData.sender_name || ''
+          console.log('邮件配置已加载:', emailForm)
+        }
       } catch (error) {
         console.error('加载邮件配置失败:', error)
+        ElMessage.error('加载邮件配置失败')
       }
     }
 
@@ -1013,7 +1086,10 @@ export default {
       try {
         await configAPI.savePaymentSettings(paymentForm)
         ElMessage.success('支付设置保存成功')
+        // 重新加载配置以确保数据同步
+        await loadPaymentSettings()
       } catch (error) {
+        console.error('保存支付设置失败:', error)
         ElMessage.error('保存支付设置失败')
       } finally {
         paymentLoading.value = false
@@ -1037,9 +1113,57 @@ export default {
     const loadPaymentSettings = async () => {
       try {
         const response = await configAPI.getPaymentSettings()
-        Object.assign(paymentForm, response.data)
+        console.log('支付配置响应:', response)
+        if (response.data && response.data.data && response.data.data.payment_configs) {
+          // 将支付配置数组转换为表单对象
+          const configs = response.data.data.payment_configs
+          configs.forEach(config => {
+            if (config.key && config.value !== undefined) {
+              // 映射配置键名到表单字段
+              const fieldMapping = {
+                'payment_enabled': 'payment_enabled',
+                'default_payment_method': 'default_payment_method',
+                'currency': 'currency',
+                'alipay_app_id': 'alipay_app_id',
+                'alipay_private_key': 'alipay_private_key',
+                'alipay_public_key': 'alipay_public_key',
+                'alipay_gateway': 'alipay_gateway',
+                'wechat_app_id': 'wechat_app_id',
+                'wechat_mch_id': 'wechat_mch_id',
+                'wechat_api_key': 'wechat_api_key',
+                'wechat_cert_path': 'wechat_cert_path',
+                'wechat_key_path': 'wechat_key_path',
+                'paypal_client_id': 'paypal_client_id',
+                'paypal_secret': 'paypal_secret',
+                'paypal_mode': 'paypal_mode',
+                'stripe_publishable_key': 'stripe_publishable_key',
+                'stripe_secret_key': 'stripe_secret_key',
+                'stripe_webhook_secret': 'stripe_webhook_secret',
+                'bank_name': 'bank_name',
+                'bank_account': 'bank_account',
+                'bank_branch': 'bank_branch',
+                'account_holder': 'account_holder',
+                'return_url': 'return_url',
+                'notify_url': 'notify_url'
+              }
+              
+              if (fieldMapping[config.key]) {
+                const fieldName = fieldMapping[config.key]
+                if (config.type === 'boolean') {
+                  paymentForm[fieldName] = config.value === 'true' || config.value === true
+                } else if (config.type === 'number') {
+                  paymentForm[fieldName] = parseFloat(config.value) || 0
+                } else {
+                  paymentForm[fieldName] = config.value
+                }
+              }
+            }
+          })
+          console.log('支付配置已加载:', paymentForm)
+        }
       } catch (error) {
         console.error('加载支付设置失败:', error)
+        ElMessage.error('加载支付设置失败')
       }
     }
 

@@ -707,7 +707,7 @@ def get_email_config(
         from sqlalchemy import text
         
         # 从数据库获取邮件配置
-        query = text("SELECT config_key, config_value FROM system_configs WHERE config_type = 'email'")
+        query = text("SELECT \"key\", value FROM system_configs WHERE type = 'email'")
         result = db.execute(query)
         
         email_config = {
@@ -2042,15 +2042,15 @@ def update_payment_configs(
         
         for key, value in payment_configs.items():
             # 检查配置是否已存在
-            check_query = text("SELECT id FROM system_configs WHERE config_key = :key AND config_type = 'payment'")
+            check_query = text("SELECT id FROM system_configs WHERE \"key\" = :key AND type = 'payment'")
             existing = db.execute(check_query, {"key": key}).first()
             
             if existing:
                 # 更新现有配置
                 update_query = text("""
                     UPDATE system_configs 
-                    SET config_value = :value, updated_at = :updated_at
-                    WHERE config_key = :key AND config_type = 'payment'
+                    SET value = :value, updated_at = :updated_at
+                    WHERE "key" = :key AND type = 'payment'
                 """)
                 db.execute(update_query, {
                     "value": str(value),
@@ -2060,12 +2060,14 @@ def update_payment_configs(
             else:
                 # 插入新配置
                 insert_query = text("""
-                    INSERT INTO system_configs (config_key, config_value, config_type, created_at, updated_at)
-                    VALUES (:key, :value, 'payment', :created_at, :updated_at)
+                    INSERT INTO system_configs ("key", value, type, category, display_name, description, is_public, sort_order, created_at, updated_at)
+                    VALUES (:key, :value, 'payment', 'payment', :display_name, :description, false, 0, :created_at, :updated_at)
                 """)
                 db.execute(insert_query, {
                     "key": key,
                     "value": str(value),
+                    "display_name": key.replace('_', ' ').title(),
+                    "description": f"Payment configuration for {key}",
                     "created_at": current_time,
                     "updated_at": current_time
                 })
