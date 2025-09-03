@@ -226,6 +226,36 @@ check_system_dependencies() {
 install_system_components() {
     log_info "安装缺失的系统组件..."
 
+    # 安装Python虚拟环境包
+    log_info "安装Python虚拟环境包..."
+    PYTHON_MAJOR=$(echo $PYTHON_VERSION | cut -d. -f1)
+    PYTHON_MINOR=$(echo $PYTHON_VERSION | cut -d. -f2)
+    
+    if [ "$PYTHON_MAJOR" -eq 3 ]; then
+        case $PYTHON_MINOR in
+            12)
+                apt install -y python3.12-venv python3.12-dev python3-pip
+                ;;
+            11)
+                apt install -y python3.11-venv python3.11-dev python3-pip
+                ;;
+            10)
+                apt install -y python3.10-venv python3.10-dev python3-pip
+                ;;
+            9)
+                apt install -y python3.9-venv python3.9-dev python3-pip
+                ;;
+            8)
+                apt install -y python3.8-venv python3.8-dev python3-pip
+                ;;
+            *)
+                apt install -y python3-venv python3-dev python3-pip
+                ;;
+        esac
+    else
+        apt install -y python3-venv python3-dev python3-pip
+    fi
+
     # 安装Nginx (如果未安装)
     if [ -z "$NGINX_VERSION" ]; then
         log_info "安装Nginx..."
