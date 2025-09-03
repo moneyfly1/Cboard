@@ -26,6 +26,10 @@ class SubscriptionService:
     def get_by_user_id(self, user_id: int) -> Optional[Subscription]:
         """根据用户ID获取订阅"""
         return self.db.query(Subscription).filter(Subscription.user_id == user_id).first()
+    
+    def get_all_by_user_id(self, user_id: int) -> List[Subscription]:
+        """根据用户ID获取所有订阅"""
+        return self.db.query(Subscription).filter(Subscription.user_id == user_id).all()
 
     def create(self, subscription_in: SubscriptionCreate) -> Subscription:
         """创建订阅"""

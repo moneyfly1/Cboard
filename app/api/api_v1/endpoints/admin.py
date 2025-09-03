@@ -1316,33 +1316,31 @@ def get_subscriptions(
                     "max_device_limit": 3
                 }
             
-            # 确定订阅类型和完整URL
-            if "ssr" in subscription.subscription_url:
-                subscription_type = "v2ray"
-                full_url = f"http://localhost:8000/api/v1/subscriptions/ssr/{subscription.subscription_url}"
-                user_subscriptions[user_id]["v2ray_subscription"] = {
-                    "id": subscription.id,
-                    "subscription_url": subscription.subscription_url,
-                    "full_url": full_url,
-                    "status": "active" if subscription.is_active else "paused",
-                    "device_limit": subscription.device_limit,
-                    "current_devices": subscription.current_devices,
-                    "expires_at": subscription.expire_time.isoformat() if subscription.expire_time else None,
-                    "created_at": subscription.created_at.isoformat() if subscription.created_at else None
-                }
-            else:
-                subscription_type = "clash"
-                full_url = f"http://localhost:8000/api/v1/subscriptions/clash/{subscription.subscription_url}"
-                user_subscriptions[user_id]["clash_subscription"] = {
-                    "id": subscription.id,
-                    "subscription_url": subscription.subscription_url,
-                    "full_url": full_url,
-                    "status": "active" if subscription.is_active else "paused",
-                    "device_limit": subscription.device_limit,
-                    "current_devices": subscription.current_devices,
-                    "expires_at": subscription.expire_time.isoformat() if subscription.expire_time else None,
-                    "created_at": subscription.created_at.isoformat() if subscription.created_at else None
-                }
+            # 根据订阅ID的奇偶性分配类型，确保每个用户都有两个订阅
+            if subscription.id % 2 == 1:  # 奇数ID为V2Ray
+                if not user_subscriptions[user_id].get("v2ray_subscription"):
+                    user_subscriptions[user_id]["v2ray_subscription"] = {
+                        "id": subscription.id,
+                        "subscription_url": subscription.subscription_url,
+                        "full_url": f"http://localhost:8000/api/v1/subscriptions/ssr/{subscription.subscription_url}",
+                        "status": "active" if subscription.is_active else "paused",
+                        "device_limit": subscription.device_limit,
+                        "current_devices": subscription.current_devices,
+                        "expires_at": subscription.expire_time.isoformat() if subscription.expire_time else None,
+                        "created_at": subscription.created_at.isoformat() if subscription.created_at else None
+                    }
+            else:  # 偶数ID为Clash
+                if not user_subscriptions[user_id].get("clash_subscription"):
+                    user_subscriptions[user_id]["clash_subscription"] = {
+                        "id": subscription.id,
+                        "subscription_url": subscription.subscription_url,
+                        "full_url": f"http://localhost:8000/api/v1/subscriptions/clash/{subscription.subscription_url}",
+                        "status": "active" if subscription.is_active else "paused",
+                        "device_limit": subscription.device_limit,
+                        "current_devices": subscription.current_devices,
+                        "expires_at": subscription.expire_time.isoformat() if subscription.expire_time else None,
+                        "created_at": subscription.created_at.isoformat() if subscription.created_at else None
+                    }
             
             # 累计设备数量和设备限制
             user_subscriptions[user_id]["total_devices"] += subscription.current_devices
@@ -1419,11 +1417,11 @@ def create_subscription(
             return ResponseBase(success=False, message="用户不存在")
         
         # 检查用户是否已有订阅
-        existing_subscription = subscription_service.get_by_user_id(user.id)
-        if existing_subscription:
+        existing_subscriptions = subscription_service.get_all_by_user_id(user.id)
+        if existing_subscriptions:
             return ResponseBase(success=False, message="用户已有订阅")
         
-        # 创建订阅
+        # 创建两个订阅（V2Ray和Clash）
         from sqlalchemy import text
         from datetime import datetime, timedelta
         
@@ -1431,32 +1429,57 @@ def create_subscription(
         expire_days = subscription_data.get("expire_days", 30)
         expire_time = datetime.now() + timedelta(days=expire_days)
         
-        # 生成订阅URL
+        # 生成V2Ray订阅标识符（16位字符）
         import secrets
-        subscription_key = secrets.token_urlsafe(32)
-        subscription_url = f"http://localhost:8000/api/v1/subscriptions/ssr/{subscription_key}"
+        v2ray_key = secrets.token_urlsafe(16)
         
-        insert_query = text("""
+        # 生成Clash订阅标识符（16位字符）
+        clash_key = secrets.token_urlsafe(16)
+        
+        current_time = datetime.now()
+        device_limit = subscription_data.get("device_limit", 3)
+        is_active = subscription_data.get("is_active", True)
+        
+        # 插入V2Ray订阅
+        v2ray_insert_query = text("""
             INSERT INTO subscriptions (user_id, subscription_url, device_limit, current_devices, is_active, expire_time, created_at, updated_at)
             VALUES (:user_id, :subscription_url, :device_limit, :current_devices, :is_active, :expire_time, :created_at, :updated_at)
         """)
         
-        current_time = datetime.now()
-        result = db.execute(insert_query, {
+        db.execute(v2ray_insert_query, {
             "user_id": user.id,
-            "subscription_url": subscription_url,
-            "device_limit": subscription_data.get("device_limit", 3),
+            "subscription_url": v2ray_key,
+            "device_limit": device_limit,
             "current_devices": 0,
-            "is_active": subscription_data.get("is_active", True),
+            "is_active": is_active,
+            "expire_time": expire_time,
+            "created_at": current_time,
+            "updated_at": current_time
+        })
+        
+        # 插入Clash订阅
+        clash_insert_query = text("""
+            INSERT INTO subscriptions (user_id, subscription_url, device_limit, current_devices, is_active, expire_time, created_at, :updated_at)
+            VALUES (:user_id, :subscription_url, :device_limit, :current_devices, :is_active, :expire_time, :created_at, :updated_at)
+        """)
+        
+        db.execute(clash_insert_query, {
+            "user_id": user.id,
+            "subscription_url": clash_key,
+            "device_limit": device_limit,
+            "current_devices": 0,
+            "is_active": is_active,
             "expire_time": expire_time,
             "created_at": current_time,
             "updated_at": current_time
         })
         
         db.commit()
-        subscription_id = result.lastrowid
         
-        return ResponseBase(message="订阅创建成功", data={"subscription_id": subscription_id})
+        return ResponseBase(message="订阅创建成功", data={
+            "v2ray_subscription": v2ray_key,
+            "clash_subscription": clash_key
+        })
     except Exception as e:
         db.rollback()
         return ResponseBase(success=False, message=f"创建订阅失败: {str(e)}")
@@ -1635,17 +1658,68 @@ def reset_user_all_subscriptions(
         if not user_subscriptions:
             return ResponseBase(success=False, message="用户没有订阅")
         
-        # 重置每个订阅
+        # 删除现有订阅
         for subscription in user_subscriptions:
-            subscription_service.reset_subscription(
-                subscription_id=subscription.id,
-                user_id=subscription.user_id,
-                reset_type="admin",
-                reason="管理员重置所有订阅"
-            )
+            db.delete(subscription)
         
-        return ResponseBase(message="用户所有订阅重置成功")
+        # 创建新的V2Ray和Clash订阅
+        from sqlalchemy import text
+        from datetime import datetime, timedelta
+        import secrets
+        
+        # 计算到期时间（默认30天）
+        expire_time = datetime.now() + timedelta(days=30)
+        current_time = datetime.now()
+        device_limit = 3  # 默认设备限制
+        
+        # 生成V2Ray订阅标识符（16位字符）
+        v2ray_key = secrets.token_urlsafe(16)
+        
+        # 生成Clash订阅标识符（16位字符）
+        clash_key = secrets.token_urlsafe(16)
+        
+        # 插入V2Ray订阅
+        v2ray_insert_query = text("""
+            INSERT INTO subscriptions (user_id, subscription_url, device_limit, current_devices, is_active, expire_time, created_at, updated_at)
+            VALUES (:user_id, :subscription_url, :device_limit, :current_devices, :is_active, :expire_time, :created_at, :updated_at)
+        """)
+        
+        db.execute(v2ray_insert_query, {
+            "user_id": user_id,
+            "subscription_url": v2ray_url,
+            "device_limit": device_limit,
+            "current_devices": 0,
+            "is_active": True,
+            "expire_time": expire_time,
+            "created_at": current_time,
+            "updated_at": current_time
+        })
+        
+        # 插入Clash订阅
+        clash_insert_query = text("""
+            INSERT INTO subscriptions (user_id, subscription_url, device_limit, current_devices, is_active, expire_time, created_at, updated_at)
+            VALUES (:user_id, :subscription_url, :device_limit, :current_devices, :is_active, :expire_time, :created_at, :updated_at)
+        """)
+        
+        db.execute(clash_insert_query, {
+            "user_id": user_id,
+            "subscription_url": clash_url,
+            "device_limit": device_limit,
+            "current_devices": 0,
+            "is_active": True,
+            "expire_time": expire_time,
+            "created_at": current_time,
+            "updated_at": current_time
+        })
+        
+        db.commit()
+        
+        return ResponseBase(message="用户所有订阅重置成功", data={
+            "v2ray_subscription_url": v2ray_key,
+            "clash_subscription_url": clash_key
+        })
     except Exception as e:
+        db.rollback()
         return ResponseBase(success=False, message=f"重置用户订阅失败: {str(e)}")
 
 @router.delete("/subscriptions/{subscription_id}", response_model=ResponseBase)
