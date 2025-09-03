@@ -1,6 +1,7 @@
 from typing import Any, Optional, List
 from fastapi import APIRouter, Depends, HTTPException, status, Query, Body
 from sqlalchemy.orm import Session
+from datetime import datetime
 
 from app.core.database import get_db
 from app.schemas.common import ResponseBase
@@ -1299,21 +1300,34 @@ def get_subscriptions(
         
         subscription_list = []
         for subscription in subscriptions:
-            # 获取用户信息
-            user = subscription.user if hasattr(subscription, 'user') else None
+            # 获取用户信息（通过join查询已经获取）
             user_info = {
-                "id": user.id,
-                "username": user.username,
-                "email": user.email
-            } if user else {"id": subscription.user_id, "username": "未知用户", "email": "未知邮箱"}
+                "id": subscription.user.id,
+                "username": subscription.user.username,
+                "email": subscription.user.email
+            }
+            
+            # 确定订阅状态
+            status = "active"
+            if not subscription.is_active:
+                status = "paused"
+            elif subscription.expire_time and subscription.expire_time < datetime.now():
+                status = "expired"
+            
+            # 确定订阅类型
+            subscription_type = "v2ray" if "ssr" in subscription.subscription_url else "clash"
             
             subscription_data = {
                 "id": subscription.id,
+                "user_id": subscription.user_id,
                 "user": user_info,
                 "subscription_url": subscription.subscription_url,
+                "subscription_type": subscription_type,
+                "status": status,
                 "device_limit": subscription.device_limit,
                 "current_devices": subscription.current_devices,
-                "is_active": subscription.is_active,
+                "device_count": subscription.current_devices,
+                "expires_at": subscription.expire_time.isoformat() if subscription.expire_time else None,
                 "expire_time": subscription.expire_time.isoformat() if subscription.expire_time else None,
                 "created_at": subscription.created_at.isoformat() if subscription.created_at else None,
                 "updated_at": subscription.updated_at.isoformat() if subscription.updated_at else None
@@ -1441,6 +1455,15 @@ def update_subscription(
                 expire_time = None
             update_fields.append("expire_time = :expire_time")
             update_values["expire_time"] = expire_time
+        
+        if "expires_at" in subscription_data:
+            # 直接设置到期时间
+            try:
+                expire_time = datetime.fromisoformat(subscription_data["expires_at"].replace('Z', '+00:00'))
+                update_fields.append("expire_time = :expire_time")
+                update_values["expire_time"] = expire_time
+            except ValueError as e:
+                return ResponseBase(success=False, message=f"时间格式错误: {str(e)}")
         
         if update_fields:
             update_fields.append("updated_at = :updated_at")
@@ -2786,3 +2809,72 @@ def clear_logs(
         return ResponseBase(message="日志清理成功")
     except Exception as e:
         return ResponseBase(success=False, message=f"清理日志失败: {str(e)}")
+
+# ==================== 设备管理 ====================
+
+@router.delete("/subscriptions/{subscription_id}/devices/{device_id}", response_model=ResponseBase)
+def remove_device(
+    subscription_id: int,
+    device_id: int,
+    db: Session = Depends(get_db),
+    current_admin = Depends(get_current_admin_user)
+) -> Any:
+    """删除设备"""
+    try:
+        subscription_service = SubscriptionService(db)
+        success = subscription_service.remove_device(device_id)
+        if success:
+            return ResponseBase(message="设备删除成功")
+        else:
+            return ResponseBase(success=False, message="设备删除失败")
+    except Exception as e:
+        return ResponseBase(success=False, message=f"删除设备失败: {str(e)}")
+
+@router.delete("/subscriptions/{subscription_id}/devices", response_model=ResponseBase)
+def clear_all_devices(
+    subscription_id: int,
+    db: Session = Depends(get_db),
+    current_admin = Depends(get_current_admin_user)
+) -> Any:
+    """清空订阅的所有设备"""
+    try:
+        subscription_service = SubscriptionService(db)
+        success = subscription_service.delete_devices_by_subscription_id(subscription_id)
+        if success:
+            return ResponseBase(message="所有设备已清空")
+        else:
+            return ResponseBase(success=False, message="清空设备失败")
+    except Exception as e:
+        return ResponseBase(success=False, message=f"清空设备失败: {str(e)}")
+
+@router.get("/subscriptions/{subscription_id}/devices", response_model=ResponseBase)
+def get_subscription_devices(
+    subscription_id: int,
+    db: Session = Depends(get_db),
+    current_admin = Depends(get_current_admin_user)
+) -> Any:
+    """获取订阅的设备列表"""
+    try:
+        subscription_service = SubscriptionService(db)
+        devices = subscription_service.get_devices_by_subscription_id(subscription_id)
+        
+        device_list = []
+        for device in devices:
+            device_data = {
+                "id": device.id,
+                "name": device.device_name or "未知设备",
+                "type": device.device_type or "未知类型",
+                "ip": device.ip_address,
+                "user_agent": device.user_agent,
+                "last_access": device.last_access.isoformat() if device.last_access else None,
+                "is_active": device.is_active,
+                "created_at": device.created_at.isoformat() if device.created_at else None
+            }
+            device_list.append(device_data)
+        
+        return ResponseBase(data={
+            "devices": device_list,
+            "total": len(device_list)
+        })
+    except Exception as e:
+        return ResponseBase(success=False, message=f"获取设备列表失败: {str(e)}")

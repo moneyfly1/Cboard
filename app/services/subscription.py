@@ -191,8 +191,10 @@ class SubscriptionService:
 
     def get_subscriptions_with_pagination(self, skip: int = 0, limit: int = 20) -> Tuple[List[Subscription], int]:
         """获取订阅列表（分页）"""
-        total = self.db.query(Subscription).count()
-        subscriptions = self.db.query(Subscription).offset(skip).limit(limit).all()
+        # 使用join查询来获取用户信息
+        query = self.db.query(Subscription).join(User, Subscription.user_id == User.id)
+        total = query.count()
+        subscriptions = query.offset(skip).limit(limit).all()
         return subscriptions, total
 
     # 新增方法：重置订阅
