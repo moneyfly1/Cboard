@@ -1,6 +1,5 @@
 from typing import List, Union
-from pydantic import AnyHttpUrl, validator
-from pydantic_settings import BaseSettings
+from pydantic import AnyHttpUrl, validator, BaseSettings
 import os
 from pathlib import Path
 
@@ -12,8 +11,10 @@ class Settings(BaseSettings):
     # CORS配置
     BACKEND_CORS_ORIGINS: List[AnyHttpUrl] = [
         "http://localhost:3000",
+        "http://localhost:5173",
         "http://localhost:8080",
         "http://127.0.0.1:3000",
+        "http://127.0.0.1:5173",
         "http://127.0.0.1:8080",
     ]
 
@@ -75,7 +76,7 @@ class Settings(BaseSettings):
     MAX_FILE_SIZE: int = int(os.getenv("MAX_FILE_SIZE", "10485760"))  # 10MB
     
     # 订阅配置
-    SUBSCRIPTION_URL_PREFIX: str = os.getenv("SUBSCRIPTION_URL_PREFIX", "https://yourdomain.com/sub")
+    SUBSCRIPTION_URL_PREFIX: str = os.getenv("SUBSCRIPTION_URL_PREFIX", "http://localhost:8000/sub")
     DEVICE_LIMIT_DEFAULT: int = int(os.getenv("DEVICE_LIMIT_DEFAULT", "3"))
     
     # 应用配置

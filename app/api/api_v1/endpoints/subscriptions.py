@@ -68,6 +68,7 @@ def get_user_subscription(
         base_url = settings.BASE_URL.rstrip('/')
         ssr_url = f"{base_url}/api/v1/subscriptions/{subscription.id}/ssr"
         clash_url = f"{base_url}/api/v1/subscriptions/{subscription.id}/clash"
+        v2ray_url = f"{base_url}/api/v1/subscriptions/{subscription.id}/v2ray"
         qrcode_url = f"sub://{base64_encode(ssr_url)}#{urlencode(expiry_date)}"
         
         return ResponseBase(
@@ -82,6 +83,7 @@ def get_user_subscription(
                 "is_device_limit_reached": current_devices >= max_devices,
                 "mobileUrl": ssr_url,
                 "clashUrl": clash_url,
+                "v2rayUrl": v2ray_url,
                 "qrcodeUrl": qrcode_url
             }
         )
@@ -303,18 +305,73 @@ def get_clash_subscription(
         )
     
     # 检查订阅是否有效
+    is_valid = True
     if subscription.expire_time and subscription.expire_time < datetime.utcnow():
-        raise HTTPException(
-            status_code=status.HTTP_410_GONE,
-            detail="订阅已过期"
-        )
+        is_valid = False
+    
+    # 检查用户是否被禁用
+    if subscription.user and not subscription.user.is_active:
+        is_valid = False
+    
+    # 检查设备数量是否超限
+    devices = subscription_service.get_devices_by_subscription_id(subscription.id)
+    if len(devices) > subscription.device_limit:
+        is_valid = False
     
     # 记录设备访问
     record_device_access(subscription, request, db)
     
-    # 返回Clash订阅内容
-    clash_content = subscription_service.generate_clash_subscription(subscription)
+    if is_valid:
+        # 返回有效的Clash订阅内容
+        clash_content = subscription_service.generate_clash_subscription(subscription)
+    else:
+        # 返回失效的Clash配置
+        clash_content = subscription_service.get_invalid_clash_config()
+    
     return ResponseBase(data={"content": clash_content})
+
+@router.get("/{subscription_id}/v2ray")
+def get_v2ray_subscription(
+    subscription_id: int,
+    request: Request,
+    db: Session = Depends(get_db)
+) -> Any:
+    """获取V2Ray订阅内容"""
+    subscription_service = SubscriptionService(db)
+    
+    # 获取订阅信息
+    subscription = subscription_service.get(subscription_id)
+    if not subscription:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="订阅不存在"
+        )
+    
+    # 检查订阅是否有效
+    is_valid = True
+    if subscription.expire_time and subscription.expire_time < datetime.utcnow():
+        is_valid = False
+    
+    # 检查用户是否被禁用
+    if subscription.user and not subscription.user.is_active:
+        is_valid = False
+    
+    # 检查设备数量是否超限
+    devices = subscription_service.get_devices_by_subscription_id(subscription.id)
+    if len(devices) > subscription.device_limit:
+        is_valid = False
+    
+    # 记录设备访问
+    record_device_access(subscription, request, db)
+    
+    if is_valid:
+        # 返回有效的V2Ray订阅内容
+        v2ray_content = subscription_service.generate_v2ray_subscription(subscription)
+    else:
+        # 返回失效的V2Ray配置
+        v2ray_content = subscription_service.get_invalid_v2ray_config()
+    
+    return ResponseBase(data={"content": v2ray_content})
 
 def base64_encode(text: str) -> str:
     """Base64编码"""

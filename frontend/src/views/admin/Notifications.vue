@@ -205,8 +205,10 @@ export default {
           size: pagination.size
         }
         const response = await notificationAPI.getNotifications(params)
-        notifications.value = response.data.items
-        pagination.total = response.data.total
+        console.log('通知API响应:', response)
+        console.log('通知响应数据结构:', response.data)
+        notifications.value = response.data.data?.notifications || response.data.items || []
+        pagination.total = response.data.data?.total || response.data.total || 0
       } catch (error) {
         ElMessage.error('获取通知列表失败')
         console.error('获取通知列表失败:', error)

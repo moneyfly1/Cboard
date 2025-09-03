@@ -118,7 +118,7 @@ def login(
     # 临时禁用邮箱验证检查
     # if not user.is_verified:
     #     raise HTTPException(
-    #         status_code=status.HTTP_400_BAD_REQUEST,
+    #         status_code=status.HTP_400_BAD_REQUEST,
     #         detail="请先验证QQ邮箱"
     #     )
     
@@ -145,13 +145,13 @@ def login(
     # 创建访问令牌
     access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
-        data={"sub": user.username, "user_id": user.id},
+        data={"sub": str(user.id), "user_id": user.id},
         expires_delta=access_token_expires
     )
     
     # 创建刷新令牌
     refresh_token = create_refresh_token(
-        data={"sub": user.username, "user_id": user.id}
+        data={"sub": str(user.id), "user_id": user.id}
     )
     
     return Token(
@@ -159,7 +159,7 @@ def login(
         token_type="bearer",
         expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
         refresh_token=refresh_token,
-        user=user
+        user=user.__dict__ if hasattr(user, '__dict__') else None
     )
 
 @router.post("/login-json", response_model=Token)
@@ -237,13 +237,13 @@ def login_json(
     # 创建访问令牌
     access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
-        data={"sub": user.username, "user_id": user.id},
+        data={"sub": str(user.id), "user_id": user.id},
         expires_delta=access_token_expires
     )
     
     # 创建刷新令牌
     refresh_token = create_refresh_token(
-        data={"sub": user.username, "user_id": user.id}
+        data={"sub": str(user.id), "user_id": user.id}
     )
     
     return Token(
@@ -251,7 +251,7 @@ def login_json(
         token_type="bearer",
         expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
         refresh_token=refresh_token,
-        user=user
+        user=user.__dict__ if hasattr(user, '__dict__') else None
     )
 
 @router.post("/refresh", response_model=Token)
@@ -291,7 +291,7 @@ def refresh_token(
     # 创建新的访问令牌
     access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
-        data={"sub": username, "user_id": user_id},
+        data={"sub": str(user_id), "user_id": user_id},
         expires_delta=access_token_expires
     )
     

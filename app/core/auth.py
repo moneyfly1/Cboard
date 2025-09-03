@@ -70,7 +70,7 @@ async def get_current_user(
         if payload is None:
             raise credentials_exception
         
-        user_id: str = payload.get("sub")
+        user_id = payload.get("sub")
         if user_id is None:
             raise credentials_exception
         
@@ -86,7 +86,10 @@ async def get_current_user(
         raise credentials_exception
     
     # 从数据库获取用户
-    user = db.query(User).filter(User.id == int(user_id)).first()
+    try:
+        user = db.query(User).filter(User.id == int(user_id)).first()
+    except (ValueError, TypeError):
+        raise credentials_exception
     if user is None:
         raise credentials_exception
     

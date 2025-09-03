@@ -252,8 +252,10 @@ export default {
           ...searchForm
         }
         const response = await packageAPI.getPackages(params)
-        packages.value = response.data.items
-        pagination.total = response.data.total
+        console.log('套餐API响应:', response)
+        console.log('套餐响应数据结构:', response.data)
+        packages.value = response.data.data?.packages || response.data.items || []
+        pagination.total = response.data.data?.total || response.data.total || 0
       } catch (error) {
         ElMessage.error('获取套餐列表失败')
         console.error('获取套餐列表失败:', error)

@@ -21,6 +21,9 @@
               <el-icon><Plus /></el-icon>
               添加用户
             </el-button>
+            <el-button type="warning" @click="testAPI">
+              测试API
+            </el-button>
           </div>
         </div>
       </template>
@@ -405,13 +408,13 @@
 </template>
 
 <script>
-import { ref, reactive, onMounted, computed } from 'vue'
+import { ref, reactive, onMounted, computed, nextTick } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { 
   Plus, Edit, Delete, View, Search, Refresh, Download, 
   Message, Switch, Connection, Upload, DataAnalysis
 } from '@element-plus/icons-vue'
-import { useApi } from '@/utils/api'
+import { adminAPI } from '@/utils/api'
 
 export default {
   name: 'AdminUsers',
@@ -420,7 +423,7 @@ export default {
     Message, Switch, Connection
   },
   setup() {
-    const api = useApi()
+    const api = adminAPI
     const loading = ref(false)
     const saving = ref(false)
     const users = ref([])
@@ -502,12 +505,56 @@ export default {
           size: pageSize.value,
           ...searchForm
         }
-        const response = await api.get('/admin/users', { params })
-        users.value = response.data.users || response.data.items || []
-        total.value = response.data.total || 0
+        
+        console.log('=== 开始加载用户列表 ===')
+        console.log('请求用户列表参数:', params)
+        console.log('当前token:', localStorage.getItem('token'))
+        console.log('使用的API:', api)
+        console.log('API方法:', api.getUsers)
+        
+        const response = await api.getUsers(params)
+        console.log('=== API响应详情 ===')
+        console.log('响应状态:', response.status)
+        console.log('响应状态文本:', response.statusText)
+        console.log('响应头:', response.headers)
+        console.log('响应数据:', response.data)
+        console.log('响应数据类型:', typeof response.data)
+        console.log('response.data.users:', response.data?.users)
+        console.log('response.data.total:', response.data?.total)
+        
+        if (response.data && response.data.users) {
+          users.value = response.data.users
+          total.value = response.data.total || 0
+          console.log('=== 数据绑定成功 ===')
+          console.log('用户列表加载成功，共', users.value.length, '个用户')
+          console.log('users.value:', users.value)
+          console.log('total.value:', total.value)
+          console.log('users.value类型:', Array.isArray(users.value))
+          console.log('users.value长度:', users.value.length)
+          
+          // 强制触发响应式更新
+          nextTick(() => {
+            console.log('nextTick后users.value:', users.value)
+            console.log('nextTick后users.value长度:', users.value.length)
+          })
+        } else {
+          console.warn('=== 响应数据格式异常 ===')
+          console.warn('response.data:', response.data)
+          console.warn('response.data.users:', response.data?.users)
+          console.warn('response.data.total:', response.data?.total)
+          users.value = []
+          total.value = 0
+        }
       } catch (error) {
-        ElMessage.error('加载用户列表失败')
-        console.error('加载用户列表失败:', error)
+        console.error('=== 加载用户列表失败 ===')
+        console.error('错误对象:', error)
+        console.error('错误消息:', error.message)
+        console.error('错误响应:', error.response)
+        console.error('错误响应数据:', error.response?.data)
+        console.error('错误响应状态:', error.response?.status)
+        ElMessage.error(`加载用户列表失败: ${error.response?.data?.message || error.message}`)
+        users.value = []
+        total.value = 0
       } finally {
         loading.value = false
       }
@@ -574,10 +621,28 @@ export default {
         saving.value = true
         
         if (editingUser.value) {
-          await api.put(`/admin/users/${editingUser.value.id}`, userForm)
+          // 转换数据格式以匹配后端API期望
+          const userData = {
+            username: userForm.username,
+            email: userForm.email,
+            is_active: userForm.status === 'active',
+            is_verified: false
+          }
+          console.log('发送更新用户数据:', userData)
+          await api.updateUser(editingUser.value.id, userData)
           ElMessage.success('用户更新成功')
         } else {
-          await api.post('/admin/users', userForm)
+          // 转换数据格式以匹配后端API期望
+          const userData = {
+            username: userForm.username,
+            email: userForm.email,
+            password: userForm.password,
+            is_active: userForm.status === 'active',
+            is_admin: false,
+            is_verified: false
+          }
+          console.log('发送创建用户数据:', userData)
+          await api.createUser(userData)
           ElMessage.success('用户创建成功')
         }
         
@@ -729,10 +794,14 @@ export default {
 
     const loadStatistics = async () => {
       try {
-        const response = await api.get('/admin/users/statistics')
-        Object.assign(statistics, response.data)
+        const response = await api.getUserStatistics()
+        console.log('用户统计响应:', response)
+        if (response.data) {
+          Object.assign(statistics, response.data)
+        }
       } catch (error) {
         console.error('加载统计数据失败:', error)
+        console.error('错误详情:', error.response?.data)
       }
     }
 
@@ -942,9 +1011,53 @@ export default {
       }
     }
 
+    const testAPI = async () => {
+      try {
+        console.log('=== 开始API测试 ===')
+        console.log('Token:', localStorage.getItem('token'))
+        console.log('API对象:', api)
+        console.log('API方法:', api.getUsers)
+        
+        ElMessage.info('开始测试API...')
+        
+        // 直接使用fetch调用，绕过adminAPI
+        const token = localStorage.getItem('token')
+        console.log('使用的token:', token)
+        
+        const response = await fetch('/api/v1/admin/users?page=1&size=10', {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        })
+        
+        const data = await response.json()
+        console.log('直接fetch调用结果:', data)
+        
+        // 同时测试adminAPI
+        const adminResponse = await api.getUsers({ page: 1, size: 10 })
+        console.log('adminAPI调用结果:', adminResponse)
+        
+        ElMessage.success(`API测试成功，直接调用: ${data.data?.users?.length || 0}个用户, adminAPI: ${adminResponse.data?.users?.length || 0}个用户`)
+      } catch (error) {
+        console.error('API测试失败:', error)
+        console.error('错误详情:', error.response?.data)
+        ElMessage.error(`API测试失败: ${error.response?.data?.message || error.message}`)
+      }
+    }
+
     onMounted(() => {
-      loadUsers()
-      loadStatistics()
+      console.log('Users.vue 组件已挂载，开始加载数据...')
+      console.log('当前token:', localStorage.getItem('token'))
+      console.log('API对象:', api)
+      
+      // 延迟加载，确保组件完全挂载
+      setTimeout(() => {
+        console.log('开始加载用户数据...')
+        loadUsers()
+        loadStatistics()
+      }, 100)
     })
 
     return {
@@ -988,6 +1101,7 @@ export default {
       batchDisableUsers,
       batchDeleteUsers,
       exportUsers,
+      testAPI,
       getStatusType,
       getStatusText,
       formatDate,

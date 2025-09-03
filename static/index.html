@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>XBoard 静态文件服务</title>
+    <link rel="stylesheet" href="css/main.css">
+    <link rel="icon" href="images/favicon.ico" type="image/x-icon">
+</head>
+<body>
+    <div class="container">
+        <header class="card">
+            <div class="card-header">
+                <h1>🚀 XBoard 静态文件服务</h1>
+                <p>此页面显示可用的静态资源文件</p>
+            </div>
+        </header>
+
+        <main>
+            <!-- CSS 文件 -->
+            <section class="card">
+                <div class="card-header">
+                    <h2>🎨 CSS 样式文件</h2>
+                </div>
+                <div class="card-body">
+                    <ul>
+                        <li><a href="css/main.css">main.css</a> - 主要样式文件</li>
+                    </ul>
+                </div>
+            </section>
+
+            <!-- JavaScript 文件 -->
+            <section class="card">
+                <div class="card-header">
+                    <h2>⚡ JavaScript 文件</h2>
+                </div>
+                <div class="card-body">
+                    <ul>
+                        <li><a href="js/utils.js">utils.js</a> - 工具函数库</li>
+                    </ul>
+                </div>
+            </section>
+
+            <!-- 图片文件 -->
+            <section class="card">
+                <div class="card-header">
+                    <h2>🖼️ 图片文件</h2>
+                </div>
+                <div class="card-body">
+                    <ul>
+                        <li><a href="images/logo.svg">logo.svg</a> - XBoard Logo</li>
+                        <li><a href="images/favicon.ico">favicon.ico</a> - 网站图标</li>
+                    </ul>
+                </div>
+            </section>
+
+            <!-- 使用说明 -->
+            <section class="card">
+                <div class="card-header">
+                    <h2>📚 使用说明</h2>
+                </div>
+                <div class="card-body">
+                    <h3>在 HTML 中引用：</h3>
+                    <pre><code>&lt;!-- CSS 文件 --&gt;
+&lt;link rel="stylesheet" href="/static/css/main.css"&gt;
+
+&lt;!-- JavaScript 文件 --&gt;
+&lt;script src="/static/js/utils.js"&gt;&lt;/script&gt;
+
+&lt;!-- 图片文件 --&gt;
+&lt;img src="/static/images/logo.svg" alt="XBoard Logo"&gt;</code></pre>
+
+                    <h3>在 Vue 组件中使用：</h3>
+                    <pre><code>&lt;template&gt;
+  &lt;div&gt;
+    &lt;img src="/static/images/logo.svg" alt="Logo"&gt;
+  &lt;/div&gt;
+&lt;/template&gt;
+
+&lt;script&gt;
+export default {
+  mounted() {
+    // 使用工具函数
+    if (window.XBoardUtils) {
+      window.XBoardUtils.showNotification('页面加载成功！', 'success');
+    }
+  }
+}
+&lt;/script&gt;</code></pre>
+                </div>
+            </section>
+
+            <!-- 功能演示 -->
+            <section class="card">
+                <div class="card-header">
+                    <h2>🎯 功能演示</h2>
+                </div>
+                <div class="card-body">
+                    <div class="form-group">
+                        <button class="btn btn-primary" onclick="showDemoNotification()">显示通知</button>
+                        <button class="btn btn-success" onclick="formatDemoDate()">格式化日期</button>
+                        <button class="btn btn-warning" onclick="formatDemoPrice()">格式化价格</button>
+                    </div>
+                    <div id="demo-output" style="margin-top: 1rem; padding: 1rem; background: #f8fafc; border-radius: 0.375rem;"></div>
+                </div>
+            </section>
+        </main>
+
+        <footer class="card">
+            <div class="card-footer">
+                <p>&copy; 2025 XBoard. 静态文件服务正常运行。</p>
+                <p>访问地址：<code>/static/</code></p>
+            </div>
+        </footer>
+    </div>
+
+    <script src="js/utils.js"></script>
+    <script>
+        // 演示函数
+        function showDemoNotification() {
+            if (window.XBoardUtils) {
+                window.XBoardUtils.showNotification('这是一个演示通知！', 'success');
+            } else {
+                alert('工具函数未加载');
+            }
+        }
+
+        function formatDemoDate() {
+            if (window.XBoardUtils) {
+                const date = new Date();
+                const formatted = window.XBoardUtils.formatDate(date, 'YYYY年MM月DD日 HH:mm:ss');
+                document.getElementById('demo-output').innerHTML = `<strong>当前时间：</strong>${formatted}`;
+            }
+        }
+
+        function formatDemoPrice() {
+            if (window.XBoardUtils) {
+                const price = 99.99;
+                const formatted = window.XBoardUtils.formatPrice(price);
+                document.getElementById('demo-output').innerHTML = `<strong>价格：</strong>${formatted}`;
+            }
+        }
+
+        // 页面加载完成后的初始化
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('XBoard 静态文件服务页面加载完成');
+            if (window.XBoardUtils) {
+                console.log('工具函数库加载成功');
+            }
+        });
+    </script>
+</body>
+</html>

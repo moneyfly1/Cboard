@@ -218,7 +218,10 @@ class UserService:
         skip: int = 0, 
         limit: int = 100,
         search: Optional[str] = None,
-        status: Optional[str] = None
+        status: Optional[str] = None,
+        email: Optional[str] = None,
+        username: Optional[str] = None,
+        date_range: Optional[str] = None
     ) -> Tuple[List[User], int]:
         """分页获取用户列表"""
         query = self.db.query(User)
@@ -232,6 +235,12 @@ class UserService:
                 )
             )
         
+        # 具体字段搜索
+        if email:
+            query = query.filter(User.email.contains(email))
+        if username:
+            query = query.filter(User.username.contains(username))
+        
         # 状态筛选
         if status == "active":
             query = query.filter(User.is_active == True)
@@ -241,6 +250,24 @@ class UserService:
             query = query.filter(User.is_verified == True)
         elif status == "unverified":
             query = query.filter(User.is_verified == False)
+        elif status == "disabled":
+            query = query.filter(User.is_active == False)
+        
+        # 日期范围筛选
+        if date_range:
+            try:
+                # 假设date_range格式为 "2024-01-01,2024-12-31"
+                dates = date_range.split(',')
+                if len(dates) == 2:
+                    start_date = datetime.fromisoformat(dates[0])
+                    end_date = datetime.fromisoformat(dates[1])
+                    query = query.filter(
+                        User.created_at >= start_date,
+                        User.created_at <= end_date
+                    )
+            except (ValueError, IndexError):
+                # 如果日期格式错误，忽略日期筛选
+                pass
         
         total = query.count()
         users = query.order_by(User.created_at.desc()).offset(skip).limit(limit).all()

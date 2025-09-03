@@ -374,4 +374,148 @@ class SubscriptionService:
                 Subscription.expire_time <= cutoff_date,
                 Subscription.expire_time > datetime.utcnow()
             )
-        ).count() 
+        ).count()
+    
+    def generate_v2ray_subscription(self, subscription: Subscription) -> dict:
+        """生成V2Ray订阅内容"""
+        # 获取所有可用节点
+        nodes = self.db.query(Node).filter(Node.is_active == True).all()
+        
+        if not nodes:
+            return {"error": "暂无可用节点"}
+        
+        # 从数据库获取V2Ray模板配置
+        from sqlalchemy import text
+        query = text('SELECT value FROM system_configs WHERE "key" = \'v2ray_config\' AND type = \'v2ray\'')
+        result = self.db.execute(query).first()
+        
+        if result:
+            # 使用数据库中的配置作为模板
+            import json
+            try:
+                config = json.loads(result.value)
+            except:
+                config = self._get_default_v2ray_config()
+        else:
+            # 使用默认配置
+            config = self._get_default_v2ray_config()
+        
+        # 添加节点到配置
+        inbounds = []
+        outbounds = []
+        
+        for node in nodes:
+            inbound_config = self._generate_v2ray_inbound_config(node, subscription)
+            outbound_config = self._generate_v2ray_outbound_config(node, subscription)
+            inbounds.append(inbound_config)
+            outbounds.append(outbound_config)
+        
+        config["inbounds"] = inbounds
+        config["outbounds"] = outbounds
+        
+        return config
+    
+    def get_invalid_clash_config(self) -> dict:
+        """获取失效的Clash配置"""
+        from sqlalchemy import text
+        query = text('SELECT value FROM system_configs WHERE "key" = \'clash_config_invalid\' AND type = \'clash_invalid\'')
+        result = self.db.execute(query).first()
+        
+        if result:
+            import yaml
+            try:
+                return yaml.safe_load(result.value)
+            except:
+                pass
+        
+        # 返回默认失效配置
+        return self._get_default_invalid_clash_config()
+    
+    def get_invalid_v2ray_config(self) -> dict:
+        """获取失效的V2Ray配置"""
+        from sqlalchemy import text
+        query = text('SELECT value FROM system_configs WHERE "key" = \'v2ray_config_invalid\' AND type = \'v2ray_invalid\'')
+        result = self.db.execute(query).first()
+        
+        if result:
+            import json
+            try:
+                return json.loads(result.value)
+            except:
+                pass
+        
+        # 返回默认失效配置
+        return self._get_default_invalid_v2ray_config()
+    
+    def _generate_v2ray_inbound_config(self, node: Node, subscription: Subscription) -> dict:
+        """生成V2Ray入站配置"""
+        return {
+            "port": node.port,
+            "protocol": "socks",
+            "settings": {
+                "auth": "noauth",
+                "udp": True
+            }
+        }
+    
+    def _generate_v2ray_outbound_config(self, node: Node, subscription: Subscription) -> dict:
+        """生成V2Ray出站配置"""
+        return {
+            "protocol": "vmess",
+            "settings": {
+                "vnext": [
+                    {
+                        "address": node.server,
+                        "port": node.port,
+                        "users": [
+                            {
+                                "id": node.password or "uuid-here",
+                                "alterId": 64
+                            }
+                        ]
+                    }
+                ]
+            }
+        }
+    
+    def _get_default_v2ray_config(self) -> dict:
+        """获取默认V2Ray配置"""
+        return {
+            "log": {
+                "loglevel": "warning"
+            },
+            "inbounds": [],
+            "outbounds": []
+        }
+    
+    def _get_default_invalid_clash_config(self) -> dict:
+        """获取默认失效Clash配置"""
+        return {
+            "port": 7890,
+            "socks-port": 7891,
+            "allow-lan": True,
+            "mode": "Rule",
+            "log-level": "info",
+            "external-controller": ":9090",
+            "proxies": [],
+            "proxy-groups": [
+                {
+                    "name": "Proxy",
+                    "type": "select",
+                    "proxies": []
+                }
+            ],
+            "rules": [
+                "MATCH,DIRECT"
+            ]
+        }
+    
+    def _get_default_invalid_v2ray_config(self) -> dict:
+        """获取默认失效V2Ray配置"""
+        return {
+            "log": {
+                "loglevel": "warning"
+            },
+            "inbounds": [],
+            "outbounds": []
+        } 

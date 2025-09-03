@@ -107,6 +107,50 @@
               </el-form-item>
             </el-form>
           </div>
+
+          <div class="config-section">
+            <h3>Clash 失效配置</h3>
+            <el-form>
+              <el-form-item label="失效配置文件">
+                <el-input
+                  v-model="clashConfigInvalid"
+                  type="textarea"
+                  :rows="10"
+                  placeholder="请输入Clash失效配置文件内容（用于无效用户）"
+                />
+              </el-form-item>
+              <el-form-item>
+                <el-button type="primary" @click="saveClashConfigInvalid" :loading="clashInvalidLoading">
+                  保存Clash失效配置
+                </el-button>
+                <el-button @click="loadClashConfigInvalid">
+                  加载当前失效配置
+                </el-button>
+              </el-form-item>
+            </el-form>
+          </div>
+
+          <div class="config-section">
+            <h3>V2Ray 失效配置</h3>
+            <el-form>
+              <el-form-item label="失效配置文件">
+                <el-input
+                  v-model="v2rayConfigInvalid"
+                  type="textarea"
+                  :rows="10"
+                  placeholder="请输入V2Ray失效配置文件内容（用于无效用户）"
+                />
+              </el-form-item>
+              <el-form-item>
+                <el-button type="primary" @click="saveV2rayConfigInvalid" :loading="v2rayInvalidLoading">
+                  保存V2Ray失效配置
+                </el-button>
+                <el-button @click="loadV2rayConfigInvalid">
+                  加载当前失效配置
+                </el-button>
+              </el-form-item>
+            </el-form>
+          </div>
         </el-tab-pane>
 
         <!-- 邮件配置 -->
@@ -505,6 +549,8 @@ export default {
     const systemLoading = ref(false)
     const clashLoading = ref(false)
     const v2rayLoading = ref(false)
+    const clashInvalidLoading = ref(false)
+    const v2rayInvalidLoading = ref(false)
     const emailLoading = ref(false)
     const testLoading = ref(false)
     const emailQueueLoading = ref(false)
@@ -513,6 +559,8 @@ export default {
     
     const clashConfig = ref('')
     const v2rayConfig = ref('')
+    const clashConfigInvalid = ref('')
+    const v2rayConfigInvalid = ref('')
     const backupHistory = ref([])
     
     const uploadUrl = '/api/admin/upload'
@@ -668,6 +716,52 @@ export default {
         v2rayConfig.value = response.data
       } catch (error) {
         ElMessage.error('加载配置失败')
+      }
+    }
+
+    // 保存Clash失效配置
+    const saveClashConfigInvalid = async () => {
+      clashInvalidLoading.value = true
+      try {
+        await configAPI.saveClashConfigInvalid(clashConfigInvalid.value)
+        ElMessage.success('Clash失效配置保存成功')
+      } catch (error) {
+        ElMessage.error('保存失败')
+      } finally {
+        clashInvalidLoading.value = false
+      }
+    }
+
+    // 保存V2Ray失效配置
+    const saveV2rayConfigInvalid = async () => {
+      v2rayInvalidLoading.value = true
+      try {
+        await configAPI.saveV2rayConfigInvalid(v2rayConfigInvalid.value)
+        ElMessage.success('V2Ray失效配置保存成功')
+      } catch (error) {
+        ElMessage.error('保存失败')
+      } finally {
+        v2rayInvalidLoading.value = false
+      }
+    }
+
+    // 加载Clash失效配置
+    const loadClashConfigInvalid = async () => {
+      try {
+        const response = await configAPI.getClashConfigInvalid()
+        clashConfigInvalid.value = response.data
+      } catch (error) {
+        ElMessage.error('加载失效配置失败')
+      }
+    }
+
+    // 加载V2Ray失效配置
+    const loadV2rayConfigInvalid = async () => {
+      try {
+        const response = await configAPI.getV2rayConfigInvalid()
+        v2rayConfigInvalid.value = response.data
+      } catch (error) {
+        ElMessage.error('加载失效配置失败')
       }
     }
 
@@ -954,6 +1048,8 @@ export default {
       loadEmailConfig()
       loadClashConfig()
       loadV2rayConfig()
+      loadClashConfigInvalid()
+      loadV2rayConfigInvalid()
       loadEmailQueueStats()
       loadEmailQueueList()
       loadPaymentSettings()
@@ -966,6 +1062,8 @@ export default {
       systemLoading,
       clashLoading,
       v2rayLoading,
+      clashInvalidLoading,
+      v2rayInvalidLoading,
       emailLoading,
       testLoading,
       emailQueueLoading,
@@ -976,15 +1074,21 @@ export default {
       paymentForm,
       clashConfig,
       v2rayConfig,
+      clashConfigInvalid,
+      v2rayConfigInvalid,
       backupHistory,
       uploadUrl,
       saveSystemConfig,
       saveClashConfig,
       saveV2rayConfig,
+      saveClashConfigInvalid,
+      saveV2rayConfigInvalid,
       saveEmailConfig,
       testEmail,
       loadClashConfig,
       loadV2rayConfig,
+      loadClashConfigInvalid,
+      loadV2rayConfigInvalid,
       exportConfig,
       handleLogoSuccess,
       beforeLogoUpload,

@@ -96,7 +96,9 @@ export default {
     const loadStats = async () => {
       try {
         const response = await api.get('/admin/stats')
-        stats.value = response.data
+        console.log('统计API响应:', response)
+        console.log('统计响应数据结构:', response.data)
+        stats.value = response.data.data || response.data
       } catch (error) {
         console.error('加载统计数据失败:', error)
       }
@@ -105,7 +107,9 @@ export default {
     const loadRecentUsers = async () => {
       try {
         const response = await api.get('/admin/users/recent')
-        recentUsers.value = response.data
+        console.log('最近用户API响应:', response)
+        console.log('最近用户响应数据结构:', response.data)
+        recentUsers.value = response.data.data?.users || response.data.users || response.data
       } catch (error) {
         console.error('加载最近用户失败:', error)
       }
@@ -114,7 +118,9 @@ export default {
     const loadRecentOrders = async () => {
       try {
         const response = await api.get('/admin/orders/recent')
-        recentOrders.value = response.data
+        console.log('最近订单API响应:', response)
+        console.log('最近订单响应数据结构:', response.data)
+        recentOrders.value = response.data.data?.orders || response.data.orders || response.data
       } catch (error) {
         console.error('加载最近订单失败:', error)
       }

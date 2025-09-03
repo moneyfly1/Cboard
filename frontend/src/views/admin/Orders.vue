@@ -277,8 +277,10 @@ export default {
         }
         
         const response = await api.get('/admin/orders', { params })
-        orders.value = response.data.items
-        total.value = response.data.total
+        console.log('订单API响应:', response)
+        console.log('订单响应数据结构:', response.data)
+        orders.value = response.data.data?.orders || response.data.items || []
+        total.value = response.data.data?.total || response.data.total || 0
       } catch (error) {
         ElMessage.error('加载订单列表失败')
       } finally {

@@ -20,12 +20,23 @@ api.interceptors.request.use(
   config => {
     // 从localStorage获取token，避免循环导入
     const token = localStorage.getItem('token')
+    console.log('=== 请求拦截器 ===')
+    console.log('请求URL:', config.url)
+    console.log('请求方法:', config.method)
+    console.log('Token:', token)
+    console.log('请求头:', config.headers)
+    
     if (token) {
       config.headers.Authorization = `Bearer ${token}`
+      console.log('已添加Authorization头')
+    } else {
+      console.log('未找到token')
     }
+    
     return config
   },
   error => {
+    console.error('请求拦截器错误:', error)
     return Promise.reject(error)
   }
 )
@@ -113,7 +124,14 @@ export const adminAPI = {
   // 管理端首页
   getDashboard: () => api.get('/admin/dashboard'),
   getStats: () => api.get('/admin/stats'),
-  getUsers: (params) => api.get('/admin/users', { params }),
+  getUsers: (params) => {
+    console.log('adminAPI.getUsers 被调用，参数:', params)
+    return api.get('/admin/users', { params })
+  },
+  getUserStatistics: () => {
+    console.log('adminAPI.getUserStatistics 被调用')
+    return api.get('/admin/users/statistics')
+  },
   getOrders: (params) => api.get('/admin/orders', { params }),
   
   // 用户管理
@@ -223,8 +241,12 @@ export const configAPI = {
   testEmail: () => api.post('/admin/test-email'),
   getClashConfig: () => api.get('/admin/clash-config'),
   saveClashConfig: (content) => api.post('/admin/clash-config', { content }),
+  getClashConfigInvalid: () => api.get('/admin/clash-config-invalid'),
+  saveClashConfigInvalid: (content) => api.post('/admin/clash-config-invalid', { content }),
   getV2rayConfig: () => api.get('/admin/v2ray-config'),
   saveV2rayConfig: (content) => api.post('/admin/v2ray-config', { content }),
+  getV2rayConfigInvalid: () => api.get('/admin/v2ray-config-invalid'),
+  saveV2rayConfigInvalid: (content) => api.post('/admin/v2ray-config-invalid', { content }),
   exportConfig: () => api.get('/admin/export-config'),
   
   // 支付设置管理
