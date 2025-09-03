@@ -1299,13 +1299,19 @@ def get_subscriptions(
         subscriptions, total = subscription_service.get_subscriptions_with_pagination(skip=skip, limit=size)
         
         subscription_list = []
+        # 按用户分组订阅
+        user_subscriptions = {}
         for subscription in subscriptions:
-            # 获取用户信息（通过join查询已经获取）
-            user_info = {
-                "id": subscription.user.id,
-                "username": subscription.user.username,
-                "email": subscription.user.email
-            }
+            user_id = subscription.user_id
+            if user_id not in user_subscriptions:
+                user_subscriptions[user_id] = {
+                    "user": {
+                        "id": subscription.user.id,
+                        "username": subscription.user.username,
+                        "email": subscription.user.email
+                    },
+                    "subscriptions": []
+                }
             
             # 确定订阅状态
             status = "active"
@@ -1314,14 +1320,19 @@ def get_subscriptions(
             elif subscription.expire_time and subscription.expire_time < datetime.now():
                 status = "expired"
             
-            # 确定订阅类型
-            subscription_type = "v2ray" if "ssr" in subscription.subscription_url else "clash"
+            # 确定订阅类型和完整URL
+            if "ssr" in subscription.subscription_url:
+                subscription_type = "v2ray"
+                full_url = f"http://localhost:8000/api/v1/subscriptions/ssr/{subscription.subscription_url}"
+            else:
+                subscription_type = "clash"
+                full_url = f"http://localhost:8000/api/v1/subscriptions/clash/{subscription.subscription_url}"
             
             subscription_data = {
                 "id": subscription.id,
                 "user_id": subscription.user_id,
-                "user": user_info,
                 "subscription_url": subscription.subscription_url,
+                "full_url": full_url,
                 "subscription_type": subscription_type,
                 "status": status,
                 "device_limit": subscription.device_limit,
@@ -1332,7 +1343,56 @@ def get_subscriptions(
                 "created_at": subscription.created_at.isoformat() if subscription.created_at else None,
                 "updated_at": subscription.updated_at.isoformat() if subscription.updated_at else None
             }
-            subscription_list.append(subscription_data)
+            user_subscriptions[user_id]["subscriptions"].append(subscription_data)
+        
+        # 将用户订阅数据转换为列表格式
+        for user_id, user_data in user_subscriptions.items():
+            # 确保每个用户有两个订阅
+            v2ray_sub = next((s for s in user_data["subscriptions"] if s["subscription_type"] == "v2ray"), None)
+            clash_sub = next((s for s in user_data["subscriptions"] if s["subscription_type"] == "clash"), None)
+            
+            # 如果缺少某个类型的订阅，创建占位符
+            if not v2ray_sub:
+                v2ray_sub = {
+                    "id": f"placeholder_v2ray_{user_id}",
+                    "user_id": user_id,
+                    "subscription_url": "未配置",
+                    "full_url": "未配置",
+                    "subscription_type": "v2ray",
+                    "status": "inactive",
+                    "device_limit": 3,
+                    "current_devices": 0,
+                    "device_count": 0,
+                    "expires_at": None,
+                    "expire_time": None,
+                    "created_at": None,
+                    "updated_at": None,
+                    "is_placeholder": True
+                }
+            
+            if not clash_sub:
+                clash_sub = {
+                    "id": f"placeholder_clash_{user_id}",
+                    "user_id": user_id,
+                    "subscription_url": "未配置",
+                    "full_url": "未配置",
+                    "subscription_type": "clash",
+                    "status": "inactive",
+                    "device_limit": 3,
+                    "current_devices": 0,
+                    "device_count": 0,
+                    "expires_at": None,
+                    "expire_time": None,
+                    "created_at": None,
+                    "updated_at": None,
+                    "is_placeholder": True
+                }
+            
+            # 添加用户信息到每个订阅
+            v2ray_sub["user"] = user_data["user"]
+            clash_sub["user"] = user_data["user"]
+            
+            subscription_list.extend([v2ray_sub, clash_sub])
         
         return ResponseBase(data={
             "subscriptions": subscription_list,
@@ -1465,6 +1525,10 @@ def update_subscription(
             except ValueError as e:
                 return ResponseBase(success=False, message=f"时间格式错误: {str(e)}")
         
+        if "device_limit" in subscription_data:
+            update_fields.append("device_limit = :device_limit")
+            update_values["device_limit"] = subscription_data["device_limit"]
+        
         if update_fields:
             update_fields.append("updated_at = :updated_at")
             update_values["updated_at"] = datetime.now()
@@ -1570,6 +1634,35 @@ def reset_subscription(
     except Exception as e:
         return ResponseBase(success=False, message=f"重置订阅失败: {str(e)}")
 
+@router.post("/subscriptions/user/{user_id}/reset-all", response_model=ResponseBase)
+def reset_user_all_subscriptions(
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_admin = Depends(get_current_admin_user)
+) -> Any:
+    """重置用户的所有订阅（V2Ray和Clash）"""
+    try:
+        subscription_service = SubscriptionService(db)
+        
+        # 获取用户的所有订阅
+        user_subscriptions = db.query(Subscription).filter(Subscription.user_id == user_id).all()
+        
+        if not user_subscriptions:
+            return ResponseBase(success=False, message="用户没有订阅")
+        
+        # 重置每个订阅
+        for subscription in user_subscriptions:
+            subscription_service.reset_subscription(
+                subscription_id=subscription.id,
+                user_id=subscription.user_id,
+                reset_type="admin",
+                reason="管理员重置所有订阅"
+            )
+        
+        return ResponseBase(message="用户所有订阅重置成功")
+    except Exception as e:
+        return ResponseBase(success=False, message=f"重置用户订阅失败: {str(e)}")
+
 @router.delete("/subscriptions/{subscription_id}", response_model=ResponseBase)
 def delete_subscription(
     subscription_id: int,
@@ -1587,6 +1680,36 @@ def delete_subscription(
             return ResponseBase(success=False, message="订阅删除失败")
     except Exception as e:
         return ResponseBase(success=False, message=f"删除订阅失败: {str(e)}")
+
+@router.delete("/subscriptions/user/{user_id}/delete-all", response_model=ResponseBase)
+def delete_user_all_data(
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_admin = Depends(get_current_admin_user)
+) -> Any:
+    """删除用户的所有数据（订阅、设备等）"""
+    try:
+        subscription_service = SubscriptionService(db)
+        user_service = UserService(db)
+        
+        # 获取用户信息
+        user = user_service.get(user_id)
+        if not user:
+            return ResponseBase(success=False, message="用户不存在")
+        
+        # 删除用户的所有订阅
+        user_subscriptions = db.query(Subscription).filter(Subscription.user_id == user_id).all()
+        for subscription in user_subscriptions:
+            subscription_service.delete(subscription.id)
+        
+        # 删除用户
+        db.delete(user)
+        db.commit()
+        
+        return ResponseBase(message="用户及其所有数据删除成功")
+    except Exception as e:
+        db.rollback()
+        return ResponseBase(success=False, message=f"删除用户失败: {str(e)}")
 
 # ==================== 系统设置管理 ====================
 
