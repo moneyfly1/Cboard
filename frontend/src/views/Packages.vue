@@ -5,8 +5,36 @@
       <p>选择适合您的订阅套餐</p>
     </div>
 
+    <!-- 调试信息 -->
+    <div class="debug-info" style="background: #f5f5f5; padding: 10px; margin: 10px 0; border-radius: 4px; font-family: monospace; font-size: 12px;">
+      <div><strong>调试信息:</strong></div>
+      <div>套餐数量: {{ packages.length }}</div>
+      <div>加载状态: {{ isLoading ? '加载中...' : '加载完成' }}</div>
+      <div>错误信息: {{ errorMessage || '无' }}</div>
+      <div>API响应: {{ apiResponse ? '已收到' : '未收到' }}</div>
+    </div>
+
+    <!-- 加载状态 -->
+    <div v-if="isLoading" class="loading-container">
+      <el-loading-component />
+      <p>正在加载套餐列表...</p>
+    </div>
+
+    <!-- 错误状态 -->
+    <div v-else-if="errorMessage" class="error-container">
+      <el-alert
+        :title="errorMessage"
+        type="error"
+        :closable="false"
+        show-icon
+      />
+      <el-button @click="loadPackages" type="primary" style="margin-top: 10px;">
+        重试加载
+      </el-button>
+    </div>
+
     <!-- 套餐列表 -->
-    <div class="packages-grid">
+    <div v-else-if="packages.length > 0" class="packages-grid">
       <el-card 
         v-for="pkg in packages" 
         :key="pkg.id" 
@@ -46,6 +74,11 @@
           </el-button>
         </div>
       </el-card>
+    </div>
+
+    <!-- 空状态 -->
+    <div v-else class="empty-container">
+      <el-empty description="暂无可用套餐" />
     </div>
 
     <!-- 购买确认对话框 -->
@@ -130,6 +163,8 @@ export default {
     
     // 响应式数据
     const packages = ref([])
+    const isLoading = ref(false)
+    const errorMessage = ref('')
     const isProcessing = ref(false)
     const purchaseDialogVisible = ref(false)
     const paymentDialogVisible = ref(false)
@@ -145,22 +180,49 @@ export default {
     // 获取套餐列表
     const loadPackages = async () => {
       try {
+        isLoading.value = true
+        errorMessage.value = ''
+        
+        console.log('开始加载套餐列表...')
         const response = await api.get('/packages/')
-        packages.value = response.data.map(pkg => ({
-          ...pkg,
-          features: [
-            `有效期 ${pkg.duration_days} 天`,
-            `支持 ${pkg.device_limit} 个设备`,
-            pkg.bandwidth_limit ? `流量限制 ${pkg.bandwidth_limit}GB` : '无流量限制',
-            '7×24小时技术支持',
-            '高速稳定节点'
+        console.log('API响应:', response)
+        
+        if (response.data && response.data.data && response.data.data.packages) {
+          packages.value = response.data.data.packages.map(pkg => ({
+            ...pkg,
+            features: [
+              `有效期 ${pkg.duration_days} 天`,
+              `支持 ${pkg.device_limit} 个设备`,
+              pkg.bandwidth_limit ? `流量限制 ${pkg.bandwidth_limit}GB` : '无流量限制',
+              '7×24小时技术支持',
+              '高速稳定节点'
           ],
-          is_popular: pkg.sort_order === 2,
-          is_recommended: pkg.sort_order === 3
-        }))
+            is_popular: pkg.sort_order === 2,
+            is_recommended: pkg.sort_order === 3
+          }))
+          console.log('套餐数据已处理:', packages.value)
+        } else {
+          console.error('API响应格式不正确:', response)
+          errorMessage.value = 'API响应格式不正确'
+        }
       } catch (error) {
-        ElMessage.error('加载套餐列表失败')
         console.error('加载套餐失败:', error)
+        console.error('错误详情:', error.response?.data)
+        console.error('错误状态:', error.response?.status)
+        
+        if (error.response?.status === 404) {
+          errorMessage.value = '套餐接口不存在 (404)'
+        } else if (error.response?.status === 500) {
+          errorMessage.value = '服务器内部错误 (500)'
+        } else if (error.code === 'ECONNREFUSED') {
+          errorMessage.value = '无法连接到服务器，请检查后端服务是否启动'
+        } else if (error.message) {
+          errorMessage.value = `加载失败: ${error.message}`
+        } else {
+          errorMessage.value = '加载套餐列表失败，请重试'
+        }
+      } finally {
+        isLoading.value = false
       }
     }
     

@@ -12,6 +12,8 @@ class Package(Base):
     price = Column(Numeric(10, 2), nullable=False)
     duration_days = Column(Integer, nullable=False)
     device_limit = Column(Integer, default=3)
+    bandwidth_limit = Column(Integer, nullable=True)  # 流量限制（GB）
+    sort_order = Column(Integer, default=1)  # 排序顺序
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())

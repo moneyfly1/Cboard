@@ -1,7 +1,8 @@
 from datetime import datetime, timedelta
 from typing import Optional, Union
 from jose import JWTError, jwt
-from passlib.context import CryptContext
+import hashlib
+import os
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
@@ -9,19 +10,27 @@ from app.core.config import settings
 from app.core.database import get_db
 from app.models.user import User
 
-# 密码加密上下文
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
 # OAuth2 密码承载者
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/v1/auth/login")
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    """验证密码"""
-    return pwd_context.verify(plain_password, hashed_password)
+    """验证密码 - 使用简单的SHA256哈希"""
+    # 从哈希值中提取盐值
+    if ':' not in hashed_password:
+        return False
+    salt, hash_value = hashed_password.split(':', 1)
+    # 使用相同的盐值重新计算哈希
+    computed_hash = hashlib.sha256((salt + plain_password).encode()).hexdigest()
+    return computed_hash == hash_value
 
 def get_password_hash(password: str) -> str:
-    """获取密码哈希值"""
-    return pwd_context.hash(password)
+    """获取密码哈希值 - 使用简单的SHA256哈希"""
+    # 生成随机盐值
+    salt = os.urandom(16).hex()
+    # 计算哈希值
+    hash_value = hashlib.sha256((salt + password).encode()).hexdigest()
+    # 返回 盐值:哈希值 的格式
+    return f"{salt}:{hash_value}"
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
     """创建访问令牌"""

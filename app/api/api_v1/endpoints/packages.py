@@ -18,23 +18,25 @@ def get_packages(
     package_service = PackageService(db)
     packages = package_service.get_active_packages()
     
-    return ResponseBase(
-        data={
-            "packages": [
-                {
-                    "id": pkg.id,
-                    "name": pkg.name,
-                    "price": pkg.price,
-                    "duration_days": pkg.duration_days,
-                    "device_limit": pkg.device_limit,
-                    "description": pkg.description,
-                    "is_active": pkg.is_active,
-                    "sort_order": getattr(pkg, 'sort_order', 1),
-                    "bandwidth_limit": getattr(pkg, 'bandwidth_limit', None)
-                }
-                for pkg in packages
-            ]
+    # 转换为字典格式，包含所有必要字段
+    package_list = [
+        {
+            "id": pkg.id,
+            "name": pkg.name,
+            "price": float(pkg.price),  # 转换为float避免Decimal序列化问题
+            "duration_days": pkg.duration_days,
+            "device_limit": pkg.device_limit,
+            "description": pkg.description,
+            "is_active": pkg.is_active,
+            "sort_order": getattr(pkg, 'sort_order', 1),
+            "bandwidth_limit": getattr(pkg, 'bandwidth_limit', None)
         }
+        for pkg in packages
+    ]
+    
+    return ResponseBase(
+        data={"packages": package_list},
+        message="获取套餐列表成功"
     )
 
 @router.get("/{package_id}", response_model=ResponseBase)
