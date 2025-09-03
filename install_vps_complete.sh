@@ -267,6 +267,19 @@ install_mysql() {
     
     if [ -n "$MYSQL_VERSION" ]; then
         log_info "MySQL已安装: $MYSQL_VERSION"
+        # 确保安装MySQL开发库
+        case $OS in
+            "ubuntu"|"debian")
+                apt install -y libmysqlclient-dev pkg-config
+                ;;
+            "centos"|"rhel"|"almalinux"|"rocky")
+                if command -v dnf &> /dev/null; then
+                    dnf install -y mysql-devel pkgconfig
+                else
+                    yum install -y mysql-devel pkgconfig
+                fi
+                ;;
+        esac
         return 0
     fi
     
@@ -274,20 +287,20 @@ install_mysql() {
         "ubuntu")
             if [ "$OS_VERSION" = "18.04" ] || [ "$OS_VERSION" = "20.04" ]; then
                 # 安装MySQL 5.7
-                apt install -y mysql-server mysql-client
+                apt install -y mysql-server mysql-client libmysqlclient-dev pkg-config
             else
                 # 安装MySQL 8.0
-                apt install -y mysql-server mysql-client
+                apt install -y mysql-server mysql-client libmysqlclient-dev pkg-config
             fi
             ;;
         "debian")
-            apt install -y mysql-server mysql-client
+            apt install -y mysql-server mysql-client libmysqlclient-dev pkg-config
             ;;
         "centos"|"rhel"|"almalinux"|"rocky")
             if command -v dnf &> /dev/null; then
-                dnf install -y mysql-server mysql
+                dnf install -y mysql-server mysql mysql-devel pkgconfig
             else
-                yum install -y mysql-server mysql
+                yum install -y mysql-server mysql mysql-devel pkgconfig
             fi
             ;;
     esac
@@ -567,7 +580,19 @@ setup_python_environment() {
     # 智能选择requirements文件
     if [ -f "backend/requirements_modern.txt" ]; then
         log_info "使用现代系统requirements文件"
-        pip install -r backend/requirements_modern.txt
+        
+        # 先安装基础依赖，避免mysqlclient编译问题
+        log_info "先安装基础依赖..."
+        pip install fastapi uvicorn sqlalchemy python-multipart python-jose[cryptography] passlib[bcrypt] python-dotenv email-validator pydantic pydantic-settings
+        
+        # 然后安装MySQL相关依赖
+        log_info "安装MySQL相关依赖..."
+        pip install mysqlclient pymysql
+        
+        # 最后安装其他依赖
+        log_info "安装其他依赖..."
+        pip install alembic redis httpx aiofiles python-multipart
+        
     elif [ -f "backend/requirements_vps.txt" ]; then
         log_info "使用VPS专用requirements文件"
         pip install -r backend/requirements_vps.txt
