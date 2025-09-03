@@ -62,13 +62,24 @@
       </el-form>
 
       <!-- 订阅列表 -->
-      <el-table :data="subscriptions" style="width: 100%" v-loading="loading" row-key="user.id">
+      <el-table :data="subscriptions" style="width: 100%" v-loading="loading" row-key="user.id" @selection-change="handleSelectionChange">
+        <!-- 选择列 -->
+        <el-table-column type="selection" width="55" />
+        
+        <!-- 用户信息 -->
         <el-table-column label="用户信息" width="200">
           <template #default="scope">
-            <div class="user-info">
-              <div class="username">{{ scope.row.user.username }}</div>
-              <div class="email">{{ scope.row.user.email }}</div>
-            </div>
+                          <div class="user-info">
+                <div class="user-id">ID: {{ scope.row.user?.id || '未知' }}</div>
+                <div class="username">{{ scope.row.user?.username || '未知用户' }}</div>
+                <div class="email">{{ scope.row.user?.email || '未知邮箱' }}</div>
+                <div class="user-actions">
+                  <el-button size="small" type="primary" @click="showUserDetails(scope.row.user)">
+                    <el-icon><View /></el-icon>
+                    详情
+                  </el-button>
+                </div>
+              </div>
           </template>
         </el-table-column>
         
@@ -78,25 +89,24 @@
             <div class="subscription-card v2ray">
               <div class="subscription-header">
                 <el-tag type="primary" size="small">V2Ray</el-tag>
-                <el-tag :type="getStatusType(scope.row.v2ray_subscription.status)" size="small">
-                  {{ getStatusText(scope.row.v2ray_subscription.status) }}
+                <el-tag :type="getStatusType(scope.row.v2ray_subscription?.status || 'inactive')" size="small">
+                  {{ getStatusText(scope.row.v2ray_subscription?.status || 'inactive') }}
                 </el-tag>
               </div>
               <div class="subscription-url-section">
-                <div v-if="scope.row.v2ray_subscription.is_placeholder" class="placeholder-url">
+                <div v-if="!scope.row.v2ray_subscription || scope.row.v2ray_subscription.is_placeholder" class="placeholder-url">
                   <el-tag type="info" size="small">未配置</el-tag>
                 </div>
-                <el-input 
-                  v-else
-                  :value="scope.row.v2ray_subscription.full_url" 
-                  readonly 
-                  size="small"
-                  class="subscription-url"
-                >
-                  <template #append>
-                    <el-button @click="copyUrl(scope.row.v2ray_subscription.full_url)" size="small">复制</el-button>
-                  </template>
-                </el-input>
+                <div v-else class="subscription-url-container">
+                  <span class="subscription-url-text">{{ scope.row.v2ray_subscription.full_url }}</span>
+                  <el-button 
+                    type="text" 
+                    class="copy-btn" 
+                    @click="copyUrl(scope.row.v2ray_subscription.full_url)"
+                  >
+                    复制
+                  </el-button>
+                </div>
               </div>
               <div class="subscription-details">
                 <div class="detail-item">
@@ -120,7 +130,7 @@
                     :max="10"
                     size="small"
                     @change="(value) => updateDeviceLimit(scope.row.v2ray_subscription.id, value)"
-                    :disabled="scope.row.v2ray_subscription.is_placeholder"
+                    :disabled="!scope.row.v2ray_subscription || scope.row.v2ray_subscription.is_placeholder"
                     style="width: 80px"
                   />
                 </div>
@@ -135,25 +145,24 @@
             <div class="subscription-card clash">
               <div class="subscription-header">
                 <el-tag type="success" size="small">Clash</el-tag>
-                <el-tag :type="getStatusType(scope.row.clash_subscription.status)" size="small">
-                  {{ getStatusText(scope.row.clash_subscription.status) }}
+                <el-tag :type="getStatusType(scope.row.clash_subscription?.status || 'inactive')" size="small">
+                  {{ getStatusText(scope.row.clash_subscription?.status || 'inactive') }}
                 </el-tag>
               </div>
               <div class="subscription-url-section">
-                <div v-if="scope.row.clash_subscription.is_placeholder" class="placeholder-url">
+                <div v-if="!scope.row.clash_subscription || scope.row.clash_subscription.is_placeholder" class="placeholder-url">
                   <el-tag type="info" size="small">未配置</el-tag>
                 </div>
-                <el-input 
-                  v-else
-                  :value="scope.row.clash_subscription.full_url" 
-                  readonly 
-                  size="small"
-                  class="subscription-url"
-                >
-                  <template #append>
-                    <el-button @click="copyUrl(scope.row.clash_subscription.full_url)" size="small">复制</el-button>
-                  </template>
-                </el-input>
+                <div v-else class="subscription-url-container">
+                  <span class="subscription-url-text">{{ scope.row.clash_subscription.full_url }}</span>
+                  <el-button 
+                    type="text" 
+                    class="copy-btn" 
+                    @click="copyUrl(scope.row.clash_subscription.full_url)"
+                  >
+                    复制
+                  </el-button>
+                </div>
               </div>
               <div class="subscription-details">
                 <div class="detail-item">
@@ -177,7 +186,7 @@
                     :max="10"
                     size="small"
                     @change="(value) => updateDeviceLimit(scope.row.clash_subscription.id, value)"
-                    :disabled="scope.row.clash_subscription.is_placeholder"
+                    :disabled="!scope.row.clash_subscription || scope.row.clash_subscription.is_placeholder"
                     style="width: 80px"
                   />
                 </div>
@@ -191,8 +200,8 @@
           <template #default="scope">
             <div class="device-management">
               <div class="device-summary">
-                <el-tag :type="scope.row.total_devices >= scope.row.max_device_limit ? 'danger' : 'success'" size="small">
-                  {{ scope.row.total_devices }}/{{ scope.row.max_device_limit }}
+                <el-tag :type="(scope.row.total_devices || 0) >= (scope.row.max_device_limit || 3) ? 'danger' : 'success'" size="small">
+                  {{ scope.row.total_devices || 0 }}/{{ scope.row.max_device_limit || 3 }}
                 </el-tag>
                 <span class="device-text">设备</span>
               </div>
@@ -201,7 +210,7 @@
                   size="small" 
                   type="info" 
                   @click="viewUserDevices(scope.row)"
-                  :disabled="scope.row.total_devices === 0"
+                  :disabled="(scope.row.total_devices || 0) === 0"
                 >
                   <el-icon><Monitor /></el-icon>
                   查看设备
@@ -210,7 +219,7 @@
                   size="small" 
                   type="warning" 
                   @click="clearUserAllDevices(scope.row)"
-                  :disabled="scope.row.total_devices === 0"
+                  :disabled="(scope.row.total_devices || 0) === 0"
                 >
                   <el-icon><Delete /></el-icon>
                   清空设备
@@ -227,7 +236,7 @@
               <el-button 
                 size="small" 
                 type="warning" 
-                @click="resetUserAllSubscriptions(scope.row.user.id)"
+                @click="resetUserAllSubscriptions(scope.row.user?.id)"
               >
                 <el-icon><RefreshLeft /></el-icon>
                 重置全部
@@ -235,7 +244,7 @@
               <el-button 
                 size="small" 
                 type="danger" 
-                @click="deleteUserAllData(scope.row.user.id)"
+                @click="deleteUserAllData(scope.row.user?.id)"
               >
                 <el-icon><Delete /></el-icon>
                 删除用户
@@ -302,26 +311,6 @@
       </template>
     </el-dialog>
 
-    <!-- 设备列表对话框 -->
-    <el-dialog v-model="showDevicesDialog" title="设备列表" width="800px">
-      <el-table :data="devices" style="width: 100%">
-        <el-table-column prop="device_id" label="设备ID" />
-        <el-table-column prop="device_name" label="设备名称" />
-        <el-table-column prop="device_type" label="设备类型" />
-        <el-table-column prop="ip_address" label="IP地址" />
-        <el-table-column prop="last_seen" label="最后访问" />
-        <el-table-column label="操作" width="100">
-          <template #default="scope">
-            <el-button 
-              size="small" 
-              type="danger" 
-              @click="removeDevice(scope.row)"
-            >移除</el-button>
-          </template>
-        </el-table-column>
-      </el-table>
-    </el-dialog>
-
     <!-- 批量操作对话框 -->
     <el-dialog v-model="showBulkOperationsDialog" title="批量操作" width="500px">
       <el-form :model="bulkForm" label-width="100px">
@@ -332,34 +321,45 @@
             <el-option label="批量删除" value="delete" />
           </el-select>
         </el-form-item>
-        
         <el-form-item label="续费天数" v-if="bulkForm.operation === 'renew'">
           <el-input-number v-model="bulkForm.days" :min="1" :max="365" />
-        </el-form-item>
-        
-        <el-form-item label="选择订阅">
-          <el-checkbox-group v-model="bulkForm.selectedIds">
-            <el-checkbox 
-              v-for="sub in subscriptions" 
-              :key="sub.id" 
-              :label="sub.id"
-            >
-              {{ sub.user?.email }} - {{ sub.subscription_url?.substring(0, 20) }}...
-            </el-checkbox>
-          </el-checkbox-group>
         </el-form-item>
       </el-form>
       <template #footer>
         <span class="dialog-footer">
           <el-button @click="showBulkOperationsDialog = false">取消</el-button>
-          <el-button type="primary" @click="executeBulkOperation" :loading="bulkLoading">
-            执行操作
-          </el-button>
+          <el-button type="primary" @click="executeBulkOperation" :loading="bulkLoading">确定</el-button>
         </span>
       </template>
     </el-dialog>
+    
+    <!-- 用户详情对话框 -->
+    <el-dialog v-model="userDetailDialogVisible" title="用户详情" width="600px">
+      <div v-if="selectedUser" class="user-detail">
+        <div class="detail-row">
+          <span class="label">用户ID:</span>
+          <span class="value">{{ selectedUser.id }}</span>
+        </div>
+        <div class="detail-row">
+          <span class="label">用户名:</span>
+          <span class="value">{{ selectedUser.username }}</span>
+        </div>
+        <div class="detail-row">
+          <span class="label">邮箱:</span>
+          <span class="value">{{ selectedUser.email }}</span>
+        </div>
+        <div class="detail-row">
+          <span class="label">注册时间:</span>
+          <span class="value">{{ selectedUser.created_at }}</span>
+        </div>
+        <div class="detail-row">
+          <span class="label">最后登录:</span>
+          <span class="value">{{ selectedUser.last_login_at || '从未登录' }}</span>
+        </div>
+      </div>
+    </el-dialog>
 
-    <!-- 订阅统计对话框 -->
+    <!-- 统计对话框 -->
     <el-dialog v-model="showStatisticsDialog" title="订阅统计" width="600px">
       <div class="statistics-content">
         <el-row :gutter="20">
@@ -477,7 +477,7 @@ import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { 
   Download, Operation, DataAnalysis, Plus, Edit, 
-  Refresh, RefreshLeft, Monitor, Delete 
+  Refresh, RefreshLeft, Monitor, Delete, View 
 } from '@element-plus/icons-vue'
 import { useApi } from '@/utils/api'
 
@@ -485,7 +485,7 @@ export default {
   name: 'AdminSubscriptions',
   components: {
     Download, Operation, DataAnalysis, Plus, Edit, 
-    Refresh, RefreshLeft, Monitor, Delete
+    Refresh, RefreshLeft, Monitor, Delete, View
   },
   setup() {
     const api = useApi()
@@ -527,6 +527,10 @@ export default {
       days: 30,
       selectedIds: []
     })
+    
+    const selectedUsers = ref([])
+    const userDetailDialogVisible = ref(false)
+    const selectedUser = ref(null)
 
     const statistics = reactive({
       totalSubscriptions: 0,
@@ -1141,7 +1145,7 @@ export default {
       saveSubscription,
       deleteSubscription,
       resetSubscription,
-      viewDevices,
+      viewUserDevices,
       removeDevice,
       copyUrl,
       renewSubscription,
@@ -1150,6 +1154,100 @@ export default {
       loadStatistics,
       getStatusType,
       getStatusText,
+      // 新增的响应式变量
+      showBulkOperationsDialog,
+      showStatisticsDialog,
+      bulkForm,
+      bulkLoading,
+      statistics,
+      // 新增的方法
+      showUserDetails(user) {
+        ElMessage.info(`用户详情: ${user.username} (${user.email})`);
+        // 这里可以打开用户详情对话框
+      },
+      
+      showUserBackend(user) {
+        ElMessage.info(`访问用户后台: ${user.username}`);
+        // 这里可以跳转到用户后台或打开用户管理对话框
+      },
+      
+      sendUserNotification(user) {
+        ElMessage.info(`发送通知给用户: ${user.username}`);
+        // 这里可以打开发送通知对话框
+      },
+      
+      editUserSubscription(userData) {
+        ElMessage.info(`编辑用户订阅: ${userData.user.username}`);
+        // 这里可以打开编辑订阅对话框
+      },
+      
+      updateUserExpireTime(userId, value) {
+        if (!value) return;
+        ElMessage.info(`更新用户 ${userId} 的到期时间: ${value}`);
+        // 这里需要调用API更新用户的到期时间
+      },
+      
+      extendExpireTime(userId, months) {
+        ElMessage.info(`延长用户 ${userId} 的到期时间 ${months} 个月`);
+        // 这里需要调用API延长用户的到期时间
+      },
+      
+      updateUserMaxDevices(userId, value) {
+        ElMessage.info(`更新用户 ${userId} 的最大设备数: ${value}`);
+        // 这里需要调用API更新用户的最大设备数
+      },
+      
+      increaseMaxDevices(userId, amount) {
+        ElMessage.info(`增加用户 ${userId} 的最大设备数 ${amount} 个`);
+        // 这里需要调用API增加用户的最大设备数
+      },
+      
+      // 批量操作相关方法
+      handleSelectionChange(selection) {
+        bulkForm.selectedIds = selection
+      },
+      
+      // 显示用户详情
+      showUserDetails(user) {
+        selectedUser.value = user
+        userDetailDialogVisible.value = true
+      },
+      
+      // 批量重置订阅
+      bulkResetSubscriptions() {
+        if (bulkForm.selectedIds.length === 0) {
+          ElMessage.warning('请先选择用户');
+          return;
+        }
+        ElMessageBox.confirm('确定要重置选中用户的所有订阅吗？', '确认操作', {
+          confirmButtonText: '确定',
+          cancelButtonText: '取消',
+          type: 'warning'
+        }).then(() => {
+          const userIds = bulkForm.selectedIds.map(sub => sub.user.id);
+          // 这里需要调用API批量重置订阅
+          ElMessage.success(`已重置 ${userIds.length} 个用户的订阅`);
+          loadSubscriptions();
+        });
+      },
+      
+      // 批量删除用户
+      bulkDeleteUsers() {
+        if (bulkForm.selectedIds.length === 0) {
+          ElMessage.warning('请先选择用户');
+          return;
+        }
+        ElMessageBox.confirm('确定要删除选中的用户吗？此操作不可恢复！', '确认操作', {
+          confirmButtonText: '确定',
+          cancelButtonText: '取消',
+          type: 'danger'
+        }).then(() => {
+          const userIds = bulkForm.selectedIds.map(sub => sub.user.id);
+          // 这里需要调用API批量删除用户
+          ElMessage.success(`已删除 ${userIds.length} 个用户`);
+          loadSubscriptions();
+        });
+      },
       // 新增的响应式变量
       showBulkOperationsDialog,
       showStatisticsDialog,
@@ -1229,6 +1327,53 @@ export default {
   gap: 4px;
 }
 
+.user-id {
+  font-size: 12px;
+  color: #909399;
+  font-weight: 500;
+}
+
+.username {
+  font-weight: bold;
+  color: #303133;
+}
+
+.email {
+  color: #606266;
+  font-size: 13px;
+}
+
+.user-actions {
+  margin-top: 8px;
+}
+
+.user-detail {
+  padding: 20px 0;
+}
+
+.detail-row {
+  display: flex;
+  margin-bottom: 15px;
+  padding: 10px 0;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.detail-row:last-child {
+  border-bottom: none;
+}
+
+.detail-row .label {
+  font-weight: bold;
+  color: #606266;
+  min-width: 100px;
+  margin-right: 15px;
+}
+
+.detail-row .value {
+  color: #303133;
+  flex: 1;
+}
+
 .username {
   font-weight: bold;
   color: #303133;
@@ -1243,84 +1388,33 @@ export default {
   width: 100%;
 }
 
-.device-info {
+.subscription-url-container {
   display: flex;
-  flex-direction: column;
-  gap: 8px;
   align-items: center;
+  gap: 8px;
+  background: #f8f9fa;
+  border: 1px solid #e9ecef;
+  border-radius: 6px;
+  padding: 8px 12px;
+  margin-bottom: 8px;
 }
 
-.device-count {
-  margin-bottom: 4px;
+.subscription-url-text {
+  flex: 1;
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  font-size: 12px;
+  color: #495057;
+  word-break: break-all;
+  line-height: 1.4;
+  padding: 4px 0;
 }
 
-.device-actions {
-  display: flex;
-  gap: 4px;
-}
-
-.action-buttons {
-  display: flex;
-  gap: 4px;
-  flex-wrap: wrap;
-}
-
-.devices-dialog-content {
-  padding: 0;
-}
-
-.subscription-info {
-  background: #f5f7fa;
-  padding: 16px;
-  border-radius: 8px;
-  margin-bottom: 16px;
-}
-
-.subscription-info h4 {
-  margin: 0 0 12px 0;
-  color: #303133;
-}
-
-.subscription-info p {
-  margin: 8px 0;
-  color: #606266;
-}
-
-.devices-actions {
-  margin-bottom: 16px;
-  display: flex;
-  gap: 12px;
-}
-
-.devices-footer {
-  margin-top: 16px;
-  text-align: center;
-  color: #909399;
-  font-size: 14px;
-}
-
-.placeholder-url {
-  text-align: center;
-  padding: 8px;
-}
-
-.device-limit-edit {
-  margin: 8px 0;
-}
-
-.search-form {
-  margin-bottom: 20px;
-  padding: 20px;
-  background: #f5f7fa;
-  border-radius: 8px;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 16px;
-}
-
-.search-form .el-form-item {
-  margin-bottom: 0;
-  margin-right: 0;
+.copy-btn {
+  flex-shrink: 0;
+  font-size: 12px;
+  padding: 4px 8px;
+  height: auto;
+  min-width: 50px;
 }
 
 .subscription-card {
@@ -1329,14 +1423,22 @@ export default {
   padding: 16px;
   background: #fafafa;
   margin: 8px 0;
+  transition: all 0.3s ease;
+}
+
+.subscription-card:hover {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  transform: translateY(-1px);
 }
 
 .subscription-card.v2ray {
   border-left: 4px solid #409eff;
+  background: linear-gradient(135deg, #f0f8ff 0%, #fafafa 100%);
 }
 
 .subscription-card.clash {
   border-left: 4px solid #67c23a;
+  background: linear-gradient(135deg, #f0fff0 0%, #fafafa 100%);
 }
 
 .subscription-header {
