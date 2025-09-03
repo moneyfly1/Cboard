@@ -639,6 +639,25 @@ build_frontend() {
 configure_database() {
     log_info "配置数据库..."
     
+    # 询问用户是否跳过数据库配置
+    if [ -t 0 ]; then
+        echo ""
+        echo "=========================================="
+        echo "🗄️  数据库配置选项"
+        echo "=========================================="
+        echo "1) 自动配置数据库（需要MySQL root权限）"
+        echo "2) 跳过数据库配置（稍后手动配置）"
+        echo ""
+        read -p "请选择 (1/2): " -n 1 -r
+        echo
+        
+        if [[ $REPLY =~ ^[2]$ ]]; then
+            log_info "用户选择跳过数据库配置"
+            log_info "请稍后在.env文件中手动配置数据库连接信息"
+            return 0
+        fi
+    fi
+    
     # 尝试不同的MySQL连接方式
     MYSQL_CMD=""
     
@@ -715,6 +734,35 @@ configure_database() {
 configure_nginx() {
     log_info "配置Nginx..."
     
+    # 询问用户是否跳过Nginx配置
+    if [ -t 0 ]; then
+        echo ""
+        echo "=========================================="
+        echo "🌐 Nginx配置选项"
+        echo "=========================================="
+        echo "1) 自动配置Nginx（需要Nginx已安装）"
+        echo "2) 跳过Nginx配置（稍后手动配置）"
+        echo ""
+        read -p "请选择 (1/2): " -n 1 -r
+        echo
+        
+        if [[ $REPLY =~ ^[2]$ ]]; then
+            log_info "用户选择跳过Nginx配置"
+            log_info "请稍后手动配置Nginx反向代理"
+            return 0
+        fi
+    fi
+    
+    # 检查Nginx是否安装
+    if ! command -v nginx &> /dev/null; then
+        log_error "Nginx未安装，无法配置"
+        return 1
+    fi
+    
+    # 创建Nginx配置目录
+    mkdir -p /etc/nginx/sites-available
+    mkdir -p /etc/nginx/sites-enabled
+    
     # 创建Nginx配置
     cat > /etc/nginx/sites-available/xboard << 'EOF'
 server {
@@ -788,6 +836,7 @@ create_env_file() {
     else
         DB_CONFIG="mysql+pymysql://root@localhost:3306/xboard"
         log_info "使用默认root用户连接数据库"
+        log_warning "请根据实际情况修改数据库连接信息"
     fi
     
     # 创建.env文件
