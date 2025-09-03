@@ -788,6 +788,43 @@ manual_configure() {
     done
 }
 
+# 安装项目依赖
+install_project_dependencies() {
+    log_info "安装项目依赖..."
+    
+    # 检查是否在项目目录中
+    if [ ! -f "backend/main.py" ]; then
+        log_error "未找到项目文件，请确保在正确的目录中运行脚本"
+        exit 1
+    fi
+    
+    # 创建虚拟环境
+    if [ ! -d "venv" ]; then
+        log_info "创建Python虚拟环境..."
+        python3 -m venv venv
+    fi
+    
+    # 激活虚拟环境
+    source venv/bin/activate
+    
+    # 升级pip
+    pip install --upgrade pip
+    
+    # 安装依赖
+    if [ -f "backend/$COMPATIBLE_REQUIREMENTS" ]; then
+        log_info "使用兼容的requirements文件: $COMPATIBLE_REQUIREMENTS"
+        pip install -r "backend/$COMPATIBLE_REQUIREMENTS"
+    elif [ -f "backend/requirements_vps.txt" ]; then
+        log_info "使用标准requirements文件: requirements_vps.txt"
+        pip install -r backend/requirements_vps.txt
+    else
+        log_warning "未找到requirements文件，安装基础依赖..."
+        pip install fastapi uvicorn sqlalchemy pymysql python-multipart python-jose[cryptography] passlib[bcrypt] python-dotenv email-validator
+    fi
+    
+    log_success "项目依赖安装完成"
+}
+
 # 主安装流程
 main() {
     echo "=========================================="

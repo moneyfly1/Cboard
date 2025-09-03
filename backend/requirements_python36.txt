@@ -1,0 +1,47 @@
+# Python 3.6兼容的依赖文件
+# 针对Ubuntu 18.04和Python 3.6优化
+
+# 基础依赖 - 兼容Python 3.6
+fastapi==0.83.0
+uvicorn==0.17.0
+sqlalchemy==1.4.46
+alembic==1.7.7
+python-multipart==0.0.5
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+python-dotenv==0.19.2
+pydantic==1.10.8
+pydantic-settings==1.2.0
+
+# 数据库驱动 - 兼容版本
+mysqlclient==2.1.1
+pymysql==1.0.2
+psycopg2-binary==2.9.5
+aiosqlite==0.17.0
+
+# 邮件和模板相关
+jinja2==3.1.2
+email-validator==1.3.1
+
+# 异步和队列支持 - 兼容版本
+celery==5.2.7
+redis==4.3.6
+
+# 工具库 - 兼容版本
+httpx==0.23.3
+watchfiles==0.19.0
+websockets==10.4
+
+# 开发和测试 - 兼容版本
+pytest==6.2.5
+black==21.12b0
+flake8==4.0.1
+isort==5.10.1
+
+# 系统兼容性包
+cryptography==36.0.2
+pycparser==2.21
+
+# 额外兼容包
+typing-extensions==4.1.1
+dataclasses==0.6
