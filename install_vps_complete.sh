@@ -417,26 +417,151 @@ setup_python_environment() {
     
     cd "$PROJECT_ROOT"
     
-    # 创建虚拟环境
-    if [ ! -d "venv" ]; then
-        log_info "创建Python虚拟环境..."
+    # 删除已存在的虚拟环境（如果有问题）
+    if [ -d "venv" ]; then
+        log_info "删除已存在的虚拟环境..."
+        rm -rf venv
+    fi
+    
+    # 尝试创建虚拟环境
+    log_info "创建Python虚拟环境..."
+    log_info "使用Python命令: $PYTHON_CMD"
+    
+    # 尝试不同的虚拟环境创建方法
+    VENV_CREATED=false
+    
+    # 方法1: 使用python3 -m venv
+    log_info "尝试方法1: $PYTHON_CMD -m venv venv"
+    $PYTHON_CMD -m venv venv
+    if [ $? -eq 0 ] && [ -f "venv/bin/activate" ]; then
+        log_success "方法1成功: 虚拟环境创建完成"
+        VENV_CREATED=true
+    else
+        log_warning "方法1失败，尝试其他方法..."
+        rm -rf venv 2>/dev/null || true
+    fi
+    
+    # 方法2: 如果方法1失败，尝试使用python3.12 -m venv
+    if [ "$VENV_CREATED" = false ] && command -v python3.12 &> /dev/null; then
+        log_info "尝试方法2: python3.12 -m venv venv"
+        python3.12 -m venv venv
+        if [ $? -eq 0 ] && [ -f "venv/bin/activate" ]; then
+            log_success "方法2成功: 使用python3.12创建虚拟环境"
+            VENV_CREATED=true
+        else
+            log_warning "方法2失败..."
+            rm -rf venv 2>/dev/null || true
+        fi
+    fi
+    
+    # 方法3: 如果方法2失败，尝试使用python3.11 -m venv
+    if [ "$VENV_CREATED" = false ] && command -v python3.11 &> /dev/null; then
+        log_info "尝试方法3: python3.11 -m venv venv"
+        python3.11 -m venv venv
+        if [ $? -eq 0 ] && [ -f "venv/bin/activate" ]; then
+            log_success "方法3成功: 使用python3.11创建虚拟环境"
+            VENV_CREATED=true
+        else
+            log_warning "方法3失败..."
+            rm -rf venv 2>/dev/null || true
+        fi
+    fi
+    
+    # 方法4: 如果方法3失败，尝试使用python3.10 -m venv
+    if [ "$VENV_CREATED" = false ] && command -v python3.10 &> /dev/null; then
+        log_info "尝试方法4: python3.10 -m venv venv"
+        python3.10 -m venv venv
+        if [ $? -eq 0 ] && [ -f "venv/bin/activate" ]; then
+            log_success "方法4成功: 使用python3.10创建虚拟环境"
+            VENV_CREATED=true
+        else
+            log_warning "方法4失败..."
+            rm -rf venv 2>/dev/null || true
+        fi
+    fi
+    
+    # 方法5: 如果方法4失败，尝试使用python3.9 -m venv
+    if [ "$VENV_CREATED" = false ] && command -v python3.9 &> /dev/null; then
+        log_info "尝试方法5: python3.9 -m venv venv"
+        python3.9 -m venv venv
+        if [ $? -eq 0 ] && [ -f "venv/bin/activate" ]; then
+            log_success "方法5成功: 使用python3.9创建虚拟环境"
+            VENV_CREATED=true
+        else
+            log_warning "方法5失败..."
+            rm -rf venv 2>/dev/null || true
+        fi
+    fi
+    
+    # 方法6: 如果方法5失败，尝试使用python3.8 -m venv
+    if [ "$VENV_CREATED" = false ] && command -v python3.8 &> /dev/null; then
+        log_info "尝试方法6: python3.8 -m venv venv"
+        python3.8 -m venv venv
+        if [ $? -eq 0 ] && [ -f "venv/bin/activate" ]; then
+            log_success "方法6成功: 使用python3.8创建虚拟环境"
+            VENV_CREATED=true
+        else
+            log_warning "方法6失败..."
+            rm -rf venv 2>/dev/null || true
+        fi
+    fi
+    
+    # 方法7: 如果方法6失败，尝试使用python3 -m venv
+    if [ "$VENV_CREATED" = false ] && command -v python3 &> /dev/null; then
+        log_info "尝试方法7: python3 -m venv venv"
+        python3 -m venv venv
+        if [ $? -eq 0 ] && [ -f "venv/bin/activate" ]; then
+            log_success "方法7成功: 使用python3创建虚拟环境"
+            VENV_CREATED=true
+        else
+            log_warning "方法7失败..."
+            rm -rf venv 2>/dev/null || true
+        fi
+    fi
+    
+    # 检查最终结果
+    if [ "$VENV_CREATED" = false ]; then
+        log_error "所有虚拟环境创建方法都失败了"
+        log_error "请检查Python安装和venv模块"
+        log_info "尝试手动安装venv模块..."
+        
+        # 尝试安装venv模块
+        case $OS in
+            "ubuntu"|"debian")
+                apt install -y python3-venv python3-virtualenv
+                ;;
+            "centos"|"rhel"|"almalinux"|"rocky")
+                if command -v dnf &> /dev/null; then
+                    dnf install -y python3-virtualenv
+                else
+                    yum install -y python3-virtualenv
+                fi
+                ;;
+        esac
+        
+        # 再次尝试创建虚拟环境
+        log_info "重新尝试创建虚拟环境..."
         $PYTHON_CMD -m venv venv
-        if [ $? -ne 0 ]; then
-            log_error "虚拟环境创建失败"
+        if [ $? -eq 0 ] && [ -f "venv/bin/activate" ]; then
+            log_success "重新尝试成功: 虚拟环境创建完成"
+            VENV_CREATED=true
+        else
+            log_error "虚拟环境创建最终失败，请检查系统配置"
             exit 1
         fi
     fi
     
-    # 检查虚拟环境是否创建成功
-    if [ ! -f "venv/bin/activate" ]; then
-        log_error "虚拟环境创建失败，venv/bin/activate文件不存在"
-        exit 1
-    fi
+    # 显示虚拟环境信息
+    log_info "虚拟环境创建成功，详细信息："
+    ls -la venv/bin/
+    log_info "Python版本: $($PYTHON_CMD --version)"
     
     # 激活虚拟环境
+    log_info "激活虚拟环境..."
     source venv/bin/activate
     
     # 升级pip
+    log_info "升级pip..."
     pip install --upgrade pip
     
     # 智能选择requirements文件
