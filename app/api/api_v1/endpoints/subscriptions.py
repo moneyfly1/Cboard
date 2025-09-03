@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta
 from typing import Any, List
-from fastapi import APIRouter, Depends, HTTPException, status, Request
+from fastapi import APIRouter, Depends, HTTPException, status, Request, Response
 from sqlalchemy.orm import Session
 import secrets
 import string
@@ -16,6 +16,7 @@ from app.services.user import UserService
 from app.utils.security import get_current_user, generate_subscription_url
 from app.services.email import EmailService
 from app.utils.device import generate_device_fingerprint, detect_device_type, extract_device_name
+from app.models.subscription import Subscription
 
 router = APIRouter()
 
@@ -525,3 +526,99 @@ def clear_user_devices(
         return ResponseBase(message="所有设备清理成功")
     except Exception as e:
         return ResponseBase(success=False, message=f"清理设备失败: {str(e)}") 
+
+@router.get("/ssr/{subscription_key}")
+def get_ssr_subscription(
+    subscription_key: str,
+    db: Session = Depends(get_db)
+) -> Any:
+    """获取SSR/V2Ray订阅内容"""
+    try:
+        subscription_service = SubscriptionService(db)
+        
+        # 根据订阅密钥查找订阅
+        subscription = db.query(Subscription).filter(
+            Subscription.subscription_url == subscription_key
+        ).first()
+        
+        if not subscription:
+            # 返回无效配置
+            invalid_config = subscription_service.get_invalid_v2ray_config()
+            return Response(content=invalid_config, media_type="text/plain")
+        
+        # 检查订阅是否有效
+        if not subscription.is_active:
+            # 订阅被禁用，返回无效配置
+            invalid_config = subscription_service.get_invalid_v2ray_config()
+            return Response(content=invalid_config, media_type="text/plain")
+        
+        # 检查是否过期
+        if subscription.expire_time and subscription.expire_time < datetime.utcnow():
+            # 订阅过期，返回无效配置
+            invalid_config = subscription_service.get_invalid_v2ray_config()
+            return Response(content=invalid_config, media_type="text/plain")
+        
+        # 检查设备数量限制
+        devices = subscription_service.get_devices_by_subscription_id(subscription.id)
+        if len(devices) >= subscription.device_limit:
+            # 设备数量超限，返回无效配置
+            invalid_config = subscription_service.get_invalid_v2ray_config()
+            return Response(content=invalid_config, media_type="text/plain")
+        
+        # 直接返回数据库中的V2Ray配置文件内容
+        v2ray_config = subscription_service.get_v2ray_config()
+        return Response(content=v2ray_config, media_type="text/plain")
+        
+    except Exception as e:
+        # 发生错误，返回无效配置
+        subscription_service = SubscriptionService(db)
+        invalid_config = subscription_service.get_invalid_v2ray_config()
+        return Response(content=invalid_config, media_type="text/plain")
+
+@router.get("/clash/{subscription_key}")
+def get_clash_subscription(
+    subscription_key: str,
+    db: Session = Depends(get_db)
+) -> Any:
+    """获取Clash订阅内容"""
+    try:
+        subscription_service = SubscriptionService(db)
+        
+        # 根据订阅密钥查找订阅
+        subscription = db.query(Subscription).filter(
+            Subscription.subscription_url == subscription_key
+        ).first()
+        
+        if not subscription:
+            # 返回无效配置
+            invalid_config = subscription_service.get_invalid_clash_config()
+            return Response(content=invalid_config, media_type="text/plain")
+        
+        # 检查订阅是否有效
+        if not subscription.is_active:
+            # 订阅被禁用，返回无效配置
+            invalid_config = subscription_service.get_invalid_clash_config()
+            return Response(content=invalid_config, media_type="text/plain")
+        
+        # 检查是否过期
+        if subscription.expire_time and subscription.expire_time < datetime.utcnow():
+            # 订阅过期，返回无效配置
+            invalid_config = subscription_service.get_invalid_clash_config()
+            return Response(content=invalid_config, media_type="text/plain")
+        
+        # 检查设备数量限制
+        devices = subscription_service.get_devices_by_subscription_id(subscription.id)
+        if len(devices) >= subscription.device_limit:
+            # 设备数量超限，返回无效配置
+            invalid_config = subscription_service.get_invalid_clash_config()
+            return Response(content=invalid_config, media_type="text/plain")
+        
+        # 直接返回数据库中的Clash配置文件内容
+        clash_config = subscription_service.get_clash_config()
+        return Response(content=clash_config, media_type="text/plain")
+        
+    except Exception as e:
+        # 发生错误，返回无效配置
+        subscription_service = SubscriptionService(db)
+        invalid_config = subscription_service.get_invalid_clash_config()
+        return Response(content=invalid_config, media_type="text/plain") 

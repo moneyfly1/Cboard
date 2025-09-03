@@ -300,6 +300,22 @@ class SubscriptionService:
                     group["proxies"] = proxy_names
         
         return config
+    
+    def generate_v2ray_subscription(self, subscription: Subscription) -> str:
+        """生成V2Ray订阅内容"""
+        # 获取所有可用节点
+        nodes = self.db.query(Node).filter(Node.is_active == True).all()
+        
+        if not nodes:
+            return "# 暂无可用节点"
+        
+        v2ray_lines = []
+        for node in nodes:
+            # 生成V2Ray链接格式
+            v2ray_url = self._generate_v2ray_url(node, subscription)
+            v2ray_lines.append(v2ray_url)
+        
+        return "\n".join(v2ray_lines)
 
     def _generate_ssr_url(self, node: Node, subscription: Subscription) -> str:
         """生成SSR URL"""
@@ -339,6 +355,30 @@ class SubscriptionService:
             "obfs": node.obfs or "plain",
             "obfs-param": node.obfs_param or ""
         }
+    
+    def _generate_v2ray_url(self, node: Node, subscription: Subscription) -> str:
+        """生成V2Ray URL"""
+        # V2Ray URL格式: vmess://base64(json_config)
+        
+        # 构建V2Ray配置
+        v2ray_config = {
+            "v": "2",
+            "ps": node.name,
+            "add": node.server,
+            "port": node.port,
+            "id": node.uuid or "00000000-0000-0000-0000-000000000000",
+            "aid": node.alter_id or 0,
+            "net": node.network or "tcp",
+            "type": node.header_type or "none",
+            "host": node.host or "",
+            "path": node.path or "",
+            "tls": node.tls or ""
+        }
+        
+        # 转换为JSON并Base64编码
+        import json
+        json_str = json.dumps(v2ray_config, separators=(',', ':'))
+        return f"vmess://{base64.b64encode(json_str.encode()).decode()}"
 
     def _get_default_clash_config(self) -> dict:
         """获取默认Clash配置"""
@@ -524,4 +564,36 @@ class SubscriptionService:
             },
             "inbounds": [],
             "outbounds": []
-        } 
+        }
+    
+    def get_v2ray_config(self) -> str:
+        """获取数据库中的V2Ray配置文件内容"""
+        try:
+            # 从系统配置中获取V2Ray配置
+            from sqlalchemy import text
+            query = text('SELECT value FROM system_configs WHERE "key" = \'v2ray_config\' AND type = \'v2ray\'')
+            result = self.db.execute(query).first()
+            
+            if result:
+                return result.value
+            else:
+                # 如果没有配置，返回默认的无效配置
+                return "# V2Ray配置未设置\n# 请联系管理员配置V2Ray节点信息"
+        except Exception as e:
+            return f"# V2Ray配置加载失败: {str(e)}"
+    
+    def get_clash_config(self) -> str:
+        """获取数据库中的Clash配置文件内容"""
+        try:
+            # 从系统配置中获取Clash配置
+            from sqlalchemy import text
+            query = text('SELECT value FROM system_configs WHERE "key" = \'clash_config\' AND type = \'clash\'')
+            result = self.db.execute(query).first()
+            
+            if result:
+                return result.value
+            else:
+                # 如果没有配置，返回默认的无效配置
+                return "# Clash配置未设置\n# 请联系管理员配置Clash节点信息"
+        except Exception as e:
+            return f"# Clash配置加载失败: {str(e)}" 
