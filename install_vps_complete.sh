@@ -69,70 +69,136 @@ detect_system_info() {
     if command -v python3 &> /dev/null; then
         PYTHON_VERSION=$(python3 --version 2>&1 | grep -oE '[0-9]+\.[0-9]+' | head -1)
         PYTHON_CMD="python3"
+        PYTHON_INSTALLED=true
         log_success "检测到Python: $PYTHON_VERSION"
     elif command -v python &> /dev/null; then
         PYTHON_VERSION=$(python --version 2>&1 | grep -oE '[0-9]+\.[0-9]+' | head -1)
         PYTHON_CMD="python"
+        PYTHON_INSTALLED=true
         log_success "检测到Python: $PYTHON_VERSION"
     else
+        PYTHON_INSTALLED=false
         log_warning "未检测到Python"
     fi
     
     # 检测Node.js版本
     if command -v node &> /dev/null; then
         NODE_VERSION=$(node --version 2>&1 | grep -oE 'v[0-9]+' | head -1)
-        log_success "检测到Node.js: $NODE_VERSION"
+        NODE_MAJOR_VERSION=$(echo $NODE_VERSION | grep -oE '[0-9]+' | head -1)
+        if [ -n "$NODE_MAJOR_VERSION" ] && [ "$NODE_MAJOR_VERSION" -ge 16 ]; then
+            NODE_INSTALLED=true
+            log_success "检测到Node.js: $NODE_VERSION (满足要求)"
+        else
+            NODE_INSTALLED=false
+            log_warning "检测到Node.js: $NODE_VERSION (版本过低，需要升级)"
+        fi
     else
+        NODE_INSTALLED=false
         log_warning "未检测到Node.js"
     fi
     
     # 检测Nginx版本
     if command -v nginx &> /dev/null; then
         NGINX_VERSION=$(nginx -v 2>&1 | grep -oE 'nginx/[0-9]+\.[0-9]+\.[0-9]+' | cut -d'/' -f2)
+        NGINX_INSTALLED=true
         log_success "检测到Nginx: $NGINX_VERSION"
     else
+        NGINX_INSTALLED=false
         log_warning "未检测到Nginx"
     fi
     
     # 检测MySQL版本
     if command -v mysql &> /dev/null; then
         MYSQL_VERSION=$(mysql --version | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+        MYSQL_INSTALLED=true
         log_success "检测到MySQL: $MYSQL_VERSION"
     else
+        MYSQL_INSTALLED=false
         log_warning "未检测到MySQL"
     fi
     
     # 检测PHP版本
     if command -v php &> /dev/null; then
         PHP_VERSION=$(php --version | grep -oE 'PHP [0-9]+\.[0-9]+\.[0-9]+' | cut -d' ' -f2)
+        PHP_INSTALLED=true
         log_success "检测到PHP: $PHP_VERSION"
     else
+        PHP_INSTALLED=false
         log_warning "未检测到PHP"
     fi
+    
+    # 检测系统更新状态
+    check_system_updates
+}
+
+# 检测系统更新
+check_system_updates() {
+    log_info "检测系统更新..."
+    
+    case $OS in
+        "ubuntu"|"debian")
+            # 检查是否有可用更新
+            apt update &>/dev/null
+            UPDATES_AVAILABLE=$(apt list --upgradable 2>/dev/null | grep -c upgradable || echo "0")
+            if [ "$UPDATES_AVAILABLE" -gt 0 ]; then
+                log_warning "检测到 $UPDATES_AVAILABLE 个可用更新"
+                SYSTEM_NEEDS_UPDATE=true
+            else
+                log_success "系统已是最新版本，无需更新"
+                SYSTEM_NEEDS_UPDATE=false
+            fi
+            ;;
+        "centos"|"rhel"|"almalinux"|"rocky")
+            if command -v dnf &> /dev/null; then
+                UPDATES_AVAILABLE=$(dnf check-update --quiet | wc -l)
+            else
+                UPDATES_AVAILABLE=$(yum check-update --quiet | wc -l)
+            fi
+            
+            if [ "$UPDATES_AVAILABLE" -gt 0 ]; then
+                log_warning "检测到 $UPDATES_AVAILABLE 个可用更新"
+                SYSTEM_NEEDS_UPDATE=true
+            else
+                log_success "系统已是最新版本，无需更新"
+                SYSTEM_NEEDS_UPDATE=false
+            fi
+            ;;
+    esac
 }
 
 # 系统更新
 update_system() {
-    log_info "更新系统包..."
-    
-    case $OS in
-        "ubuntu"|"debian")
-            apt update && apt upgrade -y
-            ;;
-        "centos"|"rhel"|"almalinux"|"rocky")
-            if command -v dnf &> /dev/null; then
-                dnf update -y
-            else
-                yum update -y
-            fi
-            ;;
-    esac
-    
-    log_success "系统更新完成"
+    # 检查是否需要更新
+    if [ "$SYSTEM_NEEDS_UPDATE" = true ]; then
+        log_info "开始系统更新..."
+        
+        case $OS in
+            "ubuntu"|"debian")
+                apt update && apt upgrade -y
+                ;;
+            "centos"|"rhel"|"almalinux"|"rocky")
+                if command -v dnf &> /dev/null; then
+                    dnf update -y
+                else
+                    yum update -y
+                fi
+                ;;
+        esac
+        
+        log_success "系统更新完成"
+    else
+        log_info "系统无需更新，跳过更新步骤"
+    fi
 }
 
 # 安装Python
 install_python() {
+    # 检查是否已安装
+    if [ "$PYTHON_INSTALLED" = true ]; then
+        log_info "Python已安装: $PYTHON_VERSION，跳过安装"
+        return 0
+    fi
+    
     log_info "安装Python环境..."
     
     case $OS in
@@ -177,6 +243,7 @@ install_python() {
     # 验证安装
     if [ -n "$PYTHON_CMD" ] && command -v "$PYTHON_CMD" &> /dev/null; then
         PYTHON_VERSION=$($PYTHON_CMD --version 2>&1 | grep -oE '[0-9]+\.[0-9]+' | head -1)
+        PYTHON_INSTALLED=true
         log_success "Python安装完成: $PYTHON_VERSION"
     else
         log_error "Python安装失败"
@@ -186,18 +253,13 @@ install_python() {
 
 # 安装Node.js
 install_nodejs() {
-    log_info "安装Node.js环境..."
-    
     # 检查是否已安装
-    if command -v node &> /dev/null; then
-        NODE_VERSION=$(node --version 2>&1 | grep -oE 'v[0-9]+' | head -1)
-        NODE_MAJOR_VERSION=$(echo $NODE_VERSION | grep -oE '[0-9]+' | head -1)
-        
-        if [ -n "$NODE_MAJOR_VERSION" ] && [ "$NODE_MAJOR_VERSION" -ge 16 ]; then
-            log_success "Node.js版本满足要求: $NODE_VERSION"
-            return 0
-        fi
+    if [ "$NODE_INSTALLED" = true ]; then
+        log_info "Node.js已安装: $NODE_VERSION，跳过安装"
+        return 0
     fi
+    
+    log_info "安装Node.js环境..."
     
     # 安装Node.js
     case $OS in
@@ -218,7 +280,14 @@ install_nodejs() {
     # 验证安装
     if command -v node &> /dev/null; then
         NODE_VERSION=$(node --version 2>&1 | grep -oE 'v[0-9]+' | head -1)
-        log_success "Node.js安装完成: $NODE_VERSION"
+        NODE_MAJOR_VERSION=$(echo $NODE_VERSION | grep -oE '[0-9]+' | head -1)
+        if [ -n "$NODE_MAJOR_VERSION" ] && [ "$NODE_MAJOR_VERSION" -ge 16 ]; then
+            NODE_INSTALLED=true
+            log_success "Node.js安装完成: $NODE_VERSION"
+        else
+            log_error "Node.js版本过低，安装失败"
+            exit 1
+        fi
     else
         log_error "Node.js安装失败"
         exit 1
@@ -227,12 +296,13 @@ install_nodejs() {
 
 # 安装Nginx
 install_nginx() {
-    log_info "安装Nginx..."
-    
-    if [ -n "$NGINX_VERSION" ]; then
-        log_info "Nginx已安装: $NGINX_VERSION"
+    # 检查是否已安装
+    if [ "$NGINX_INSTALLED" = true ]; then
+        log_info "Nginx已安装: $NGINX_VERSION，跳过安装"
         return 0
     fi
+    
+    log_info "安装Nginx..."
     
     case $OS in
         "ubuntu"|"debian")
@@ -254,6 +324,7 @@ install_nginx() {
     # 验证安装
     if command -v nginx &> /dev/null; then
         NGINX_VERSION=$(nginx -v 2>&1 | grep -oE 'nginx/[0-9]+\.[0-9]+\.[0-9]+' | cut -d'/' -f2)
+        NGINX_INSTALLED=true
         log_success "Nginx安装完成: $NGINX_VERSION"
     else
         log_error "Nginx安装失败"
@@ -263,10 +334,9 @@ install_nginx() {
 
 # 安装MySQL
 install_mysql() {
-    log_info "安装MySQL..."
-    
-    if [ -n "$MYSQL_VERSION" ]; then
-        log_info "MySQL已安装: $MYSQL_VERSION"
+    # 检查是否已安装
+    if [ "$MYSQL_INSTALLED" = true ]; then
+        log_info "MySQL已安装: $MYSQL_VERSION，跳过安装"
         # 确保安装MySQL开发库
         case $OS in
             "ubuntu"|"debian")
@@ -321,10 +391,9 @@ install_mysql() {
 
 # 安装PHP
 install_php() {
-    log_info "安装PHP..."
-    
-    if [ -n "$PHP_VERSION" ]; then
-        log_info "PHP已安装: $PHP_VERSION"
+    # 检查是否已安装
+    if [ "$PHP_INSTALLED" = true ]; then
+        log_info "PHP已安装: $PHP_VERSION，跳过安装"
         return 0
     fi
     
@@ -918,7 +987,8 @@ create_systemd_service() {
     cat > /etc/systemd/system/xboard.service << EOF
 [Unit]
 Description=XBoard Backend
-After=network.target mysql.service
+After=network.target
+Wants=mysql.service
 
 [Service]
 Type=exec
@@ -929,6 +999,16 @@ Environment=PATH=$PROJECT_ROOT/venv/bin
 ExecStart=$PROJECT_ROOT/venv/bin/uvicorn main:app --host 127.0.0.1 --port 8000 --workers 4
 Restart=always
 RestartSec=3
+StandardOutput=journal
+StandardError=journal
+KillMode=mixed
+TimeoutStopSec=30
+
+# 确保服务在后台运行
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=$PROJECT_ROOT/backend $PROJECT_ROOT/uploads
 
 [Install]
 WantedBy=multi-user.target
@@ -981,16 +1061,45 @@ start_services() {
     # 启动XBoard服务
     systemctl start xboard.service
     
+    # 等待服务启动
+    sleep 3
+    
     # 检查服务状态
     if systemctl is-active --quiet xboard.service; then
         log_success "XBoard服务启动成功"
+        
+        # 显示服务状态
+        log_info "服务状态:"
+        systemctl status xboard.service --no-pager -l
+        
+        # 显示日志
+        log_info "最近的服务日志:"
+        journalctl -u xboard.service --no-pager -n 10
+        
     else
         log_error "XBoard服务启动失败"
-        systemctl status xboard.service
+        log_info "服务状态:"
+        systemctl status xboard.service --no-pager -l
+        log_info "服务日志:"
+        journalctl -u xboard.service --no-pager -n 20
         exit 1
     fi
     
     log_success "所有服务启动完成"
+    
+    # 显示服务管理命令
+    echo ""
+    echo "=========================================="
+    echo "🔧 服务管理命令"
+    echo "=========================================="
+    echo "查看服务状态: systemctl status xboard"
+    echo "启动服务: systemctl start xboard"
+    echo "停止服务: systemctl stop xboard"
+    echo "重启服务: systemctl restart xboard"
+    echo "查看日志: journalctl -u xboard -f"
+    echo "启用开机自启: systemctl enable xboard"
+    echo "禁用开机自启: systemctl disable xboard"
+    echo ""
 }
 
 # 显示完成信息
