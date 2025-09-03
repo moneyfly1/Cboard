@@ -289,10 +289,53 @@ setup_python_environment() {
 
     cd "$PROJECT_ROOT"
 
+    # 确保Python虚拟环境包已安装
+    log_info "确保Python虚拟环境包已安装..."
+    PYTHON_MAJOR=$(echo $PYTHON_VERSION | cut -d. -f1)
+    PYTHON_MINOR=$(echo $PYTHON_VERSION | cut -d. -f2)
+    
+    if [ "$PYTHON_MAJOR" -eq 3 ]; then
+        case $PYTHON_MINOR in
+            12)
+                apt install -y python3.12-venv python3.12-dev python3-pip
+                ;;
+            11)
+                apt install -y python3.11-venv python3.11-dev python3-pip
+                ;;
+            10)
+                apt install -y python3.10-venv python3.10-dev python3-pip
+                ;;
+            9)
+                apt install -y python3.9-venv python3.9-dev python3-pip
+                ;;
+            8)
+                apt install -y python3.8-venv python3.8-dev python3-pip
+                ;;
+            *)
+                apt install -y python3-venv python3-dev python3-pip
+                ;;
+        esac
+    else
+        apt install -y python3-venv python3-dev python3-pip
+    fi
+
     # 创建虚拟环境
     if [ ! -d "venv" ]; then
         log_info "创建Python虚拟环境..."
         python3 -m venv venv
+        if [ $? -ne 0 ]; then
+            log_error "虚拟环境创建失败，尝试使用python3.12..."
+            if command -v python3.12 &> /dev/null; then
+                python3.12 -m venv venv
+            elif command -v python3.11 &> /dev/null; then
+                python3.11 -m venv venv
+            elif command -v python3.10 &> /dev/null; then
+                python3.10 -m venv venv
+            else
+                log_error "无法创建虚拟环境，请检查Python安装"
+                exit 1
+            fi
+        fi
     fi
 
     # 激活虚拟环境
