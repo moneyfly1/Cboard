@@ -38,15 +38,15 @@ echo "=========================================="
 echo ""
 
 # 检查root权限
-if [ "$EUID" -ne 0 ]; then
-    log_error "请使用root用户运行此脚本"
-    exit 1
-fi
+    if [ "$EUID" -ne 0 ]; then
+        log_error "请使用root用户运行此脚本"
+        exit 1
+    fi
 
 # 检测系统信息
 detect_system_info() {
     log_info "检测系统信息..."
-    
+
     # 检测操作系统
     if [ -f /etc/os-release ]; then
         . /etc/os-release
@@ -171,21 +171,21 @@ update_system() {
     # 检查是否需要更新
     if [ "$SYSTEM_NEEDS_UPDATE" = true ]; then
         log_info "开始系统更新..."
-        
-        case $OS in
-            "ubuntu"|"debian")
-                apt update && apt upgrade -y
-                ;;
-            "centos"|"rhel"|"almalinux"|"rocky")
-                if command -v dnf &> /dev/null; then
-                    dnf update -y
-                else
-                    yum update -y
-                fi
-                ;;
-        esac
-        
-        log_success "系统更新完成"
+
+    case $OS in
+        "ubuntu"|"debian")
+            apt update && apt upgrade -y
+            ;;
+        "centos"|"rhel"|"almalinux"|"rocky")
+            if command -v dnf &> /dev/null; then
+                dnf update -y
+            else
+                yum update -y
+            fi
+            ;;
+    esac
+
+    log_success "系统更新完成"
     else
         log_info "系统无需更新，跳过更新步骤"
     fi
@@ -200,7 +200,7 @@ install_python() {
     fi
     
     log_info "安装Python环境..."
-    
+
     case $OS in
         "ubuntu")
             if [ "$OS_VERSION" = "18.04" ]; then
@@ -239,7 +239,7 @@ install_python() {
             fi
             ;;
     esac
-    
+
     # 验证安装
     if [ -n "$PYTHON_CMD" ] && command -v "$PYTHON_CMD" &> /dev/null; then
         PYTHON_VERSION=$($PYTHON_CMD --version 2>&1 | grep -oE '[0-9]+\.[0-9]+' | head -1)
@@ -276,7 +276,7 @@ install_nodejs() {
             fi
             ;;
     esac
-    
+
     # 验证安装
     if command -v node &> /dev/null; then
         NODE_VERSION=$(node --version 2>&1 | grep -oE 'v[0-9]+' | head -1)
@@ -303,7 +303,7 @@ install_nginx() {
     fi
     
     log_info "安装Nginx..."
-    
+
     case $OS in
         "ubuntu"|"debian")
             apt install -y nginx
@@ -316,7 +316,7 @@ install_nginx() {
             fi
             ;;
     esac
-    
+
     # 启动并启用Nginx
     systemctl start nginx
     systemctl enable nginx
@@ -338,21 +338,21 @@ install_mysql() {
     if [ "$MYSQL_INSTALLED" = true ]; then
         log_info "MySQL已安装: $MYSQL_VERSION，跳过安装"
         # 确保安装MySQL开发库
-        case $OS in
-            "ubuntu"|"debian")
+    case $OS in
+        "ubuntu"|"debian")
                 apt install -y libmysqlclient-dev pkg-config
-                ;;
-            "centos"|"rhel"|"almalinux"|"rocky")
-                if command -v dnf &> /dev/null; then
+            ;;
+        "centos"|"rhel"|"almalinux"|"rocky")
+            if command -v dnf &> /dev/null; then
                     dnf install -y mysql-devel pkgconfig
-                else
+            else
                     yum install -y mysql-devel pkgconfig
-                fi
-                ;;
-        esac
+            fi
+            ;;
+    esac
         return 0
     fi
-    
+
     case $OS in
         "ubuntu")
             if [ "$OS_VERSION" = "18.04" ] || [ "$OS_VERSION" = "20.04" ]; then
@@ -374,7 +374,7 @@ install_mysql() {
             fi
             ;;
     esac
-    
+
     # 启动并启用MySQL
     systemctl start mysql
     systemctl enable mysql
@@ -396,7 +396,7 @@ install_php() {
         log_info "PHP已安装: $PHP_VERSION，跳过安装"
         return 0
     fi
-    
+
     case $OS in
         "ubuntu")
             if [ "$OS_VERSION" = "18.04" ]; then
@@ -422,7 +422,7 @@ install_php() {
             fi
             ;;
     esac
-    
+
     # 启动并启用PHP-FPM
     systemctl start php*-fpm
     systemctl enable php*-fpm
@@ -440,7 +440,7 @@ install_php() {
 # 检测项目路径
 detect_project_path() {
     log_info "检测项目路径..."
-    
+
     # 策略1: 检查当前目录
     if [ -d "backend" ] && [ -d "frontend" ]; then
         PROJECT_ROOT="$(pwd)"
@@ -496,7 +496,7 @@ detect_project_path() {
 # 设置Python环境
 setup_python_environment() {
     log_info "设置Python环境..."
-    
+
     cd "$PROJECT_ROOT"
     
     # 删除已存在的虚拟环境（如果有问题）
@@ -591,7 +591,7 @@ setup_python_environment() {
     # 方法7: 如果方法6失败，尝试使用python3 -m venv
     if [ "$VENV_CREATED" = false ] && command -v python3 &> /dev/null; then
         log_info "尝试方法7: python3 -m venv venv"
-        python3 -m venv venv
+    python3 -m venv venv
         if [ $? -eq 0 ] && [ -f "venv/bin/activate" ]; then
             log_success "方法7成功: 使用python3创建虚拟环境"
             VENV_CREATED=true
@@ -637,30 +637,54 @@ setup_python_environment() {
     log_info "虚拟环境创建成功，详细信息："
     ls -la venv/bin/
     log_info "Python版本: $($PYTHON_CMD --version)"
-    
+
     # 激活虚拟环境
     log_info "激活虚拟环境..."
     source venv/bin/activate
-    
+
     # 升级pip
     log_info "升级pip..."
     pip install --upgrade pip
-    
-    # 智能选择requirements文件
+
+    # 安装系统级依赖（避免编译问题）
+    log_info "安装系统级依赖..."
+    case $OS in
+        "ubuntu"|"debian")
+            apt install -y build-essential python3-dev libffi-dev libssl-dev libmysqlclient-dev pkg-config
+            ;;
+        "centos"|"rhel"|"almalinux"|"rocky")
+            if command -v dnf &> /dev/null; then
+                dnf install -y gcc gcc-c++ python3-devel libffi-devel openssl-devel mysql-devel pkgconfig
+            else
+                yum install -y gcc gcc-c++ python3-devel libffi-devel openssl-devel mysql-devel pkgconfig
+            fi
+            ;;
+    esac
+
+    # 智能选择requirements文件并安装依赖
     if [ -f "backend/requirements_modern.txt" ]; then
         log_info "使用现代系统requirements文件"
         
-        # 先安装基础依赖，避免mysqlclient编译问题
-        log_info "先安装基础依赖..."
-        pip install fastapi uvicorn sqlalchemy python-multipart python-jose[cryptography] passlib[bcrypt] python-dotenv email-validator pydantic pydantic-settings
+        # 分步安装依赖，避免编译问题
+        log_info "第1步: 安装基础依赖..."
+        pip install --no-cache-dir fastapi uvicorn sqlalchemy python-multipart python-jose[cryptography] passlib[bcrypt] python-dotenv email-validator pydantic pydantic-settings
         
-        # 然后安装MySQL相关依赖
-        log_info "安装MySQL相关依赖..."
-        pip install mysqlclient pymysql
+        log_info "第2步: 安装数据库驱动..."
+        pip install --no-cache-dir pymysql
         
-        # 最后安装其他依赖
-        log_info "安装其他依赖..."
-        pip install alembic redis httpx aiofiles python-multipart
+        # 尝试安装mysqlclient（如果失败则跳过）
+        log_info "第3步: 尝试安装mysqlclient..."
+        if pip install --no-cache-dir mysqlclient; then
+            log_success "mysqlclient安装成功"
+        else
+            log_warning "mysqlclient安装失败，将使用pymysql"
+        fi
+        
+        log_info "第4步: 安装其他依赖..."
+        pip install --no-cache-dir alembic redis httpx aiofiles jinja2
+        
+        log_info "第5步: 安装开发依赖..."
+        pip install --no-cache-dir watchfiles websockets
         
     elif [ -f "backend/requirements_vps.txt" ]; then
         log_info "使用VPS专用requirements文件"
@@ -670,16 +694,88 @@ setup_python_environment() {
         pip install -r backend/requirements.txt
     else
         log_warning "未找到requirements文件，安装基础依赖..."
-        pip install fastapi uvicorn sqlalchemy pymysql python-multipart python-jose[cryptography] passlib[bcrypt] python-dotenv email-validator
+        pip install --no-cache-dir fastapi uvicorn sqlalchemy pymysql python-multipart python-jose[cryptography] passlib[bcrypt] python-dotenv email-validator alembic
+    fi
+
+    # 验证关键依赖安装
+    log_info "验证关键依赖安装..."
+    verify_python_dependencies
+
+    log_success "Python环境设置完成"
+}
+
+# 验证Python依赖安装
+verify_python_dependencies() {
+    log_info "验证Python依赖安装..."
+    
+    # 检查关键包是否安装成功
+    CRITICAL_PACKAGES=("fastapi" "uvicorn" "sqlalchemy" "pymysql" "alembic")
+    MISSING_PACKAGES=()
+    
+    for package in "${CRITICAL_PACKAGES[@]}"; do
+        if python -c "import $package" 2>/dev/null; then
+            log_success "✓ $package 安装成功"
+        else
+            log_warning "✗ $package 安装失败"
+            MISSING_PACKAGES+=("$package")
+        fi
+    done
+    
+    # 检查MySQL驱动
+    if python -c "import mysqlclient" 2>/dev/null; then
+        log_success "✓ mysqlclient 安装成功"
+    elif python -c "import pymysql" 2>/dev/null; then
+        log_success "✓ pymysql 安装成功（备用MySQL驱动）"
+    else
+        log_error "✗ MySQL驱动安装失败"
+        MISSING_PACKAGES+=("mysql_driver")
     fi
     
-    log_success "Python环境设置完成"
+    # 如果有缺失的包，尝试重新安装
+    if [ ${#MISSING_PACKAGES[@]} -gt 0 ]; then
+        log_warning "检测到缺失的依赖包: ${MISSING_PACKAGES[*]}"
+        log_info "尝试重新安装缺失的依赖..."
+        
+        for package in "${MISSING_PACKAGES[@]}"; do
+            case $package in
+                "fastapi")
+                    pip install --no-cache-dir fastapi
+                    ;;
+                "uvicorn")
+                    pip install --no-cache-dir uvicorn[standard]
+                    ;;
+                "sqlalchemy")
+                    pip install --no-cache-dir sqlalchemy
+                    ;;
+                "pymysql")
+                    pip install --no-cache-dir pymysql
+                    ;;
+                "alembic")
+                    pip install --no-cache-dir alembic
+                    ;;
+                "mysql_driver")
+                    # 尝试安装MySQL驱动
+                    if ! pip install --no-cache-dir mysqlclient; then
+                        pip install --no-cache-dir pymysql
+                    fi
+                    ;;
+            esac
+        done
+        
+        # 再次验证
+        log_info "重新验证依赖安装..."
+        verify_python_dependencies
+    fi
+    
+    # 显示已安装的包列表
+    log_info "已安装的Python包:"
+    pip list --format=columns | head -20
 }
 
 # 构建前端
 build_frontend() {
     log_info "构建前端..."
-    
+
     cd "$PROJECT_ROOT/frontend"
     
     # 检查package.json
@@ -696,7 +792,7 @@ build_frontend() {
     if grep -q '"build"' package.json; then
         log_info "执行前端构建..."
         npm run build
-        log_success "前端构建完成"
+    log_success "前端构建完成"
     else
         log_warning "package.json中未找到build脚本，跳过构建"
     fi
@@ -793,9 +889,526 @@ configure_database() {
             $MYSQL_CMD -e "FLUSH PRIVILEGES;"
         fi
         
+        # 初始化数据库表结构
+        initialize_database_tables
+        
         log_success "数据库配置完成"
     else
         log_warning "无法配置数据库，请稍后手动配置"
+    fi
+}
+
+# 初始化数据库表结构
+initialize_database_tables() {
+    log_info "初始化数据库表结构..."
+    
+    # 检查数据库表是否已存在
+    TABLE_COUNT=$($MYSQL_CMD -e "USE xboard; SHOW TABLES;" 2>/dev/null | wc -l)
+    
+    if [ "$TABLE_COUNT" -gt 1 ]; then
+        log_info "检测到 $TABLE_COUNT 个数据库表，数据库已初始化"
+        return 0
+    fi
+    
+    log_info "数据库表不存在，开始初始化..."
+    
+    # 检查是否有数据库初始化脚本
+    if [ -f "database_setup.sql" ]; then
+        log_info "使用 database_setup.sql 初始化数据库..."
+        
+        # 转换SQL脚本为MySQL兼容格式
+        MYSQL_SETUP_FILE="/tmp/xboard_mysql_setup.sql"
+        
+        # 创建MySQL兼容的SQL文件
+        cat > "$MYSQL_SETUP_FILE" << 'EOF'
+-- XBoard MySQL 数据库初始化脚本
+-- 基于 database_setup.sql 转换
+
+SET NAMES utf8mb4;
+SET FOREIGN_KEY_CHECKS = 0;
+
+-- 用户表 (Users)
+CREATE TABLE IF NOT EXISTS users (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    username VARCHAR(50) NOT NULL UNIQUE,
+    email VARCHAR(100) NOT NULL UNIQUE,
+    hashed_password VARCHAR(255) NOT NULL,
+    is_active BOOLEAN DEFAULT TRUE,
+    is_verified BOOLEAN DEFAULT FALSE,
+    is_admin BOOLEAN DEFAULT FALSE,
+    avatar VARCHAR(255),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    last_login TIMESTAMP NULL,
+    
+    INDEX idx_users_username (username),
+    INDEX idx_users_email (email),
+    INDEX idx_users_created_at (created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 套餐表 (Packages)
+CREATE TABLE IF NOT EXISTS packages (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    description TEXT,
+    price DECIMAL(10,2) NOT NULL,
+    original_price DECIMAL(10,2) NULL,
+    duration_days INT NOT NULL,
+    device_limit INT DEFAULT 3,
+    traffic_limit_gb INT NULL,
+    speed_limit_mbps INT NULL,
+    is_active BOOLEAN DEFAULT TRUE,
+    sort_order INT DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    
+    INDEX idx_packages_is_active (is_active),
+    INDEX idx_packages_sort_order (sort_order)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 订阅表 (Subscriptions)
+CREATE TABLE IF NOT EXISTS subscriptions (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    package_id INT NULL,
+    subscription_url VARCHAR(500) UNIQUE,
+    status ENUM('active', 'expired', 'cancelled', 'pending') DEFAULT 'pending',
+    start_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    end_date TIMESTAMP NULL,
+    device_count INT DEFAULT 0,
+    max_devices INT DEFAULT 3,
+    traffic_used_gb DECIMAL(10,2) DEFAULT 0.00,
+    traffic_limit_gb DECIMAL(10,2) NULL,
+    last_used TIMESTAMP NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (package_id) REFERENCES packages(id) ON DELETE SET NULL,
+    INDEX idx_subscriptions_user_id (user_id),
+    INDEX idx_subscriptions_status (status),
+    INDEX idx_subscriptions_end_date (end_date),
+    INDEX idx_subscriptions_created_at (created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 设备表 (Devices)
+CREATE TABLE IF NOT EXISTS devices (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    subscription_id INT NOT NULL,
+    device_name VARCHAR(100),
+    device_type VARCHAR(50),
+    device_model VARCHAR(100),
+    os_version VARCHAR(50),
+    app_version VARCHAR(50),
+    ip_address VARCHAR(45),
+    user_agent TEXT,
+    location VARCHAR(100),
+    is_online BOOLEAN DEFAULT FALSE,
+    last_seen TIMESTAMP NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    
+    FOREIGN KEY (subscription_id) REFERENCES subscriptions(id) ON DELETE CASCADE,
+    INDEX idx_devices_subscription_id (subscription_id),
+    INDEX idx_devices_is_online (is_online),
+    INDEX idx_devices_last_seen (last_seen),
+    INDEX idx_devices_created_at (created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 订单表 (Orders)
+CREATE TABLE IF NOT EXISTS orders (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    package_id INT NOT NULL,
+    order_number VARCHAR(50) UNIQUE NOT NULL,
+    total_amount DECIMAL(10,2) NOT NULL,
+    discount_amount DECIMAL(10,2) DEFAULT 0.00,
+    payment_amount DECIMAL(10,2) NOT NULL,
+    currency VARCHAR(10) DEFAULT 'CNY',
+    status ENUM('pending', 'paid', 'cancelled', 'refunded') DEFAULT 'pending',
+    payment_method VARCHAR(50),
+    payment_config_id INT NULL,
+    notes TEXT,
+    paid_at TIMESTAMP NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (package_id) REFERENCES packages(id) ON DELETE CASCADE,
+    INDEX idx_orders_user_id (user_id),
+    INDEX idx_orders_status (status),
+    INDEX idx_orders_payment_method (payment_method),
+    INDEX idx_orders_created_at (created_at),
+    INDEX idx_orders_order_number (order_number)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 支付交易表 (Payment Transactions)
+CREATE TABLE IF NOT EXISTS payment_transactions (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    order_id INT NOT NULL,
+    transaction_id VARCHAR(100) UNIQUE,
+    external_transaction_id VARCHAR(200),
+    payment_method VARCHAR(50) NOT NULL,
+    amount DECIMAL(10,2) NOT NULL,
+    currency VARCHAR(10) DEFAULT 'CNY',
+    status ENUM('pending', 'success', 'failed', 'cancelled', 'refunded') DEFAULT 'pending',
+    payment_data JSON,
+    callback_data JSON,
+    error_message TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE,
+    INDEX idx_payment_transactions_user_id (user_id),
+    INDEX idx_payment_transactions_order_id (order_id),
+    INDEX idx_payment_transactions_status (status),
+    INDEX idx_payment_transactions_created_at (created_at),
+    INDEX idx_payment_transactions_transaction_id (transaction_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 支付配置表 (Payment Configs)
+CREATE TABLE IF NOT EXISTS payment_configs (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    pay_type VARCHAR(50) NOT NULL,
+    app_id VARCHAR(100),
+    merchant_private_key TEXT,
+    alipay_public_key TEXT,
+    wechat_app_id VARCHAR(100),
+    wechat_mch_id VARCHAR(100),
+    wechat_api_key VARCHAR(100),
+    paypal_client_id VARCHAR(200),
+    paypal_secret VARCHAR(200),
+    stripe_publishable_key VARCHAR(200),
+    stripe_secret_key VARCHAR(200),
+    bank_name VARCHAR(100),
+    account_name VARCHAR(100),
+    account_number VARCHAR(100),
+    wallet_address VARCHAR(200),
+    status INT DEFAULT 1,
+    return_url VARCHAR(500),
+    notify_url VARCHAR(500),
+    sort_order INT DEFAULT 0,
+    config_json JSON,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    
+    INDEX idx_payment_configs_pay_type (pay_type),
+    INDEX idx_payment_configs_status (status),
+    INDEX idx_payment_configs_sort_order (sort_order)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 节点表 (Nodes)
+CREATE TABLE IF NOT EXISTS nodes (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    display_name VARCHAR(200),
+    description TEXT,
+    server_address VARCHAR(200) NOT NULL,
+    port INT NOT NULL,
+    protocol VARCHAR(50) DEFAULT 'vmess',
+    uuid VARCHAR(100),
+    alter_id INT DEFAULT 0,
+    security VARCHAR(50) DEFAULT 'auto',
+    network VARCHAR(50) DEFAULT 'tcp',
+    type VARCHAR(50) DEFAULT 'none',
+    host VARCHAR(200),
+    path VARCHAR(500),
+    tls BOOLEAN DEFAULT FALSE,
+    sni VARCHAR(200),
+    alpn VARCHAR(100),
+    fp VARCHAR(50),
+    pbk VARCHAR(100),
+    sid VARCHAR(100),
+    spx VARCHAR(100),
+    flow VARCHAR(50),
+    encryption VARCHAR(50),
+    password VARCHAR(100),
+    method VARCHAR(50) DEFAULT 'aes-256-gcm',
+    country VARCHAR(10),
+    country_name VARCHAR(100),
+    city VARCHAR(100),
+    isp VARCHAR(100),
+    status BOOLEAN DEFAULT TRUE,
+    sort_order INT DEFAULT 0,
+    traffic_limit_gb DECIMAL(10,2) NULL,
+    traffic_used_gb DECIMAL(10,2) DEFAULT 0.00,
+    user_limit INT NULL,
+    active_users INT DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    
+    INDEX idx_nodes_protocol (protocol),
+    INDEX idx_nodes_status (status),
+    INDEX idx_nodes_country (country),
+    INDEX idx_nodes_sort_order (sort_order),
+    INDEX idx_nodes_created_at (created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 通知表 (Notifications)
+CREATE TABLE IF NOT EXISTS notifications (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    title VARCHAR(200) NOT NULL,
+    content TEXT NOT NULL,
+    type VARCHAR(50) DEFAULT 'info',
+    is_read BOOLEAN DEFAULT FALSE,
+    read_at TIMESTAMP NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    INDEX idx_notifications_user_id (user_id),
+    INDEX idx_notifications_is_read (is_read),
+    INDEX idx_notifications_type (type),
+    INDEX idx_notifications_created_at (created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 邮件模板表 (Email Templates)
+CREATE TABLE IF NOT EXISTS email_templates (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(100) NOT NULL UNIQUE,
+    subject VARCHAR(200) NOT NULL,
+    content TEXT NOT NULL,
+    variables TEXT,
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    
+    INDEX idx_email_templates_name (name),
+    INDEX idx_email_templates_is_active (is_active)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 邮件队列表 (Email Queue)
+CREATE TABLE IF NOT EXISTS email_queue (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    to_email VARCHAR(100) NOT NULL,
+    subject VARCHAR(200) NOT NULL,
+    content TEXT NOT NULL,
+    template_name VARCHAR(100),
+    variables JSON,
+    priority INT DEFAULT 0,
+    status ENUM('pending', 'sending', 'sent', 'failed') DEFAULT 'pending',
+    retry_count INT DEFAULT 0,
+    max_retries INT DEFAULT 3,
+    error_message TEXT,
+    scheduled_at TIMESTAMP NULL,
+    sent_at TIMESTAMP NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    
+    INDEX idx_email_queue_status (status),
+    INDEX idx_email_queue_priority (priority),
+    INDEX idx_email_queue_scheduled_at (scheduled_at),
+    INDEX idx_email_queue_created_at (created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 系统配置表 (System Configs)
+CREATE TABLE IF NOT EXISTS system_configs (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    config_key VARCHAR(100) NOT NULL UNIQUE,
+    config_value TEXT,
+    config_type VARCHAR(50) DEFAULT 'string',
+    description VARCHAR(500),
+    is_public BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    
+    INDEX idx_system_configs_config_key (config_key),
+    INDEX idx_system_configs_is_public (is_public)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 公告表 (Announcements)
+CREATE TABLE IF NOT EXISTS announcements (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    title VARCHAR(200) NOT NULL,
+    content TEXT NOT NULL,
+    type VARCHAR(50) DEFAULT 'info',
+    is_active BOOLEAN DEFAULT TRUE,
+    start_date TIMESTAMP NULL,
+    end_date TIMESTAMP NULL,
+    sort_order INT DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    
+    INDEX idx_announcements_is_active (is_active),
+    INDEX idx_announcements_start_date (start_date),
+    INDEX idx_announcements_end_date (end_date),
+    INDEX idx_announcements_sort_order (sort_order)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 主题配置表 (Theme Configs)
+CREATE TABLE IF NOT EXISTS theme_configs (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    theme_name VARCHAR(100) NOT NULL UNIQUE,
+    theme_config JSON NOT NULL,
+    is_default BOOLEAN DEFAULT FALSE,
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    
+    INDEX idx_theme_configs_theme_name (theme_name),
+    INDEX idx_theme_configs_is_default (is_default),
+    INDEX idx_theme_configs_is_active (is_active)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 用户活动记录表 (User Activities)
+CREATE TABLE IF NOT EXISTS user_activities (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    action VARCHAR(100) NOT NULL,
+    description TEXT,
+    ip_address VARCHAR(45),
+    user_agent TEXT,
+    location VARCHAR(100),
+    device_info JSON,
+    session_id VARCHAR(100),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    INDEX idx_user_activities_user_id (user_id),
+    INDEX idx_user_activities_action (action),
+    INDEX idx_user_activities_created_at (created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 登录历史表 (Login History)
+CREATE TABLE IF NOT EXISTS login_history (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    login_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    logout_time TIMESTAMP NULL,
+    ip_address VARCHAR(45),
+    user_agent TEXT,
+    location VARCHAR(100),
+    device_fingerprint VARCHAR(100),
+    session_duration INT NULL,
+    login_result ENUM('success', 'failed') DEFAULT 'success',
+    failure_reason VARCHAR(200),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    INDEX idx_login_history_user_id (user_id),
+    INDEX idx_login_history_login_time (login_time),
+    INDEX idx_login_history_login_result (login_result)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 订阅重置记录表 (Subscription Resets)
+CREATE TABLE IF NOT EXISTS subscription_resets (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    subscription_id INT NOT NULL,
+    old_url VARCHAR(500),
+    new_url VARCHAR(500),
+    reset_reason VARCHAR(200),
+    device_count INT DEFAULT 0,
+    ip_address VARCHAR(45),
+    user_agent TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (subscription_id) REFERENCES subscriptions(id) ON DELETE CASCADE,
+    INDEX idx_subscription_resets_user_id (user_id),
+    INDEX idx_subscription_resets_subscription_id (subscription_id),
+    INDEX idx_subscription_resets_created_at (created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 支付回调表 (Payment Callbacks)
+CREATE TABLE IF NOT EXISTS payment_callbacks (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    payment_transaction_id INT NOT NULL,
+    callback_type VARCHAR(50) NOT NULL,
+    callback_data JSON NOT NULL,
+    raw_request TEXT,
+    processed BOOLEAN DEFAULT FALSE,
+    processing_result VARCHAR(50),
+    error_message TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    
+    FOREIGN KEY (payment_transaction_id) REFERENCES payment_transactions(id) ON DELETE CASCADE,
+    INDEX idx_payment_callbacks_payment_transaction_id (payment_transaction_id),
+    INDEX idx_payment_callbacks_callback_type (callback_type),
+    INDEX idx_payment_callbacks_processed (processed),
+    INDEX idx_payment_callbacks_created_at (created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 创建复合索引
+CREATE INDEX idx_subscriptions_user_status ON subscriptions(user_id, status);
+CREATE INDEX idx_subscriptions_user_end_date ON subscriptions(user_id, end_date);
+CREATE INDEX idx_devices_subscription_online ON devices(subscription_id, is_online);
+CREATE INDEX idx_orders_user_status_date ON orders(user_id, status, created_at);
+CREATE INDEX idx_payment_transactions_order_status ON payment_transactions(order_id, status);
+CREATE INDEX idx_email_queue_status_priority ON email_queue(status, priority, scheduled_at);
+
+-- 插入默认数据
+INSERT IGNORE INTO system_configs (config_key, config_value, config_type, description) VALUES
+('site_name', 'XBoard Modern', 'string', '网站名称'),
+('site_description', '现代化订阅管理系统', 'string', '网站描述'),
+('admin_email', 'admin@xboard.local', 'string', '管理员邮箱'),
+('max_devices_per_user', '5', 'number', '每个用户最大设备数'),
+('subscription_renewal_reminder_days', '7', 'number', '订阅续费提醒天数'),
+('email_verification_required', 'true', 'boolean', '是否需要邮箱验证'),
+('registration_enabled', 'true', 'boolean', '是否允许用户注册');
+
+-- 插入默认主题配置
+INSERT IGNORE INTO theme_configs (theme_name, theme_config, is_default) VALUES
+('default', '{\"primary_color\": \"#409eff\", \"secondary_color\": \"#67c23a\", \"text_color\": \"#303133\", \"background_color\": \"#ffffff\", \"sidebar_color\": \"#f5f5f5\"}', true);
+
+-- 插入默认邮件模板
+INSERT IGNORE INTO email_templates (name, subject, content, variables) VALUES
+('user_registration', '欢迎注册 XBoard Modern', '<h1>欢迎来到 XBoard Modern</h1><p>您好，{{username}}！</p><p>感谢您注册我们的服务。</p><p>请点击以下链接验证您的邮箱：</p><p><a href="{{verification_url}}">验证邮箱</a></p>', '[\"username\", \"verification_url\"]'),
+('password_reset', '密码重置请求', '<h1>密码重置</h1><p>您好，{{username}}！</p><p>您请求重置密码，请点击以下链接：</p><p><a href="{{reset_url}}">重置密码</a></p><p>如果这不是您本人操作，请忽略此邮件。</p>', '[\"username\", \"reset_url\"]'),
+('subscription_expiring', '订阅即将到期提醒', '<h1>订阅到期提醒</h1><p>您好，{{username}}！</p><p>您的订阅将在 {{days_left}} 天后到期。</p><p>到期时间：{{expiry_date}}</p><p>请及时续费以免影响使用。</p>', '[\"username\", \"days_left\", \"expiry_date\"]'),
+('order_confirmed', '订单确认通知', '<h1>订单确认</h1><p>您好，{{username}}！</p><p>您的订单已确认：</p><p>订单号：{{order_number}}</p><p>金额：{{amount}} {{currency}}</p><p>套餐：{{package_name}}</p>', '[\"username\", \"order_number\", \"amount\", \"currency\", \"package_name\"]');
+
+-- 插入默认公告
+INSERT IGNORE INTO announcements (title, content, type, is_active) VALUES
+('欢迎使用 XBoard Modern', '感谢您选择我们的服务！如果您有任何问题，请随时联系我们。', 'info', true);
+
+-- 插入示例套餐数据
+INSERT IGNORE INTO packages (name, description, price, duration_days, device_limit, is_active, sort_order) VALUES
+('基础套餐', '适合个人用户的基础订阅套餐', 19.90, 30, 3, true, 1),
+('高级套餐', '适合重度用户的完整功能套餐', 39.90, 30, 5, true, 2),
+('企业套餐', '适合团队使用的企业级套餐', 99.90, 30, 10, true, 3);
+
+-- 插入默认支付配置
+INSERT IGNORE INTO payment_configs (pay_type, app_id, status, return_url, notify_url) VALUES
+('alipay', '', 1, '/api/v1/payment/alipay/return', '/api/v1/payment/alipay/notify'),
+('wechat', '', 1, '/api/v1/payment/wechat/return', '/api/v1/payment/wechat/notify'),
+('paypal', '', 1, '', ''),
+('stripe', '', 1, '', ''),
+('bank_transfer', '', 1, '', ''),
+('crypto', '', 1, '', '');
+
+-- 创建默认管理员用户 (admin/admin)
+INSERT IGNORE INTO users (username, email, hashed_password, is_active, is_verified, is_admin) VALUES
+('admin', 'admin@localhost', '$2b$12$EixZaYVK1fsbw1ZfbX3OXePaWxn96p36WQoeG6Lruj3vjPDw8KqKq', true, true, true);
+
+SET FOREIGN_KEY_CHECKS = 1;
+EOF
+        
+        # 执行MySQL初始化脚本
+        log_info "执行数据库初始化脚本..."
+        if $MYSQL_CMD xboard < "$MYSQL_SETUP_FILE"; then
+            log_success "数据库表结构初始化完成"
+            
+            # 验证表是否创建成功
+            TABLE_COUNT_AFTER=$($MYSQL_CMD -e "USE xboard; SHOW TABLES;" 2>/dev/null | wc -l)
+            log_info "数据库表数量: $TABLE_COUNT_AFTER"
+            
+            # 显示创建的表
+            log_info "已创建的数据表:"
+            $MYSQL_CMD -e "USE xboard; SHOW TABLES;" 2>/dev/null | grep -v "Tables_in_xboard"
+            
+        else
+            log_error "数据库初始化失败"
+            return 1
+        fi
+        
+        # 清理临时文件
+        rm -f "$MYSQL_SETUP_FILE"
+        
+    else
+        log_warning "未找到 database_setup.sql 文件，跳过数据库初始化"
+        log_info "请手动创建数据库表结构或运行数据库迁移"
     fi
 }
 
@@ -907,7 +1520,7 @@ create_env_file() {
         log_info "使用默认root用户连接数据库"
         log_warning "请根据实际情况修改数据库连接信息"
     fi
-    
+
     # 创建.env文件
     cat > .env << EOF
 # ================================
@@ -955,7 +1568,7 @@ MAX_FILE_SIZE=10485760
 
 # 管理员配置
 ADMIN_EMAIL=admin@localhost
-ADMIN_PASSWORD=admin123
+ADMIN_PASSWORD=admin
 
 # 系统信息
 SYSTEM_NGINX_VERSION=$NGINX_VERSION
@@ -983,7 +1596,7 @@ EOF
 # 创建systemd服务
 create_systemd_service() {
     log_info "创建systemd服务..."
-    
+
     cat > /etc/systemd/system/xboard.service << EOF
 [Unit]
 Description=XBoard Backend
@@ -1017,7 +1630,7 @@ EOF
     # 重新加载systemd
     systemctl daemon-reload
     systemctl enable xboard.service
-    
+
     log_success "systemd服务创建完成"
 }
 
@@ -1057,6 +1670,9 @@ deploy_project() {
 # 启动服务
 start_services() {
     log_info "启动服务..."
+    
+    # 测试数据库连接
+    test_database_connection
     
     # 启动XBoard服务
     systemctl start xboard.service
@@ -1102,6 +1718,132 @@ start_services() {
     echo ""
 }
 
+# 测试数据库连接
+test_database_connection() {
+    log_info "测试数据库连接..."
+    
+    cd "$PROJECT_ROOT/backend"
+    
+    # 激活虚拟环境
+    source ../venv/bin/activate
+    
+    # 创建测试脚本
+    cat > test_db.py << 'EOF'
+#!/usr/bin/env python3
+import os
+import sys
+from dotenv import load_dotenv
+
+# 加载环境变量
+load_dotenv()
+
+def test_database_connection():
+    """测试数据库连接"""
+    try:
+        # 尝试导入必要的模块
+        import sqlalchemy
+        import pymysql
+        
+        print("✓ SQLAlchemy 和 PyMySQL 导入成功")
+        
+        # 获取数据库URL
+        database_url = os.getenv('DATABASE_URL')
+        if not database_url:
+            print("✗ 未找到 DATABASE_URL 环境变量")
+            return False
+        
+        print(f"数据库URL: {database_url}")
+        
+        # 测试数据库连接
+        from sqlalchemy import create_engine, text
+        
+        engine = create_engine(database_url, echo=False)
+        
+        with engine.connect() as connection:
+            result = connection.execute(text("SELECT 1 as test"))
+            row = result.fetchone()
+            if row and row.test == 1:
+                print("✓ 数据库连接测试成功")
+                
+                # 测试数据库表
+                result = connection.execute(text("SHOW TABLES"))
+                tables = [row[0] for row in result.fetchall()]
+                print(f"✓ 数据库表数量: {len(tables)}")
+                
+                if tables:
+                    print("已创建的表:")
+                    for table in tables[:10]:  # 只显示前10个表
+                        print(f"  - {table}")
+                    if len(tables) > 10:
+                        print(f"  ... 还有 {len(tables) - 10} 个表")
+                else:
+                    print("⚠️  警告: 数据库中没有表")
+                
+                return True
+            else:
+                print("✗ 数据库连接测试失败")
+                return False
+                
+    except ImportError as e:
+        print(f"✗ 模块导入失败: {e}")
+        return False
+    except Exception as e:
+        print(f"✗ 数据库连接测试失败: {e}")
+        return False
+
+if __name__ == "__main__":
+    if test_database_connection():
+        print("\n🎉 数据库连接测试通过！")
+        sys.exit(0)
+    else:
+        print("\n❌ 数据库连接测试失败！")
+        sys.exit(1)
+EOF
+    
+    # 运行测试脚本
+    log_info "运行数据库连接测试..."
+    if python test_db.py; then
+        log_success "数据库连接测试通过"
+    else
+        log_error "数据库连接测试失败"
+        log_warning "请检查数据库配置和连接信息"
+        
+        # 显示数据库配置信息
+        echo ""
+        echo "=========================================="
+        echo "🔍 数据库配置检查"
+        echo "=========================================="
+        echo "当前 .env 文件中的数据库配置:"
+        if [ -f "../.env" ]; then
+            grep "DATABASE_URL" ../.env || echo "未找到 DATABASE_URL 配置"
+        else
+            echo "未找到 .env 文件"
+        fi
+        
+        echo ""
+        echo "请检查以下项目:"
+        echo "1. MySQL服务是否正在运行: systemctl status mysql"
+        echo "2. 数据库用户和密码是否正确"
+        echo "3. 数据库是否已创建: mysql -u root -e 'SHOW DATABASES;'"
+        echo "4. 数据库表是否已创建: mysql -u root -e 'USE xboard; SHOW TABLES;'"
+        echo ""
+        
+        read -p "是否继续启动服务？(y/n): " -n 1 -r
+        echo
+        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+            log_info "用户选择停止安装"
+            exit 1
+        fi
+        
+        log_warning "用户选择继续，但服务可能无法正常运行"
+    fi
+    
+    # 清理测试文件
+    rm -f test_db.py
+    
+    cd "$PROJECT_ROOT"
+}
+
 # 显示完成信息
 show_completion_info() {
     echo ""
@@ -1135,8 +1877,8 @@ show_completion_info() {
     echo "   1. 请修改 .env 文件中的数据库密码和邮件配置"
     echo "   2. 建议配置SSL证书"
     echo "   3. 定期备份数据库"
-    echo "   4. 默认管理员账号: admin@localhost / admin123"
-    echo ""
+    echo "   4. 默认管理员账号: admin@localhost / admin"
+        echo ""
 }
 
 # 主函数
@@ -1148,23 +1890,23 @@ main() {
     
     # 系统更新
     update_system
-    
+
     # 安装必需组件
     install_python
     install_nodejs
     install_nginx
     install_mysql
     install_php
-    
+
     # 检测项目路径
     detect_project_path
-    
+
     # 设置Python环境
     setup_python_environment
-    
+
     # 构建前端
     build_frontend
-    
+
     # 配置数据库
     configure_database
     
@@ -1173,16 +1915,16 @@ main() {
     
     # 创建环境变量文件
     create_env_file
-    
+
     # 创建systemd服务
     create_systemd_service
-    
+
     # 部署项目文件
     deploy_project
     
     # 启动服务
     start_services
-    
+
     # 显示完成信息
     show_completion_info
     
