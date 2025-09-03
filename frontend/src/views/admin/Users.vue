@@ -519,12 +519,16 @@ export default {
         console.log('响应头:', response.headers)
         console.log('响应数据:', response.data)
         console.log('响应数据类型:', typeof response.data)
-        console.log('response.data.users:', response.data?.users)
-        console.log('response.data.total:', response.data?.total)
+        console.log('response.data.success:', response.data?.success)
+        console.log('response.data.data:', response.data?.data)
+        console.log('response.data.data.users:', response.data?.data?.users)
+        console.log('response.data.data.total:', response.data?.data?.total)
         
-        if (response.data && response.data.users) {
-          users.value = response.data.users
-          total.value = response.data.total || 0
+        // 检查响应是否成功
+        if (response.data && response.data.success && response.data.data) {
+          const responseData = response.data.data
+          users.value = responseData.users || []
+          total.value = responseData.total || 0
           console.log('=== 数据绑定成功 ===')
           console.log('用户列表加载成功，共', users.value.length, '个用户')
           console.log('users.value:', users.value)
@@ -540,10 +544,18 @@ export default {
         } else {
           console.warn('=== 响应数据格式异常 ===')
           console.warn('response.data:', response.data)
-          console.warn('response.data.users:', response.data?.users)
-          console.warn('response.data.total:', response.data?.total)
+          console.warn('response.data.success:', response.data?.success)
+          console.warn('response.data.data:', response.data?.data)
+          console.warn('response.data.data.users:', response.data?.data?.users)
+          console.warn('response.data.data.total:', response.data?.data?.total)
+          console.warn('response.data.message:', response.data?.message)
           users.value = []
           total.value = 0
+          
+          // 如果有错误消息，显示给用户
+          if (response.data?.message) {
+            ElMessage.error(`加载用户列表失败: ${response.data.message}`)
+          }
         }
       } catch (error) {
         console.error('=== 加载用户列表失败 ===')

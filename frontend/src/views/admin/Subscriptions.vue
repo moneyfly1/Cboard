@@ -357,9 +357,23 @@ export default {
     const loadUsers = async () => {
       try {
         const response = await api.get('/admin/users')
-        users.value = response.data.items
+        console.log('订阅管理页面 - 加载用户列表响应:', response.data)
+        
+        if (response.data && response.data.success && response.data.data) {
+          const responseData = response.data.data
+          users.value = responseData.users || []
+          console.log('订阅管理页面 - 用户列表加载成功，共', users.value.length, '个用户')
+        } else {
+          console.warn('订阅管理页面 - 用户列表响应格式异常:', response.data)
+          users.value = []
+          if (response.data?.message) {
+            ElMessage.error(`加载用户列表失败: ${response.data.message}`)
+          }
+        }
       } catch (error) {
+        console.error('订阅管理页面 - 加载用户列表失败:', error)
         ElMessage.error('加载用户列表失败')
+        users.value = []
       }
     }
 
