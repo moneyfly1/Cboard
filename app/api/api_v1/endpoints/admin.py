@@ -1310,89 +1310,74 @@ def get_subscriptions(
                         "username": subscription.user.username,
                         "email": subscription.user.email
                     },
-                    "subscriptions": []
+                    "v2ray_subscription": None,
+                    "clash_subscription": None,
+                    "total_devices": 0,
+                    "max_device_limit": 3
                 }
-            
-            # 确定订阅状态
-            status = "active"
-            if not subscription.is_active:
-                status = "paused"
-            elif subscription.expire_time and subscription.expire_time < datetime.now():
-                status = "expired"
             
             # 确定订阅类型和完整URL
             if "ssr" in subscription.subscription_url:
                 subscription_type = "v2ray"
                 full_url = f"http://localhost:8000/api/v1/subscriptions/ssr/{subscription.subscription_url}"
+                user_subscriptions[user_id]["v2ray_subscription"] = {
+                    "id": subscription.id,
+                    "subscription_url": subscription.subscription_url,
+                    "full_url": full_url,
+                    "status": "active" if subscription.is_active else "paused",
+                    "device_limit": subscription.device_limit,
+                    "current_devices": subscription.current_devices,
+                    "expires_at": subscription.expire_time.isoformat() if subscription.expire_time else None,
+                    "created_at": subscription.created_at.isoformat() if subscription.created_at else None
+                }
             else:
                 subscription_type = "clash"
                 full_url = f"http://localhost:8000/api/v1/subscriptions/clash/{subscription.subscription_url}"
+                user_subscriptions[user_id]["clash_subscription"] = {
+                    "id": subscription.id,
+                    "subscription_url": subscription.subscription_url,
+                    "full_url": full_url,
+                    "status": "active" if subscription.is_active else "paused",
+                    "device_limit": subscription.device_limit,
+                    "current_devices": subscription.current_devices,
+                    "expires_at": subscription.expire_time.isoformat() if subscription.expire_time else None,
+                    "created_at": subscription.created_at.isoformat() if subscription.created_at else None
+                }
             
-            subscription_data = {
-                "id": subscription.id,
-                "user_id": subscription.user_id,
-                "subscription_url": subscription.subscription_url,
-                "full_url": full_url,
-                "subscription_type": subscription_type,
-                "status": status,
-                "device_limit": subscription.device_limit,
-                "current_devices": subscription.current_devices,
-                "device_count": subscription.current_devices,
-                "expires_at": subscription.expire_time.isoformat() if subscription.expire_time else None,
-                "expire_time": subscription.expire_time.isoformat() if subscription.expire_time else None,
-                "created_at": subscription.created_at.isoformat() if subscription.created_at else None,
-                "updated_at": subscription.updated_at.isoformat() if subscription.updated_at else None
-            }
-            user_subscriptions[user_id]["subscriptions"].append(subscription_data)
+            # 累计设备数量和设备限制
+            user_subscriptions[user_id]["total_devices"] += subscription.current_devices
+            user_subscriptions[user_id]["max_device_limit"] = max(user_subscriptions[user_id]["max_device_limit"], subscription.device_limit)
         
-        # 将用户订阅数据转换为列表格式
+        # 转换为用户列表格式
         for user_id, user_data in user_subscriptions.items():
-            # 确保每个用户有两个订阅
-            v2ray_sub = next((s for s in user_data["subscriptions"] if s["subscription_type"] == "v2ray"), None)
-            clash_sub = next((s for s in user_data["subscriptions"] if s["subscription_type"] == "clash"), None)
-            
             # 如果缺少某个类型的订阅，创建占位符
-            if not v2ray_sub:
-                v2ray_sub = {
+            if not user_data["v2ray_subscription"]:
+                user_data["v2ray_subscription"] = {
                     "id": f"placeholder_v2ray_{user_id}",
-                    "user_id": user_id,
                     "subscription_url": "未配置",
                     "full_url": "未配置",
-                    "subscription_type": "v2ray",
                     "status": "inactive",
                     "device_limit": 3,
                     "current_devices": 0,
-                    "device_count": 0,
                     "expires_at": None,
-                    "expire_time": None,
                     "created_at": None,
-                    "updated_at": None,
                     "is_placeholder": True
                 }
             
-            if not clash_sub:
-                clash_sub = {
+            if not user_data["clash_subscription"]:
+                user_data["clash_subscription"] = {
                     "id": f"placeholder_clash_{user_id}",
-                    "user_id": user_id,
                     "subscription_url": "未配置",
                     "full_url": "未配置",
-                    "subscription_type": "clash",
                     "status": "inactive",
                     "device_limit": 3,
                     "current_devices": 0,
-                    "device_count": 0,
                     "expires_at": None,
-                    "expire_time": None,
                     "created_at": None,
-                    "updated_at": None,
                     "is_placeholder": True
                 }
             
-            # 添加用户信息到每个订阅
-            v2ray_sub["user"] = user_data["user"]
-            clash_sub["user"] = user_data["user"]
-            
-            subscription_list.extend([v2ray_sub, clash_sub])
+            subscription_list.append(user_data)
         
         return ResponseBase(data={
             "subscriptions": subscription_list,

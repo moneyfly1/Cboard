@@ -62,8 +62,7 @@
       </el-form>
 
       <!-- 订阅列表 -->
-      <el-table :data="subscriptions" style="width: 100%" v-loading="loading" row-key="id">
-        <el-table-column prop="id" label="ID" width="60" />
+      <el-table :data="subscriptions" style="width: 100%" v-loading="loading" row-key="user.id">
         <el-table-column label="用户信息" width="200">
           <template #default="scope">
             <div class="user-info">
@@ -72,121 +71,163 @@
             </div>
           </template>
         </el-table-column>
-        <el-table-column label="订阅类型" width="100">
+        
+        <!-- V2Ray订阅 -->
+        <el-table-column label="V2Ray订阅" min-width="300">
           <template #default="scope">
-            <el-tag :type="scope.row.subscription_type === 'v2ray' ? 'primary' : 'success'" size="small">
-              {{ scope.row.subscription_type === 'v2ray' ? 'V2Ray' : 'Clash' }}
-            </el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column label="订阅地址" min-width="300">
-          <template #default="scope">
-            <div v-if="scope.row.is_placeholder" class="placeholder-url">
-              <el-tag type="info" size="small">未配置</el-tag>
-            </div>
-            <el-input 
-              v-else
-              :value="scope.row.full_url" 
-              readonly 
-              size="small"
-              class="subscription-url"
-            >
-              <template #append>
-                <el-button @click="copyUrl(scope.row.full_url)" size="small">复制</el-button>
-              </template>
-            </el-input>
-          </template>
-        </el-table-column>
-        <el-table-column prop="status" label="状态" width="80">
-          <template #default="scope">
-            <el-tag :type="getStatusType(scope.row.status)" size="small">
-              {{ getStatusText(scope.row.status) }}
-            </el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column label="到期时间" width="180">
-          <template #default="scope">
-            <el-date-picker
-              v-model="scope.row.expires_at"
-              type="datetime"
-              placeholder="选择到期时间"
-              format="YYYY-MM-DD HH:mm:ss"
-              value-format="YYYY-MM-DDTHH:mm:ss"
-              size="small"
-              @change="(value) => updateExpireTime(scope.row.id, value)"
-              style="width: 100%"
-            />
-          </template>
-        </el-table-column>
-        <el-table-column label="设备管理" width="220">
-          <template #default="scope">
-            <div class="device-info">
-              <div class="device-count">
-                <el-tag :type="scope.row.device_count >= scope.row.device_limit ? 'danger' : 'success'" size="small">
-                  {{ scope.row.device_count }}/{{ scope.row.device_limit }}
+            <div class="subscription-card v2ray">
+              <div class="subscription-header">
+                <el-tag type="primary" size="small">V2Ray</el-tag>
+                <el-tag :type="getStatusType(scope.row.v2ray_subscription.status)" size="small">
+                  {{ getStatusText(scope.row.v2ray_subscription.status) }}
                 </el-tag>
               </div>
-              <div class="device-limit-edit">
-                <el-input-number
-                  v-model="scope.row.device_limit"
-                  :min="1"
-                  :max="10"
+              <div class="subscription-url-section">
+                <div v-if="scope.row.v2ray_subscription.is_placeholder" class="placeholder-url">
+                  <el-tag type="info" size="small">未配置</el-tag>
+                </div>
+                <el-input 
+                  v-else
+                  :value="scope.row.v2ray_subscription.full_url" 
+                  readonly 
                   size="small"
-                  @change="(value) => updateDeviceLimit(scope.row.id, value)"
-                  :disabled="scope.row.is_placeholder"
-                  style="width: 80px"
-                />
+                  class="subscription-url"
+                >
+                  <template #append>
+                    <el-button @click="copyUrl(scope.row.v2ray_subscription.full_url)" size="small">复制</el-button>
+                  </template>
+                </el-input>
+              </div>
+              <div class="subscription-details">
+                <div class="detail-item">
+                  <span class="label">到期时间:</span>
+                  <el-date-picker
+                    v-model="scope.row.v2ray_subscription.expires_at"
+                    type="datetime"
+                    placeholder="选择到期时间"
+                    format="YYYY-MM-DD HH:mm:ss"
+                    value-format="YYYY-MM-DDTHH:mm:ss"
+                    size="small"
+                    @change="(value) => updateExpireTime(scope.row.v2ray_subscription.id, value)"
+                    style="width: 180px"
+                  />
+                </div>
+                <div class="detail-item">
+                  <span class="label">设备限制:</span>
+                  <el-input-number
+                    v-model="scope.row.v2ray_subscription.device_limit"
+                    :min="1"
+                    :max="10"
+                    size="small"
+                    @change="(value) => updateDeviceLimit(scope.row.v2ray_subscription.id, value)"
+                    :disabled="scope.row.v2ray_subscription.is_placeholder"
+                    style="width: 80px"
+                  />
+                </div>
+              </div>
+            </div>
+          </template>
+        </el-table-column>
+        
+        <!-- Clash订阅 -->
+        <el-table-column label="Clash订阅" min-width="300">
+          <template #default="scope">
+            <div class="subscription-card clash">
+              <div class="subscription-header">
+                <el-tag type="success" size="small">Clash</el-tag>
+                <el-tag :type="getStatusType(scope.row.clash_subscription.status)" size="small">
+                  {{ getStatusText(scope.row.clash_subscription.status) }}
+                </el-tag>
+              </div>
+              <div class="subscription-url-section">
+                <div v-if="scope.row.clash_subscription.is_placeholder" class="placeholder-url">
+                  <el-tag type="info" size="small">未配置</el-tag>
+                </div>
+                <el-input 
+                  v-else
+                  :value="scope.row.clash_subscription.full_url" 
+                  readonly 
+                  size="small"
+                  class="subscription-url"
+                >
+                  <template #append>
+                    <el-button @click="copyUrl(scope.row.clash_subscription.full_url)" size="small">复制</el-button>
+                  </template>
+                </el-input>
+              </div>
+              <div class="subscription-details">
+                <div class="detail-item">
+                  <span class="label">到期时间:</span>
+                  <el-date-picker
+                    v-model="scope.row.clash_subscription.expires_at"
+                    type="datetime"
+                    placeholder="选择到期时间"
+                    format="YYYY-MM-DD HH:mm:ss"
+                    value-format="YYYY-MM-DDTHH:mm:ss"
+                    size="small"
+                    @change="(value) => updateExpireTime(scope.row.clash_subscription.id, value)"
+                    style="width: 180px"
+                  />
+                </div>
+                <div class="detail-item">
+                  <span class="label">设备限制:</span>
+                  <el-input-number
+                    v-model="scope.row.clash_subscription.device_limit"
+                    :min="1"
+                    :max="10"
+                    size="small"
+                    @change="(value) => updateDeviceLimit(scope.row.clash_subscription.id, value)"
+                    :disabled="scope.row.clash_subscription.is_placeholder"
+                    style="width: 80px"
+                  />
+                </div>
+              </div>
+            </div>
+          </template>
+        </el-table-column>
+        
+        <!-- 设备管理 -->
+        <el-table-column label="设备管理" width="200">
+          <template #default="scope">
+            <div class="device-management">
+              <div class="device-summary">
+                <el-tag :type="scope.row.total_devices >= scope.row.max_device_limit ? 'danger' : 'success'" size="small">
+                  {{ scope.row.total_devices }}/{{ scope.row.max_device_limit }}
+                </el-tag>
+                <span class="device-text">设备</span>
               </div>
               <div class="device-actions">
                 <el-button 
                   size="small" 
                   type="info" 
-                  @click="viewDevices(scope.row)"
-                  :disabled="scope.row.device_count === 0 || scope.row.is_placeholder"
+                  @click="viewUserDevices(scope.row)"
+                  :disabled="scope.row.total_devices === 0"
                 >
                   <el-icon><Monitor /></el-icon>
-                  设备
+                  查看设备
                 </el-button>
                 <el-button 
                   size="small" 
                   type="warning" 
-                  @click="clearAllDevices(scope.row)"
-                  :disabled="scope.row.device_count === 0 || scope.row.is_placeholder"
+                  @click="clearUserAllDevices(scope.row)"
+                  :disabled="scope.row.total_devices === 0"
                 >
                   <el-icon><Delete /></el-icon>
-                  清空
+                  清空设备
                 </el-button>
               </div>
             </div>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="280">
+        
+        <!-- 操作 -->
+        <el-table-column label="操作" width="200">
           <template #default="scope">
             <div class="action-buttons">
               <el-button 
                 size="small" 
-                type="success" 
-                @click="renewSubscription(scope.row)"
-                v-if="scope.row.status === 'expired'"
-                :disabled="scope.row.is_placeholder"
-              >
-                <el-icon><Refresh /></el-icon>
-                续费
-              </el-button>
-              <el-button 
-                size="small" 
                 type="warning" 
-                @click="resetSubscription(scope.row)"
-                :disabled="scope.row.is_placeholder"
-              >
-                <el-icon><RefreshLeft /></el-icon>
-                重置
-              </el-button>
-              <el-button 
-                size="small" 
-                type="info" 
                 @click="resetUserAllSubscriptions(scope.row.user.id)"
-                v-if="!scope.row.is_placeholder"
               >
                 <el-icon><RefreshLeft /></el-icon>
                 重置全部
@@ -195,7 +236,6 @@
                 size="small" 
                 type="danger" 
                 @click="deleteUserAllData(scope.row.user.id)"
-                v-if="!scope.row.is_placeholder"
               >
                 <el-icon><Delete /></el-icon>
                 删除用户
@@ -381,6 +421,13 @@
         
         <el-table :data="devices" style="width: 100%" v-loading="devicesLoading">
           <el-table-column prop="id" label="ID" width="60" />
+          <el-table-column prop="subscription_type" label="订阅类型" width="100">
+            <template #default="scope">
+              <el-tag :type="scope.row.subscription_type === 'V2Ray' ? 'primary' : 'success'" size="small">
+                {{ scope.row.subscription_type }}
+              </el-tag>
+            </template>
+          </el-table-column>
           <el-table-column prop="name" label="设备名称" width="150" />
           <el-table-column prop="type" label="设备类型" width="100">
             <template #default="scope">
@@ -647,10 +694,84 @@ export default {
       }
     }
 
-    const viewDevices = async (subscription) => {
-      currentSubscription.value = subscription
+    const viewUserDevices = async (userData) => {
+      currentSubscription.value = userData
       showDevicesDialog.value = true
-      await loadSubscriptionDevices(subscription.id)
+      // 加载用户所有设备的汇总信息
+      await loadUserDevices(userData.user.id)
+    }
+
+    const loadUserDevices = async (userId) => {
+      devicesLoading.value = true
+      try {
+        // 获取用户的所有订阅设备
+        const allDevices = []
+        const userSubscriptions = subscriptions.value.find(s => s.user.id === userId)
+        
+        if (userSubscriptions) {
+          // 加载V2Ray订阅的设备
+          if (userSubscriptions.v2ray_subscription && !userSubscriptions.v2ray_subscription.is_placeholder) {
+            const v2rayResponse = await api.get(`/admin/subscriptions/${userSubscriptions.v2ray_subscription.id}/devices`)
+            if (v2rayResponse.data && v2rayResponse.data.success && v2rayResponse.data.data) {
+              allDevices.push(...v2rayResponse.data.data.devices.map(d => ({ ...d, subscription_type: 'V2Ray' })))
+            }
+          }
+          
+          // 加载Clash订阅的设备
+          if (userSubscriptions.clash_subscription && !userSubscriptions.clash_subscription.is_placeholder) {
+            const clashResponse = await api.get(`/admin/subscriptions/${userSubscriptions.clash_subscription.id}/devices`)
+            if (clashResponse.data && clashResponse.data.success && clashResponse.data.data) {
+              allDevices.push(...clashResponse.data.data.devices.map(d => ({ ...d, subscription_type: 'Clash' })))
+            }
+          }
+        }
+        
+        devices.value = allDevices
+      } catch (error) {
+        console.error('加载用户设备失败:', error)
+        ElMessage.error('加载用户设备失败')
+        devices.value = []
+      } finally {
+        devicesLoading.value = false
+      }
+    }
+
+    const clearUserAllDevices = async (userData) => {
+      try {
+        await ElMessageBox.confirm(
+          `确定要清空用户 "${userData.user.username}" 的所有设备吗？此操作不可恢复！`,
+          '确认清空',
+          {
+            confirmButtonText: '确定',
+            cancelButtonText: '取消',
+            type: 'warning',
+          }
+        )
+        
+        clearingDevices.value = true
+        
+        // 清空用户所有订阅的设备
+        if (userData.v2ray_subscription && !userData.v2ray_subscription.is_placeholder) {
+          await api.delete(`/admin/subscriptions/${userData.v2ray_subscription.id}/devices`)
+        }
+        if (userData.clash_subscription && !userData.clash_subscription.is_placeholder) {
+          await api.delete(`/admin/subscriptions/${userData.clash_subscription.id}/devices`)
+        }
+        
+        ElMessage.success('用户所有设备已清空')
+        // 重新加载数据
+        await loadSubscriptions()
+        if (currentSubscription.value && currentSubscription.value.user.id === userData.user.id) {
+          await loadUserDevices(userData.user.id)
+        }
+      } catch (error) {
+        if (error !== 'cancel') {
+          console.error('清空用户设备失败:', error)
+          ElMessage.error('清空用户设备失败')
+        }
+      } finally {
+        clearingDevices.value = false
+      }
     }
 
     const loadSubscriptionDevices = async (subscriptionId) => {
@@ -1044,7 +1165,10 @@ export default {
       loadSubscriptionDevices,
       updateDeviceLimit,
       resetUserAllSubscriptions,
-      deleteUserAllData
+      deleteUserAllData,
+      viewUserDevices,
+      loadUserDevices,
+      clearUserAllDevices
     }
   }
 }
@@ -1173,6 +1297,109 @@ export default {
   text-align: center;
   color: #909399;
   font-size: 14px;
+}
+
+.placeholder-url {
+  text-align: center;
+  padding: 8px;
+}
+
+.device-limit-edit {
+  margin: 8px 0;
+}
+
+.search-form {
+  margin-bottom: 20px;
+  padding: 20px;
+  background: #f5f7fa;
+  border-radius: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.search-form .el-form-item {
+  margin-bottom: 0;
+  margin-right: 0;
+}
+
+.subscription-card {
+  border: 1px solid #e4e7ed;
+  border-radius: 8px;
+  padding: 16px;
+  background: #fafafa;
+  margin: 8px 0;
+}
+
+.subscription-card.v2ray {
+  border-left: 4px solid #409eff;
+}
+
+.subscription-card.clash {
+  border-left: 4px solid #67c23a;
+}
+
+.subscription-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.subscription-url-section {
+  margin-bottom: 12px;
+}
+
+.subscription-details {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.detail-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.detail-item .label {
+  font-size: 12px;
+  color: #606266;
+  min-width: 60px;
+}
+
+.device-management {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.device-summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.device-text {
+  font-size: 12px;
+  color: #606266;
+}
+
+.device-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.action-buttons {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.subscription-url {
+  width: 100%;
 }
 
 .placeholder-url {
