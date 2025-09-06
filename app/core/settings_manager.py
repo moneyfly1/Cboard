@@ -102,11 +102,11 @@ class SettingsManager:
         return {
             'host': self.get_setting('smtp_host', '', db),
             'port': self.get_setting('smtp_port', 587, db),
-            'username': self.get_setting('smtp_username', '', db),
-            'password': self.get_setting('smtp_password', '', db),
+            'username': self.get_setting('email_username', self.get_setting('smtp_username', '', db), db),
+            'password': self.get_setting('email_password', self.get_setting('smtp_password', '', db), db),
             'encryption': self.get_setting('smtp_encryption', 'tls', db),
             'from_email': self.get_setting('from_email', '', db),
-            'from_name': self.get_setting('from_name', 'XBoard', db)
+            'from_name': self.get_setting('sender_name', self.get_setting('from_name', 'XBoard', db), db)
         }
     
     def is_email_enabled(self, db: Session = None) -> bool:

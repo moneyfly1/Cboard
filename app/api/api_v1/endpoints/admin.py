@@ -838,7 +838,9 @@ def get_email_config(
             "smtp_port": 587,
             "email_username": "",
             "email_password": "",
-            "sender_name": "XBoard System"
+            "sender_name": "XBoard System",
+            "smtp_encryption": "tls",
+            "from_email": ""
         }
         
         # 更新从数据库获取的配置
@@ -884,7 +886,7 @@ def save_email_config(
                     "updated_at": current_time,
                     "key": key
                 })
-        else:
+            else:
                 # 插入新配置
                 insert_query = text("""
                     INSERT INTO system_configs ("key", value, type, category, display_name, description, is_public, sort_order, created_at, updated_at)
@@ -1221,13 +1223,90 @@ def test_email(
         if missing_fields:
             return ResponseBase(success=False, message=f"邮件配置不完整，缺少: {', '.join(missing_fields)}")
         
-        # 这里可以添加实际的邮件发送测试逻辑
-        # 例如使用smtplib发送测试邮件到admin邮箱
+        # 发送测试邮件
+        from app.services.email import EmailService
+        email_service = EmailService(db)
+        test_subject = "XBoard 邮件配置测试"
+        test_content = f"""
+        <h2>邮件配置测试</h2>
+        <p>这是一封来自 XBoard 系统的测试邮件。</p>
+        <p>如果您收到这封邮件，说明邮件配置已成功！</p>
+        <p>测试时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
+        <p>管理员: {current_admin.username}</p>
+        """
         
-        # 暂时返回成功（模拟测试通过）
-        return ResponseBase(message="测试邮件发送成功")
+        # 创建测试邮件队列
+        from app.schemas.email import EmailQueueCreate
+        email_data = EmailQueueCreate(
+            to_email=email_config.get('from_email', email_config.get('email_username', '')),
+            subject=test_subject,
+            content=test_content,
+            content_type='html',
+            email_type='test'
+        )
+        
+        email_queue = email_service.create_email_queue(email_data)
+        success = email_service.send_email(email_queue)
+        
+        if success:
+            return ResponseBase(message="测试邮件发送成功")
+        else:
+            return ResponseBase(success=False, message="测试邮件发送失败")
+        
     except Exception as e:
-        return ResponseBase(success=False, message=f"测试邮件发送失败: {str(e)}")
+        return ResponseBase(success=False, message=f"邮件配置测试失败: {str(e)}")
+
+@router.post("/test-email-to-user", response_model=ResponseBase)
+def test_email_to_user(
+    email_data: dict,
+    db: Session = Depends(get_db),
+    current_admin = Depends(get_current_admin_user)
+) -> Any:
+    """发送测试邮件给指定用户"""
+    try:
+        from app.services.email import EmailService
+        
+        target_email = email_data.get('email')
+        if not target_email:
+            return ResponseBase(success=False, message="请提供目标邮箱地址")
+        
+        # 发送测试邮件
+        email_service = EmailService(db)
+        test_subject = "XBoard 订阅地址测试邮件"
+        test_content = f"""
+        <h2>订阅地址测试邮件</h2>
+        <p>尊敬的 {target_email}，</p>
+        <p>这是一封来自 XBoard 系统的订阅地址测试邮件。</p>
+        <p>如果您收到这封邮件，说明邮件发送功能正常工作！</p>
+        <p>测试时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
+        <p>管理员: {current_admin.username}</p>
+        <hr>
+        <p><strong>订阅地址信息：</strong></p>
+        <p>V2Ray订阅地址: http://localhost:8000/api/v1/subscriptions/ssr/test</p>
+        <p>Clash订阅地址: http://localhost:8000/api/v1/subscriptions/clash/test</p>
+        <p>请使用相应的客户端软件导入订阅地址。</p>
+        """
+        
+        # 创建测试邮件队列
+        from app.schemas.email import EmailQueueCreate
+        email_queue_data = EmailQueueCreate(
+            to_email=target_email,
+            subject=test_subject,
+            content=test_content,
+            content_type='html',
+            email_type='subscription_test'
+        )
+        
+        email_queue = email_service.create_email_queue(email_queue_data)
+        success = email_service.send_email(email_queue)
+        
+        if success:
+            return ResponseBase(message=f"测试邮件已发送给 {target_email}")
+        else:
+            return ResponseBase(success=False, message="测试邮件发送失败")
+        
+    except Exception as e:
+        return ResponseBase(success=False, message=f"发送测试邮件失败: {str(e)}")
 
 @router.get("/export-config", response_model=ResponseBase)
 def export_config(

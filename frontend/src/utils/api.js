@@ -246,6 +246,7 @@ export const configAPI = {
   getEmailConfig: () => api.get('/admin/email-config'),
   saveEmailConfig: (data) => api.post('/admin/email-config', data),
   testEmail: () => api.post('/admin/test-email'),
+  testEmailToUser: (email) => api.post('/admin/test-email-to-user', { email }),
   getClashConfig: () => api.get('/admin/clash-config'),
   saveClashConfig: (content) => api.post('/admin/clash-config', { content }),
   getClashConfigInvalid: () => api.get('/admin/clash-config-invalid'),

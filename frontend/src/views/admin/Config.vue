@@ -185,12 +185,27 @@
               <el-input v-model="emailForm.sender_name" placeholder="发件人显示名称" />
             </el-form-item>
             
+            <el-form-item label="加密方式">
+              <el-select v-model="emailForm.smtp_encryption" placeholder="选择加密方式">
+                <el-option label="TLS (推荐)" value="tls" />
+                <el-option label="SSL" value="ssl" />
+                <el-option label="无加密" value="none" />
+              </el-select>
+            </el-form-item>
+            
+            <el-form-item label="发件人邮箱">
+              <el-input v-model="emailForm.from_email" placeholder="发件人邮箱地址" />
+            </el-form-item>
+            
             <el-form-item>
               <el-button type="primary" @click="saveEmailConfig" :loading="emailLoading">
                 保存邮件配置
               </el-button>
               <el-button type="success" @click="testEmail" :loading="testLoading">
                 测试邮件发送
+              </el-button>
+              <el-button type="warning" @click="testEmailToUser" :loading="testUserLoading">
+                发送测试邮件给用户
               </el-button>
             </el-form-item>
           </el-form>
@@ -553,6 +568,7 @@ export default {
     const v2rayInvalidLoading = ref(false)
     const emailLoading = ref(false)
     const testLoading = ref(false)
+    const testUserLoading = ref(false)
     const emailQueueLoading = ref(false)
     const paymentLoading = ref(false)
     const testPaymentLoading = ref(false)
@@ -578,7 +594,9 @@ export default {
       smtp_port: 587,
       email_username: '',
       email_password: '',
-      sender_name: ''
+      sender_name: '',
+      smtp_encryption: 'tls',
+      from_email: ''
     })
 
     const paymentForm = reactive({
@@ -685,9 +703,11 @@ export default {
         const emailConfigData = {
           smtp_host: emailForm.smtp_host,
           smtp_port: emailForm.smtp_port,
-          smtp_username: emailForm.email_username,
-          smtp_password: emailForm.email_password,
-          sender_name: emailForm.sender_name
+          email_username: emailForm.email_username,
+          email_password: emailForm.email_password,
+          sender_name: emailForm.sender_name,
+          smtp_encryption: emailForm.smtp_encryption,
+          from_email: emailForm.from_email
         }
         await configAPI.saveEmailConfig(emailConfigData)
         ElMessage.success('邮件配置保存成功')
@@ -711,6 +731,21 @@ export default {
         ElMessage.error('测试邮件发送失败')
       } finally {
         testLoading.value = false
+      }
+    }
+
+    // 发送测试邮件给指定用户
+    const testEmailToUser = async () => {
+      testUserLoading.value = true
+      try {
+        const testEmail = '3219904322@qq.com'
+        await configAPI.testEmailToUser(testEmail)
+        ElMessage.success(`测试邮件已发送给 ${testEmail}`)
+      } catch (error) {
+        console.error('发送测试邮件失败:', error)
+        ElMessage.error('发送测试邮件失败')
+      } finally {
+        testUserLoading.value = false
       }
     }
 
@@ -905,6 +940,8 @@ export default {
           emailForm.email_username = configData.email_username || configData.smtp_username || ''
           emailForm.email_password = configData.email_password || configData.smtp_password || ''
           emailForm.sender_name = configData.sender_name || ''
+          emailForm.smtp_encryption = configData.smtp_encryption || 'tls'
+          emailForm.from_email = configData.from_email || ''
           console.log('邮件配置已加载:', emailForm)
         }
       } catch (error) {
@@ -1190,6 +1227,7 @@ export default {
       v2rayInvalidLoading,
       emailLoading,
       testLoading,
+      testUserLoading,
       emailQueueLoading,
       paymentLoading,
       testPaymentLoading,
@@ -1209,6 +1247,7 @@ export default {
       saveV2rayConfigInvalid,
       saveEmailConfig,
       testEmail,
+      testEmailToUser,
       loadClashConfig,
       loadV2rayConfig,
       loadClashConfigInvalid,
