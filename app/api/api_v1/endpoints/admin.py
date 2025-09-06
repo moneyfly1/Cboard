@@ -3346,6 +3346,26 @@ def send_subscription_email(
     except Exception as e:
         return ResponseBase(success=False, message=f"发送订阅邮件失败: {str(e)}")
 
+@router.post("/subscriptions/user/{user_id}/send-email", response_model=ResponseBase)
+def send_subscription_email_by_user_id(
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_admin = Depends(get_current_admin_user)
+) -> Any:
+    """根据用户ID发送订阅邮件"""
+    try:
+        subscription_service = SubscriptionService(db)
+        
+        # 发送订阅邮件
+        success = subscription_service.send_subscription_email(user_id)
+        
+        if success:
+            return ResponseBase(message="订阅邮件发送成功")
+        else:
+            return ResponseBase(success=False, message="订阅邮件发送失败")
+    except Exception as e:
+        return ResponseBase(success=False, message=f"发送订阅邮件失败: {str(e)}")
+
 @router.get("/subscriptions/export", response_model=ResponseBase)
 def export_subscriptions(
     db: Session = Depends(get_db),

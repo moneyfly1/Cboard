@@ -596,4 +596,39 @@ class SubscriptionService:
                 # 如果没有配置，返回默认的无效配置
                 return "# Clash配置未设置\n# 请联系管理员配置Clash节点信息"
         except Exception as e:
-            return f"# Clash配置加载失败: {str(e)}" 
+            return f"# Clash配置加载失败: {str(e)}"
+    
+    def send_subscription_email(self, user_id: int) -> bool:
+        """发送订阅邮件给用户"""
+        try:
+            # 获取用户信息
+            user = self.db.query(User).filter(User.id == user_id).first()
+            if not user:
+                return False
+            
+            # 获取用户的订阅信息
+            subscription = self.get_by_user_id(user_id)
+            if not subscription:
+                return False
+            
+            # 导入邮件服务
+            from app.services.email import EmailService
+            email_service = EmailService(self.db)
+            
+            # 准备订阅数据
+            subscription_data = {
+                "username": user.username,
+                "user_email": user.email,
+                "subscription_url": subscription.subscription_url,
+                "v2ray_url": f"http://localhost:8000/api/v1/subscriptions/ssr/{subscription.subscription_url}",
+                "clash_url": f"http://localhost:8000/api/v1/subscriptions/clash/{subscription.subscription_url}",
+                "device_limit": subscription.device_limit,
+                "expire_time": subscription.expire_time.strftime('%Y-%m-%d %H:%M:%S') if subscription.expire_time else "永久"
+            }
+            
+            # 发送订阅邮件
+            return email_service.send_subscription_email(user.email, subscription_data)
+            
+        except Exception as e:
+            print(f"发送订阅邮件失败: {e}")
+            return False 
