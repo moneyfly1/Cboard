@@ -1623,6 +1623,18 @@ def get_subscriptions(
                 subscription_list.sort(key=lambda x: x["current_devices"], reverse=True)
             elif sort == "device_count_asc":
                 subscription_list.sort(key=lambda x: x["current_devices"])
+            elif sort == "apple_count_desc":
+                subscription_list.sort(key=lambda x: x["apple_count"], reverse=True)
+            elif sort == "apple_count_asc":
+                subscription_list.sort(key=lambda x: x["apple_count"])
+            elif sort == "online_devices_desc":
+                subscription_list.sort(key=lambda x: x["online_devices"], reverse=True)
+            elif sort == "online_devices_asc":
+                subscription_list.sort(key=lambda x: x["online_devices"])
+            elif sort == "device_limit_desc":
+                subscription_list.sort(key=lambda x: x["device_limit"], reverse=True)
+            elif sort == "device_limit_asc":
+                subscription_list.sort(key=lambda x: x["device_limit"])
         
         response_data = {
             "subscriptions": subscription_list,

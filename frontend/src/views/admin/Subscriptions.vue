@@ -17,17 +17,20 @@
               <el-icon><Setting /></el-icon>
               列设置
             </el-button>
-            <el-button type="primary" @click="showAppleStats">
+            <el-button type="primary" @click="sortByApple">
               <el-icon><Apple /></el-icon>
               苹果
             </el-button>
-            <el-button type="success" @click="showOnlineStats">
+            <el-button type="success" @click="sortByOnline">
               <el-icon><Monitor /></el-icon>
               在线
             </el-button>
+            <el-button type="default" @click="sortByCreatedTime">
+              最新↓<el-icon class="el-icon--right"><arrow-down /></el-icon>
+            </el-button>
             <el-dropdown @command="handleSortCommand">
               <el-button type="default">
-                最新↓<el-icon class="el-icon--right"><arrow-down /></el-icon>
+                更多排序<el-icon class="el-icon--right"><arrow-down /></el-icon>
               </el-button>
               <template #dropdown>
                 <el-dropdown-menu>
@@ -144,10 +147,10 @@
           </template>
         </el-table-column>
         
-        <!-- 手机短链列 -->
+        <!-- 通用订阅列 -->
         <el-table-column 
           v-if="visibleColumns.includes('v2ray_url')" 
-          label="手机短链" 
+          label="通用订阅" 
           width="180"
         >
           <template #default="scope">
@@ -166,10 +169,10 @@
           </template>
         </el-table-column>
         
-        <!-- CLASH短链列 -->
+        <!-- 猫咪订阅列 -->
         <el-table-column 
           v-if="visibleColumns.includes('clash_url')" 
-          label="CLASH短链" 
+          label="猫咪订阅" 
           width="180"
         >
           <template #default="scope">
@@ -242,6 +245,9 @@
           v-if="visibleColumns.includes('device_limit')" 
           label="最大设备数" 
           width="130"
+          sortable="custom"
+          :sort-orders="['descending', 'ascending']"
+          @sort-change="handleDeviceLimitSort"
         >
           <template #default="scope">
             <div class="device-limit-section">
@@ -460,8 +466,8 @@
             <el-checkbox label="qr_code">二维码</el-checkbox>
           </div>
           <div class="checkbox-row">
-            <el-checkbox label="v2ray_url">手机短链</el-checkbox>
-            <el-checkbox label="clash_url">CLASH短链</el-checkbox>
+            <el-checkbox label="v2ray_url">通用订阅</el-checkbox>
+            <el-checkbox label="clash_url">猫咪订阅</el-checkbox>
             <el-checkbox label="created_at">添加时间</el-checkbox>
           </div>
           <div class="checkbox-row">
@@ -524,7 +530,13 @@ export default {
         'expire_time_desc': '到期时间 (降序)',
         'expire_time_asc': '到期时间 (升序)',
         'device_count_desc': '设备数量 (降序)',
-        'device_count_asc': '设备数量 (升序)'
+        'device_count_asc': '设备数量 (升序)',
+        'apple_count_desc': '苹果设备 (降序)',
+        'apple_count_asc': '苹果设备 (升序)',
+        'online_devices_desc': '在线设备 (降序)',
+        'online_devices_asc': '在线设备 (升序)',
+        'device_limit_desc': '最大设备数 (降序)',
+        'device_limit_asc': '最大设备数 (升序)'
       }
       return sortMap[currentSort.value] || '添加时间 (降序)'
     })
@@ -868,6 +880,33 @@ export default {
       loadSubscriptions()
     }
 
+    // 排序相关方法
+    const sortByApple = () => {
+      currentSort.value = 'apple_count_desc'
+      loadSubscriptions()
+    }
+
+    const sortByOnline = () => {
+      currentSort.value = 'online_devices_desc'
+      loadSubscriptions()
+    }
+
+    const sortByCreatedTime = () => {
+      currentSort.value = 'add_time_desc'
+      loadSubscriptions()
+    }
+
+    const handleDeviceLimitSort = ({ column, prop, order }) => {
+      if (order === 'descending') {
+        currentSort.value = 'device_limit_desc'
+      } else if (order === 'ascending') {
+        currentSort.value = 'device_limit_asc'
+      } else {
+        currentSort.value = 'add_time_desc' // 默认排序
+      }
+      loadSubscriptions()
+    }
+
     // 列设置相关方法
     const selectAllColumns = () => {
       visibleColumns.value = [
@@ -943,7 +982,11 @@ export default {
       handleCurrentChange,
       selectAllColumns,
       clearAllColumns,
-      resetToDefault
+      resetToDefault,
+      sortByApple,
+      sortByOnline,
+      sortByCreatedTime,
+      handleDeviceLimitSort
     }
   }
 }
