@@ -689,9 +689,37 @@ export default {
     }
 
     // 进入用户后台
-    const goToUserBackend = (subscription) => {
-      // 这里应该实现跳转到用户后台的逻辑
-      ElMessage.info('跳转到用户后台功能待实现')
+    const goToUserBackend = async (subscription) => {
+      try {
+        await ElMessageBox.confirm(
+          `确定要以用户 ${subscription.user?.username || subscription.user?.email} 的身份登录吗？`,
+          '确认登录',
+          {
+            confirmButtonText: '确定',
+            cancelButtonText: '取消',
+            type: 'info'
+          }
+        )
+        
+        const response = await adminAPI.loginAsUser(subscription.user.id)
+        
+        // 保存用户token并跳转
+        localStorage.setItem('user_token', response.data.token)
+        localStorage.setItem('user_info', JSON.stringify(response.data.user))
+        
+        ElMessage.success('登录成功，正在跳转...')
+        
+        // 跳转到用户后台
+        setTimeout(() => {
+          window.open('/dashboard', '_blank')
+        }, 1000)
+        
+      } catch (error) {
+        if (error !== 'cancel') {
+          ElMessage.error('登录失败')
+          console.error('登录失败:', error)
+        }
+      }
     }
 
     // 重置订阅
