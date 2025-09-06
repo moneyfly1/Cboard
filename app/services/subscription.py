@@ -193,10 +193,30 @@ class SubscriptionService:
             "active_rate": (active / total * 100) if total > 0 else 0
         }
 
-    def get_subscriptions_with_pagination(self, skip: int = 0, limit: int = 20) -> Tuple[List[Subscription], int]:
+    def get_subscriptions_with_pagination(self, skip: int = 0, limit: int = 20, search: str = None, status: str = None) -> Tuple[List[Subscription], int]:
         """获取订阅列表（分页）"""
         # 使用join查询来获取用户信息
         query = self.db.query(Subscription).join(User, Subscription.user_id == User.id)
+        
+        # 添加搜索条件
+        if search:
+            search_filter = or_(
+                User.username.ilike(f'%{search}%'),
+                User.email.ilike(f'%{search}%'),
+                Subscription.subscription_url.ilike(f'%{search}%')
+            )
+            query = query.filter(search_filter)
+        
+        # 添加状态过滤
+        if status:
+            if status == 'active':
+                query = query.filter(Subscription.is_active == True)
+            elif status == 'inactive':
+                query = query.filter(Subscription.is_active == False)
+            elif status == 'expired':
+                from datetime import datetime
+                query = query.filter(Subscription.expire_time < datetime.now())
+        
         total = query.count()
         subscriptions = query.offset(skip).limit(limit).all()
         return subscriptions, total

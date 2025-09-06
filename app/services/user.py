@@ -60,10 +60,7 @@ class UserService:
             # 创建默认订阅（30天试用期）
             default_subscription = SubscriptionCreate(
                 user_id=user.id,
-                package_name="试用套餐",
-                duration_days=30,
                 device_limit=3,
-                status="active",
                 expire_time=datetime.utcnow() + timedelta(days=30)
             )
             
