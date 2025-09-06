@@ -707,11 +707,27 @@ export default {
         localStorage.setItem('token', response.data.token)
         localStorage.setItem('user', JSON.stringify(response.data.user))
         
+        // 保存管理员信息，用于返回管理员后台
+        const adminToken = localStorage.getItem('admin_token') || localStorage.getItem('token')
+        const adminUser = localStorage.getItem('admin_user') || localStorage.getItem('user')
+        localStorage.setItem('admin_token', adminToken)
+        localStorage.setItem('admin_user', adminUser)
+        
         ElMessage.success('登录成功，正在跳转...')
         
         // 跳转到用户后台
         setTimeout(() => {
-          window.open('/dashboard', '_blank')
+          // 在新标签页中打开用户后台，并传递认证信息
+          const newWindow = window.open('/dashboard', '_blank')
+          
+          // 等待新窗口加载完成后设置认证信息
+          newWindow.addEventListener('load', () => {
+            newWindow.postMessage({
+              type: 'SET_AUTH',
+              token: response.data.token,
+              user: response.data.user
+            }, '*')
+          })
         }, 1000)
         
       } catch (error) {

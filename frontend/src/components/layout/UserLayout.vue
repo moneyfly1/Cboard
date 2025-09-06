@@ -84,12 +84,15 @@
     <!-- 侧边栏 -->
     <aside class="sidebar" :class="{ collapsed: sidebarCollapsed }">
       <nav class="sidebar-nav">
-        <router-link 
+        <div 
           v-for="item in menuItems" 
           :key="item.path"
-          :to="item.path"
+          @click="handleNavClick(item)"
           class="nav-item"
-          :class="{ active: $route.path === item.path }"
+          :class="{ 
+            active: $route.path === item.path,
+            'admin-back': item.isAdminBack
+          }"
         >
           <i :class="item.icon"></i>
           <span class="nav-text" v-show="!sidebarCollapsed">{{ item.title }}</span>
@@ -99,7 +102,7 @@
             class="nav-badge"
             v-show="!sidebarCollapsed"
           />
-        </router-link>
+        </div>
       </nav>
     </aside>
 
@@ -210,54 +213,101 @@ const breadcrumbItems = computed(() => {
 })
 
 // 菜单项
-const menuItems = computed(() => [
-  {
-    path: '/dashboard',
-    title: '仪表盘',
-    icon: 'el-icon-s-home',
-    badge: null
-  },
-  {
-    path: '/subscription',
-    title: '订阅管理',
-    icon: 'el-icon-connection',
-    badge: null
-  },
-  {
-    path: '/devices',
-    title: '设备管理',
-    icon: 'el-icon-mobile-phone',
-    badge: null
-  },
-  {
-    path: '/packages',
-    title: '套餐购买',
-    icon: 'el-icon-shopping-cart-2',
-    badge: null
-  },
-  {
-    path: '/orders',
-    title: '订单记录',
-    icon: 'el-icon-document',
-    badge: null
-  },
-  {
-    path: '/nodes',
-    title: '节点列表',
-    icon: 'el-icon-location',
-    badge: null
-  },
-  {
-    path: '/help',
-    title: '帮助中心',
-    icon: 'el-icon-question',
-    badge: null
+const menuItems = computed(() => {
+  const items = [
+    {
+      path: '/dashboard',
+      title: '仪表盘',
+      icon: 'el-icon-s-home',
+      badge: null
+    },
+    {
+      path: '/subscription',
+      title: '订阅管理',
+      icon: 'el-icon-connection',
+      badge: null
+    },
+    {
+      path: '/devices',
+      title: '设备管理',
+      icon: 'el-icon-mobile-phone',
+      badge: null
+    },
+    {
+      path: '/packages',
+      title: '套餐购买',
+      icon: 'el-icon-shopping-cart-2',
+      badge: null
+    },
+    {
+      path: '/orders',
+      title: '订单记录',
+      icon: 'el-icon-document',
+      badge: null
+    },
+    {
+      path: '/nodes',
+      title: '节点列表',
+      icon: 'el-icon-location',
+      badge: null
+    },
+    {
+      path: '/help',
+      title: '帮助中心',
+      icon: 'el-icon-question',
+      badge: null
+    }
+  ]
+  
+  // 如果有管理员信息，添加返回管理员后台的选项
+  if (localStorage.getItem('admin_token')) {
+    items.push({
+      path: '#admin-back',
+      title: '回到管理员后台',
+      icon: 'el-icon-back',
+      badge: null,
+      isAdminBack: true
+    })
   }
-])
+  
+  return items
+})
 
 // 方法
 const toggleSidebar = () => {
   sidebarCollapsed.value = !sidebarCollapsed.value
+}
+
+// 处理导航点击
+const handleNavClick = (item) => {
+  if (item.isAdminBack) {
+    // 返回管理员后台
+    returnToAdmin()
+  } else {
+    // 普通路由跳转
+    router.push(item.path)
+  }
+}
+
+// 返回管理员后台
+const returnToAdmin = () => {
+  const adminToken = localStorage.getItem('admin_token')
+  const adminUser = localStorage.getItem('admin_user')
+  
+  if (adminToken && adminUser) {
+    // 恢复管理员认证信息
+    localStorage.setItem('token', adminToken)
+    localStorage.setItem('user', adminUser)
+    
+    // 清除管理员信息
+    localStorage.removeItem('admin_token')
+    localStorage.removeItem('admin_user')
+    
+    // 跳转到管理员后台
+    window.location.href = '/admin/dashboard'
+  } else {
+    ElMessage.warning('未找到管理员信息，请重新登录')
+  }
 }
 
 const handleThemeChange = (themeName) => {
@@ -330,11 +380,29 @@ onMounted(() => {
   checkMobile()
   loadNotifications()
   window.addEventListener('resize', checkMobile)
+  
+  // 监听来自父窗口的消息
+  window.addEventListener('message', handleMessage)
 })
 
 onUnmounted(() => {
   window.removeEventListener('resize', checkMobile)
+  window.removeEventListener('message', handleMessage)
 })
+
+// 处理来自父窗口的消息
+const handleMessage = (event) => {
+  if (event.data.type === 'SET_AUTH') {
+    // 设置认证信息
+    localStorage.setItem('token', event.data.token)
+    localStorage.setItem('user', JSON.stringify(event.data.user))
+    
+    // 更新认证状态
+    authStore.setAuth(event.data.token, event.data.user)
+    
+    ElMessage.success('已自动登录用户后台')
+  }
+}
 </script>
 
 <style scoped lang="scss">
@@ -514,6 +582,20 @@ onUnmounted(() => {
       
       .nav-badge {
         margin-left: auto;
+      }
+      
+      &.admin-back {
+        background-color: #f0f9ff;
+        border-left: 3px solid #3b82f6;
+        
+        &:hover {
+          background-color: #e0f2fe;
+          color: #1d4ed8;
+        }
+        
+        i {
+          color: #3b82f6;
+        }
       }
     }
   }

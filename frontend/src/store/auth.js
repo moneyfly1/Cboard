@@ -165,6 +165,13 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
+  const setAuth = (newToken, newUser) => {
+    token.value = newToken
+    user.value = newUser
+    localStorage.setItem('token', newToken)
+    localStorage.setItem('user', JSON.stringify(newUser))
+  }
+
   const getCurrentState = () => {
     return {
       token: token.value,
@@ -196,6 +203,7 @@ export const useAuthStore = defineStore('auth', () => {
     verifyEmail,
     updateUser,
     changePassword,
+    setAuth,
     getCurrentState
   }
 }) 
