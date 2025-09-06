@@ -703,16 +703,6 @@ export default {
         
         const response = await adminAPI.loginAsUser(subscription.user.id)
         
-        // 先保存管理员信息，用于返回管理员后台
-        const adminToken = localStorage.getItem('token')
-        const adminUser = localStorage.getItem('user')
-        localStorage.setItem('admin_token', adminToken)
-        localStorage.setItem('admin_user', adminUser)
-        
-        // 然后保存用户token
-        localStorage.setItem('token', response.data.token)
-        localStorage.setItem('user', JSON.stringify(response.data.user))
-        
         ElMessage.success('登录成功，正在跳转...')
         
         // 跳转到用户后台
@@ -725,7 +715,9 @@ export default {
             newWindow.postMessage({
               type: 'SET_AUTH',
               token: response.data.token,
-              user: response.data.user
+              user: response.data.user,
+              adminToken: localStorage.getItem('token'),
+              adminUser: localStorage.getItem('user')
             }, '*')
           })
         }, 1000)

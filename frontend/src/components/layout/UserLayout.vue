@@ -397,6 +397,12 @@ const handleMessage = (event) => {
     localStorage.setItem('token', event.data.token)
     localStorage.setItem('user', JSON.stringify(event.data.user))
     
+    // 保存管理员信息，用于返回管理员后台
+    if (event.data.adminToken && event.data.adminUser) {
+      localStorage.setItem('admin_token', event.data.adminToken)
+      localStorage.setItem('admin_user', event.data.adminUser)
+    }
+    
     // 更新认证状态
     authStore.setAuth(event.data.token, event.data.user)
     
