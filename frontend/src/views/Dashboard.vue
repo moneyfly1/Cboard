@@ -1,375 +1,772 @@
 <template>
   <div class="dashboard-container">
-    <!-- 页面头部 -->
-    <div class="page-header">
-      <h1>订阅管理</h1>
-      <p>管理您的订阅服务和设备</p>
+    <!-- 欢迎横幅 -->
+    <div class="welcome-banner">
+      <div class="banner-content">
+        <div class="welcome-text">
+          <h1 class="welcome-title">欢迎回来，{{ userInfo.username }}！</h1>
+          <p class="welcome-subtitle">享受高速稳定的网络服务体验</p>
+        </div>
+        <div class="welcome-icon">
+          <i class="fas fa-rocket"></i>
+        </div>
+      </div>
     </div>
 
     <!-- 统计卡片 -->
-    <div class="stats-card">
-      <div class="stats-content">
-        <h3>剩余时长</h3>
-        <div class="stats-number">{{ subscriptionInfo.remainingDays }} 天</div>
-        <div class="expiry-date">
-          到期时间：<span>{{ subscriptionInfo.expiryDate }}</span>
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-icon">
+          <i class="fas fa-crown"></i>
         </div>
-        <div class="expiry-warning" v-if="subscriptionInfo.isExpiring">
-          <i class="el-icon-warning"></i> 订阅即将到期，请及时续费
+        <div class="stat-content">
+          <h3 class="stat-title">{{ userInfo.membership || '普通会员' }}</h3>
+          <p class="stat-subtitle">到期时间：{{ formatDate(userInfo.expire_time) }}</p>
         </div>
-        <div class="device-stats">
-          当前设备数：<span class="current-devices">{{ subscriptionInfo.currentDevices }}</span> / 
-          <span class="max-devices">{{ subscriptionInfo.maxDevices }}</span> 个
-          <span class="device-hint">（当前/最大）</span>
+      </div>
+
+      <div class="stat-card">
+        <div class="stat-icon">
+          <i class="fas fa-mobile-alt"></i>
         </div>
-        <div class="device-warning" v-if="subscriptionInfo.isDeviceLimitReached">
-          <i class="el-icon-warning"></i> 设备数量已达上限，建议重置订阅地址
+        <div class="stat-content">
+          <h3 class="stat-title">{{ userInfo.online_devices || 0 }}</h3>
+          <p class="stat-subtitle">在线设备</p>
+        </div>
+      </div>
+
+      <div class="stat-card">
+        <div class="stat-icon">
+          <i class="fas fa-wallet"></i>
+        </div>
+        <div class="stat-content">
+          <h3 class="stat-title">¥ {{ userInfo.balance || '0.00' }}</h3>
+          <p class="stat-subtitle">账户余额</p>
+        </div>
+      </div>
+
+      <div class="stat-card">
+        <div class="stat-icon">
+          <i class="fas fa-tachometer-alt"></i>
+        </div>
+        <div class="stat-content">
+          <h3 class="stat-title">不限</h3>
+          <p class="stat-subtitle">宽带速率</p>
         </div>
       </div>
     </div>
 
-    <!-- 网站公告 -->
-    <el-card class="announcement-card">
-      <template #header>
-        <div class="card-header">
-          <i class="el-icon-bell"></i>
-          网站公告
+    <!-- 主要内容区域 -->
+    <div class="main-content">
+      <!-- 左侧内容 -->
+      <div class="left-content">
+        <!-- 公告卡片 -->
+        <div class="card announcement-card">
+          <div class="card-header">
+            <h3 class="card-title">
+              <i class="fas fa-bullhorn"></i>
+              最新公告
+            </h3>
+            <el-button type="text" @click="showAllAnnouncements">查看全部</el-button>
+          </div>
+          <div class="card-body">
+            <div v-if="announcements.length > 0" class="announcement-list">
+              <div 
+                v-for="announcement in announcements.slice(0, 3)" 
+                :key="announcement.id"
+                class="announcement-item"
+                @click="showAnnouncementDetail(announcement)"
+              >
+                <div class="announcement-content">
+                  <h4 class="announcement-title">{{ announcement.title }}</h4>
+                  <p class="announcement-preview">{{ announcement.content.substring(0, 100) }}...</p>
+                  <span class="announcement-time">{{ formatDate(announcement.created_at) }}</span>
+                </div>
+                <div class="announcement-arrow">
+                  <i class="fas fa-chevron-right"></i>
+                </div>
+              </div>
+            </div>
+            <div v-else class="no-announcements">
+              <i class="fas fa-inbox"></i>
+              <p>暂无公告</p>
+            </div>
+          </div>
         </div>
-      </template>
-      <div class="announcement-content">
-        <strong>请遵守节点当地和您所在国家的法律法规，禁止用作违规行为，不要发表不该说的言论，不要认为换了IP就找不到你，出问题后果自负，请谨言慎行才是生存之道！</strong>
-        
-        <div class="device-management-tip" v-if="subscriptionInfo.isDeviceLimitReached">
-          <strong>📱 设备管理提示：</strong>
-          <p>当您的设备数量达到上限时，可以点击下方"一键重置订阅地址"按钮来清除所有在线设备记录，然后使用新的订阅地址重新配置您的设备。</p>
-        </div>
-        
-        <div class="action-buttons">
-          <el-button type="primary" @click="showResetConfirm">
-            <i class="el-icon-refresh"></i>
-            一键重置订阅地址
-          </el-button>
-          <el-button type="primary" @click="sendSubscriptionEmail">
-            <i class="el-icon-message"></i>
-            发送订阅地址到邮箱
-          </el-button>
-        </div>
-        
-        <div class="warning-text">请注意，点击重置订阅之后，你之前所有的链接都会失效。</div>
-        
-        <div class="renewal-section">
-          <strong style="color: red;">续费请点击下方按钮</strong>
-          <hr>
-          <el-button type="primary" @click="$router.push('/packages')">
-            续费请点击我
-          </el-button>
-        </div>
-      </div>
-    </el-card>
 
-    <!-- 订阅地址 -->
-    <el-card class="subscription-card">
-      <template #header>
-        <div class="card-header">
-          <i class="el-icon-link"></i>
-          订阅地址
-        </div>
-      </template>
-      
-      <!-- SSR订阅地址 -->
-      <div class="subscription-item">
-        <div class="subscription-input">
-          <el-input 
-            v-model="subscriptionInfo.ssrUrl" 
-            readonly 
-            placeholder="SSR订阅地址"
-          >
-            <template #append>
-              <el-button @click="copyToClipboard(subscriptionInfo.ssrUrl)">
-                复制
-              </el-button>
-            </template>
-          </el-input>
-        </div>
-        <div class="subscription-tip ssr-tip">
-          <i class="el-icon-info"></i>
-          适配软件：Shadowrocket、V2Ray、Hiddify
-        </div>
-      </div>
-
-      <!-- Clash订阅地址 -->
-      <div class="subscription-item">
-        <div class="subscription-input">
-          <el-input 
-            v-model="subscriptionInfo.clashUrl" 
-            readonly 
-            placeholder="Clash订阅地址"
-          >
-            <template #append>
-              <el-button @click="copyToClipboard(subscriptionInfo.clashUrl)">
-                复制
-              </el-button>
-            </template>
-          </el-input>
-        </div>
-        <div class="subscription-tip clash-tip">
-          <i class="el-icon-info"></i>
-          适配软件：电脑版Clash、安卓版Clash Meta、电脑版Mihomo Part
-        </div>
-      </div>
-
-      <!-- 快速导入按钮 -->
-      <div class="quick-import">
-        <el-button type="primary" @click="importToClash">
-          <i class="el-icon-download"></i>
-          小猫咪软件一键导入
-        </el-button>
-        <div class="import-tip">此步骤省略复制订阅地址到小猫咪软件下载配置的步骤，方便快捷</div>
-        
-        <el-button type="primary" @click="importToShadowrocket">
-          <i class="el-icon-download"></i>
-          小火箭一键导入
-        </el-button>
-      </div>
-
-      <!-- 二维码 -->
-      <div class="qrcode-section">
-        <div id="qrcode"></div>
-      </div>
-    </el-card>
-
-    <!-- 快速配置 -->
-    <el-card class="quick-config-card">
-      <template #header>
-        <div class="card-header">
-          <i class="el-icon-download"></i>
-          快速配置
-        </div>
-      </template>
-      
-      <el-form :model="quickConfig" label-width="100px">
-        <el-form-item label="选择平台">
-          <el-select v-model="quickConfig.platform" @change="updateClientDownloads">
-            <el-option label="Windows" value="windows"></el-option>
-            <el-option label="Android" value="android"></el-option>
-            <el-option label="Mac" value="mac"></el-option>
-            <el-option label="iOS" value="ios"></el-option>
-          </el-select>
-        </el-form-item>
-      </el-form>
-
-      <!-- 客户端下载区域 -->
-      <div class="client-downloads">
-        <div v-for="client in currentClients" :key="client.id" class="client-card">
-          <div class="client-info">
-            <span class="client-name">{{ client.name }}</span>
-            <el-button 
-              type="primary" 
-              size="small" 
-              @click="downloadClient(client.downloadUrl)"
-            >
-              <i class="el-icon-download"></i>
-              下载
-            </el-button>
+        <!-- 使用教程卡片 -->
+        <div class="card tutorial-card">
+          <div class="card-header">
+            <h3 class="card-title">
+              <i class="fas fa-graduation-cap"></i>
+              使用教程
+            </h3>
+          </div>
+          <div class="card-body">
+            <div class="tutorial-tabs">
+              <div 
+                v-for="platform in platforms" 
+                :key="platform.name"
+                class="tutorial-tab"
+                :class="{ active: activePlatform === platform.name }"
+                @click="activePlatform = platform.name"
+              >
+                <i :class="platform.icon"></i>
+                <span>{{ platform.name }}</span>
+              </div>
+            </div>
+            
+            <div class="tutorial-content">
+              <div 
+                v-for="platform in platforms" 
+                :key="platform.name"
+                v-show="activePlatform === platform.name"
+                class="tutorial-platform"
+              >
+                <div 
+                  v-for="app in platform.apps" 
+                  :key="app.name"
+                  class="tutorial-app"
+                >
+                  <div class="app-info">
+                    <img :src="app.icon" :alt="app.name" class="app-icon">
+                    <div class="app-details">
+                      <h4 class="app-name">{{ app.name }}</h4>
+                      <p class="app-version">{{ app.version }}</p>
+                    </div>
+                  </div>
+                  <div class="app-actions">
+                    <el-button type="primary" size="small" @click="downloadApp(app.downloadKey)">
+                      立即下载
+                    </el-button>
+                    <el-button type="default" size="small" @click="openTutorial(app.tutorialUrl)">
+                      安装教程
+                    </el-button>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
-    </el-card>
 
-    <!-- 重置确认对话框 -->
-    <el-dialog
-      v-model="resetDialogVisible"
-      title="确认重置订阅地址"
-      width="400px"
-    >
-      <div class="reset-confirm-content">
-        <i class="el-icon-warning" style="color: #e6a23c; font-size: 24px;"></i>
-        <p>此操作不可逆，旧的订阅链接将立即失效。确定要继续吗？</p>
+      <!-- 右侧内容 -->
+      <div class="right-content">
+        <!-- 订阅地址卡片 -->
+        <div class="card subscription-card">
+          <div class="card-header">
+            <h3 class="card-title">
+              <i class="fas fa-link"></i>
+              订阅地址
+            </h3>
+            <el-button type="primary" size="small" @click="dailyCheckin" :loading="checkinLoading">
+              <i class="fas fa-calendar-check"></i>
+              每日签到
+            </el-button>
+          </div>
+          <div class="card-body">
+            <div class="subscription-buttons">
+              <!-- Clash 订阅 -->
+              <div class="subscription-group">
+                <el-dropdown @command="handleClashCommand" trigger="click">
+                  <el-button type="primary" class="clash-btn">
+                    <i class="fas fa-bolt"></i>
+                    Clash 订阅
+                    <i class="fas fa-chevron-down"></i>
+                  </el-button>
+                  <template #dropdown>
+                    <el-dropdown-menu>
+                      <el-dropdown-item command="copy-clash">复制 Clash 订阅</el-dropdown-item>
+                      <el-dropdown-item command="import-clash">一键导入 Clash</el-dropdown-item>
+                    </el-dropdown-menu>
+                  </template>
+                </el-dropdown>
+              </div>
+
+              <!-- Shadowrocket 订阅 -->
+              <div class="subscription-group">
+                <el-dropdown @command="handleShadowrocketCommand" trigger="click">
+                  <el-button type="success" class="shadowrocket-btn">
+                    <i class="fas fa-rocket"></i>
+                    Shadowrocket 订阅
+                    <i class="fas fa-chevron-down"></i>
+                  </el-button>
+                  <template #dropdown>
+                    <el-dropdown-menu>
+                      <el-dropdown-item command="copy-shadowrocket">复制 Shadowrocket 订阅</el-dropdown-item>
+                      <el-dropdown-item command="import-shadowrocket">一键导入 Shadowrocket</el-dropdown-item>
+                    </el-dropdown-menu>
+                  </template>
+                </el-dropdown>
+              </div>
+
+              <!-- V2Ray 订阅 -->
+              <div class="subscription-group">
+                <el-button type="info" class="v2ray-btn" @click="copyV2raySubscription">
+                  <i class="fas fa-shield-alt"></i>
+                  复制 V2Ray 订阅
+                </el-button>
+              </div>
+
+              <!-- 通用订阅 -->
+              <div class="subscription-group">
+                <el-button type="warning" class="universal-btn" @click="copyUniversalSubscription">
+                  <i class="fas fa-globe"></i>
+                  复制通用订阅
+                </el-button>
+              </div>
+            </div>
+
+            <!-- 二维码区域 -->
+            <div class="qr-code-section">
+              <el-button type="text" @click="showQRCode = !showQRCode">
+                <i class="fas fa-qrcode"></i>
+                {{ showQRCode ? '隐藏' : '显示' }}二维码
+              </el-button>
+              <div v-if="showQRCode" class="qr-code-container">
+                <div class="qr-code">
+                  <img :src="qrCodeUrl" alt="订阅二维码">
+                </div>
+                <p class="qr-tip">扫描二维码即可在Shadowrocket中添加订阅</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
       </div>
-      <template #footer>
-        <el-button @click="resetDialogVisible = false">取消</el-button>
-        <el-button type="danger" @click="confirmReset">确认重置</el-button>
-      </template>
+    </div>
+
+    <!-- 公告详情对话框 -->
+    <el-dialog
+      v-model="announcementDialogVisible"
+      :title="selectedAnnouncement?.title"
+      width="60%"
+      :before-close="closeAnnouncementDialog"
+    >
+      <div v-if="selectedAnnouncement" class="announcement-detail">
+        <div class="announcement-meta">
+          <span class="announcement-time">{{ formatDate(selectedAnnouncement.created_at) }}</span>
+        </div>
+        <div class="announcement-content" v-html="selectedAnnouncement.content"></div>
+      </div>
     </el-dialog>
   </div>
 </template>
 
-<script>
-import { ref, reactive, onMounted, computed } from 'vue'
-import { ElMessage } from 'element-plus'
-import QRCode from 'qrcode'
-import { useAuthStore } from '@/store/auth'
-import { subscriptionAPI } from '@/utils/api'
+<script setup>
+import { ref, onMounted, computed } from 'vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { useRouter } from 'vue-router'
+import { userAPI, subscriptionAPI, softwareConfigAPI } from '@/utils/api'
 
-export default {
-  name: 'Dashboard',
-  setup() {
-    const authStore = useAuthStore()
-    const resetDialogVisible = ref(false)
+const router = useRouter()
+
+// 响应式数据
+const userInfo = ref({
+  username: '用户',
+  email: '',
+  membership: '普通会员',
+  expire_time: null,
+  expiryDate: '未设置',
+  remaining_days: 0,
+  online_devices: 0,
+  total_devices: 0,
+  balance: '0.00',
+  speed_limit: '不限速',
+  subscription_url: '',
+  subscription_status: 'inactive',
+  clashUrl: '',
+  v2rayUrl: '',
+  mobileUrl: '',
+  qrcodeUrl: ''
+})
+
+const announcements = ref([])
+const softwareConfig = ref({
+  clash_windows_url: '',
+  clash_android_url: '',
+  clash_macos_url: '',
+  shadowrocket_url: '',
+  v2rayng_url: '',
+  quantumult_url: '',
+  quantumult_x_url: '',
+  surfboard_url: ''
+})
+const activePlatform = ref('Windows')
+const showQRCode = ref(false)
+const checkinLoading = ref(false)
+const announcementDialogVisible = ref(false)
+const selectedAnnouncement = ref(null)
+
+// 平台配置
+const platforms = ref([
+  {
+    name: 'Windows',
+    icon: 'fab fa-windows',
+    apps: [
+      {
+        name: 'Clash for Windows',
+        version: 'Latest',
+        icon: '/images/clash-windows.png',
+        downloadKey: 'clash-windows',
+        tutorialUrl: 'https://doc.example.com/clash-windows'
+      },
+      {
+        name: 'V2rayN',
+        version: 'Latest',
+        icon: '/images/v2rayn.png',
+        downloadKey: 'v2rayng',
+        tutorialUrl: 'https://doc.example.com/v2rayn'
+      }
+    ]
+  },
+  {
+    name: 'Android',
+    icon: 'fab fa-android',
+    apps: [
+      {
+        name: 'Clash for Android',
+        version: 'Latest',
+        icon: '/images/clash-android.png',
+        downloadKey: 'clash-android',
+        tutorialUrl: 'https://doc.example.com/clash-android'
+      },
+      {
+        name: 'V2rayNG',
+        version: 'Latest',
+        icon: '/images/v2rayng.png',
+        downloadKey: 'v2rayng',
+        tutorialUrl: 'https://doc.example.com/v2rayng'
+      }
+    ]
+  },
+  {
+    name: 'iOS',
+    icon: 'fab fa-apple',
+    apps: [
+      {
+        name: 'Shadowrocket',
+        version: 'Latest',
+        icon: '/images/shadowrocket.png',
+        downloadKey: 'shadowrocket',
+        tutorialUrl: 'https://doc.example.com/shadowrocket'
+      }
+    ]
+  },
+  {
+    name: 'macOS',
+    icon: 'fab fa-apple',
+    apps: [
+      {
+        name: 'ClashX',
+        version: 'Latest',
+        icon: '/images/clashx.png',
+        downloadKey: 'clash-macos',
+        tutorialUrl: 'https://doc.example.com/clashx'
+      }
+    ]
+  }
+])
+
+// 计算属性
+const qrCodeUrl = computed(() => {
+  if (userInfo.value.qrcodeUrl) {
+    // 使用后台提供的二维码URL
+    return `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(userInfo.value.qrcodeUrl)}&ecc=M&margin=10`
+  } else if (userInfo.value.mobileUrl) {
+    // 降级方案：使用通用订阅地址生成二维码
+    return `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(userInfo.value.mobileUrl)}&ecc=M&margin=10`
+  }
+  return ''
+})
+
+// 方法
+const formatDate = (dateString) => {
+  if (!dateString) return '未知'
+  const date = new Date(dateString)
+  return date.toLocaleString('zh-CN')
+}
+
+const loadUserInfo = async () => {
+  try {
+    // 获取用户仪表盘信息（现在包含订阅地址）
+    const dashboardResponse = await userAPI.getUserInfo()
+    userInfo.value = dashboardResponse.data
     
-    const subscriptionInfo = reactive({
-      remainingDays: 0,
-      expiryDate: '',
-      isExpiring: false,
-      currentDevices: 0,
-      maxDevices: 0,
-      isDeviceLimitReached: false,
-      ssrUrl: '',
-      clashUrl: '',
-      qrcodeUrl: ''
-    })
-
-    const quickConfig = reactive({
-      platform: 'windows'
-    })
-
-    const clientDownloads = {
-      windows: [
-        { id: 1, name: 'Clash for Windows', downloadUrl: 'https://github.com/Fndroid/clash_for_windows_pkg/releases' },
-        { id: 2, name: 'V2RayN', downloadUrl: 'https://github.com/2dust/v2rayN/releases' }
-      ],
-      android: [
-        { id: 3, name: 'Clash Meta for Android', downloadUrl: 'https://github.com/MetaCubeX/ClashMetaForAndroid/releases' },
-        { id: 4, name: 'V2RayNG', downloadUrl: 'https://github.com/2dust/v2rayNG/releases' }
-      ],
-      mac: [
-        { id: 5, name: 'ClashX Pro', downloadUrl: 'https://clashx.pro/' },
-        { id: 6, name: 'V2RayX', downloadUrl: 'https://github.com/Cenmrev/V2RayX/releases' }
-      ],
-      ios: [
-        { id: 7, name: 'Shadowrocket', downloadUrl: 'https://apps.apple.com/app/shadowrocket/id932747118' },
-        { id: 8, name: 'Quantumult X', downloadUrl: 'https://apps.apple.com/app/quantumult-x/id1443988620' }
-      ]
-    }
-
-    const currentClients = computed(() => {
-      return clientDownloads[quickConfig.platform] || []
-    })
-
-    // 获取订阅信息
-    const fetchSubscriptionInfo = async () => {
-      try {
-        const response = await subscriptionAPI.getUserSubscription()
-        const data = response.data
-        
-        subscriptionInfo.remainingDays = data.remaining_days
-        subscriptionInfo.expiryDate = data.expiry_date
-        subscriptionInfo.isExpiring = data.remaining_days <= 7
-        subscriptionInfo.currentDevices = data.current_devices
-        subscriptionInfo.maxDevices = data.max_devices
-        subscriptionInfo.isDeviceLimitReached = data.current_devices >= data.max_devices
-        subscriptionInfo.ssrUrl = data.ssr_url
-        subscriptionInfo.clashUrl = data.clash_url
-        subscriptionInfo.qrcodeUrl = data.qrcode_url
-        
-        // 生成二维码
-        if (data.qrcode_url) {
-          generateQRCode(data.qrcode_url)
+    console.log('用户信息加载成功:', userInfo.value)
+  } catch (error) {
+    console.error('加载用户信息失败:', error)
+    
+    // 降级方案：尝试从订阅API获取订阅地址
+    try {
+      console.log('尝试从订阅API获取订阅地址...')
+      const subscriptionResponse = await subscriptionAPI.getUserSubscription()
+      if (subscriptionResponse.data) {
+        // 设置基本的用户信息
+        userInfo.value = {
+          username: '用户',
+          email: '',
+          membership: '普通会员',
+          expire_time: null,
+          expiryDate: '未设置',
+          remaining_days: 0,
+          online_devices: 0,
+          total_devices: 0,
+          balance: '0.00',
+          subscription_url: subscriptionResponse.data.subscription_url || '',
+          subscription_status: 'inactive',
+          // 使用订阅API的地址
+          clashUrl: subscriptionResponse.data.clashUrl || '',
+          v2rayUrl: subscriptionResponse.data.v2rayUrl || '',
+          mobileUrl: subscriptionResponse.data.mobileUrl || '',
+          qrcodeUrl: subscriptionResponse.data.qrcodeUrl || ''
         }
-      } catch (error) {
-        ElMessage.error('获取订阅信息失败')
+        console.log('降级方案成功，获取到订阅地址:', userInfo.value)
+        ElMessage.warning('部分信息加载失败，但订阅地址可用')
+      } else {
+        throw new Error('订阅API也返回空数据')
       }
-    }
-
-    // 生成二维码
-    const generateQRCode = async (url) => {
-      try {
-        const qrcodeElement = document.getElementById('qrcode')
-        if (qrcodeElement) {
-          await QRCode.toCanvas(qrcodeElement, url, {
-            width: 200,
-            margin: 2
-          })
-        }
-      } catch (error) {
-        console.error('生成二维码失败:', error)
-      }
-    }
-
-    // 复制到剪贴板
-    const copyToClipboard = async (text) => {
-      try {
-        await navigator.clipboard.writeText(text)
-        ElMessage.success('复制成功')
-      } catch (error) {
-        ElMessage.error('复制失败')
-      }
-    }
-
-    // 发送订阅邮件
-    const sendSubscriptionEmail = async () => {
-      try {
-        await subscriptionAPI.sendSubscriptionEmail()
-        ElMessage.success('订阅地址已发送到您的邮箱，请注意查收')
-      } catch (error) {
-        ElMessage.error('发送失败')
-      }
-    }
-
-    // 显示重置确认对话框
-    const showResetConfirm = () => {
-      resetDialogVisible.value = true
-    }
-
-    // 确认重置
-    const confirmReset = async () => {
-      try {
-        await subscriptionAPI.resetSubscription()
-        ElMessage.success('订阅地址重置成功')
-        resetDialogVisible.value = false
-        // 重新获取订阅信息
-        await fetchSubscriptionInfo()
-      } catch (error) {
-        ElMessage.error('重置失败')
-      }
-    }
-
-    // 导入到Clash
-    const importToClash = () => {
-      const clashUrl = encodeURIComponent(subscriptionInfo.clashUrl)
-      const name = encodeURIComponent(subscriptionInfo.expiryDate)
-      const importUrl = `clash://install-config?url=${clashUrl}&name=${name}_到期`
-      window.open(importUrl)
-    }
-
-    // 导入到Shadowrocket
-    const importToShadowrocket = () => {
-      const ssrUrl = encodeURIComponent(subscriptionInfo.ssrUrl)
-      const name = encodeURIComponent(subscriptionInfo.expiryDate)
-      const importUrl = `shadowrocket://add/sub://${ssrUrl}#${name}`
-      window.open(importUrl)
-    }
-
-    // 下载客户端
-    const downloadClient = (url) => {
-      window.open(url, '_blank')
-    }
-
-    // 更新客户端下载列表
-    const updateClientDownloads = () => {
-      // 这里可以根据平台更新下载列表
-    }
-
-    onMounted(() => {
-      fetchSubscriptionInfo()
-    })
-
-    return {
-      subscriptionInfo,
-      quickConfig,
-      currentClients,
-      resetDialogVisible,
-      copyToClipboard,
-      sendSubscriptionEmail,
-      showResetConfirm,
-      confirmReset,
-      importToClash,
-      importToShadowrocket,
-      downloadClient,
-      updateClientDownloads
+    } catch (fallbackError) {
+      console.error('降级方案也失败:', fallbackError)
+      ElMessage.error('加载用户信息失败，请刷新页面重试')
     }
   }
 }
+
+const loadAnnouncements = async () => {
+  try {
+    const response = await userAPI.getAnnouncements()
+    announcements.value = response.data
+  } catch (error) {
+    console.error('加载公告失败:', error)
+  }
+}
+
+const loadSoftwareConfig = async () => {
+  try {
+    const response = await softwareConfigAPI.getSoftwareConfig()
+    softwareConfig.value = response.data
+  } catch (error) {
+    console.error('加载软件配置失败:', error)
+  }
+}
+
+const loadDevices = async () => {
+  try {
+    const response = await userAPI.getUserDevices()
+    devices.value = response.data
+  } catch (error) {
+    console.error('加载设备列表失败:', error)
+  }
+}
+
+const dailyCheckin = async () => {
+  try {
+    checkinLoading.value = true
+    const response = await userAPI.dailyCheckin()
+    ElMessage.success(response.message || '签到成功！')
+    await loadUserInfo() // 重新加载用户信息
+  } catch (error) {
+    ElMessage.error(error.response?.data?.message || '签到失败')
+  } finally {
+    checkinLoading.value = false
+  }
+}
+
+const handleClashCommand = (command) => {
+  if (command === 'copy-clash') {
+    copyClashSubscription()
+  } else if (command === 'import-clash') {
+    importClashSubscription()
+  }
+}
+
+const handleShadowrocketCommand = (command) => {
+  if (command === 'copy-shadowrocket') {
+    copyShadowrocketSubscription()
+  } else if (command === 'import-shadowrocket') {
+    importShadowrocketSubscription()
+  }
+}
+
+const copyClashSubscription = () => {
+  if (!userInfo.value.clashUrl) {
+    ElMessage.error('Clash 订阅地址不可用，请刷新页面重试')
+    return
+  }
+  
+  try {
+    // 添加到期时间参数
+    let url = userInfo.value.clashUrl
+    if (userInfo.value.expiryDate && userInfo.value.expiryDate !== '未设置') {
+      const urlObj = new URL(url)
+      const expiryDate = new Date(userInfo.value.expiryDate)
+      const expiryDateStr = expiryDate.toISOString().split('T')[0] // YYYY-MM-DD格式
+      urlObj.searchParams.set('expiry', expiryDateStr)
+      url = urlObj.toString()
+    }
+    
+    copyToClipboard(url, 'Clash 订阅地址已复制到剪贴板')
+  } catch (error) {
+    console.error('复制Clash订阅地址失败:', error)
+    ElMessage.error('复制失败，请手动复制订阅地址')
+  }
+}
+
+const copyShadowrocketSubscription = () => {
+  if (!userInfo.value.mobileUrl) {
+    ElMessage.error('Shadowrocket 订阅地址不可用，请刷新页面重试')
+    return
+  }
+  
+  try {
+    // 添加到期时间参数
+    let url = userInfo.value.mobileUrl
+    if (userInfo.value.expiryDate && userInfo.value.expiryDate !== '未设置') {
+      const urlObj = new URL(url)
+      const expiryDate = new Date(userInfo.value.expiryDate)
+      const expiryDateStr = expiryDate.toISOString().split('T')[0] // YYYY-MM-DD格式
+      urlObj.searchParams.set('expiry', expiryDateStr)
+      url = urlObj.toString()
+    }
+    
+    copyToClipboard(url, 'Shadowrocket 订阅地址已复制到剪贴板')
+  } catch (error) {
+    console.error('复制Shadowrocket订阅地址失败:', error)
+    ElMessage.error('复制失败，请手动复制订阅地址')
+  }
+}
+
+const copyV2raySubscription = () => {
+  if (!userInfo.value.v2rayUrl) {
+    ElMessage.error('V2Ray 订阅地址不可用')
+    return
+  }
+  
+  // 添加到期时间参数
+  let url = userInfo.value.v2rayUrl
+  if (userInfo.value.expiryDate && userInfo.value.expiryDate !== '未设置') {
+    const urlObj = new URL(url)
+    const expiryDate = new Date(userInfo.value.expiryDate)
+    const expiryDateStr = expiryDate.toISOString().split('T')[0] // YYYY-MM-DD格式
+    urlObj.searchParams.set('expiry', expiryDateStr)
+    url = urlObj.toString()
+  }
+  
+  copyToClipboard(url, 'V2Ray 订阅地址已复制到剪贴板')
+}
+
+const copyUniversalSubscription = () => {
+  if (!userInfo.value.mobileUrl) {
+    ElMessage.error('通用订阅地址不可用')
+    return
+  }
+  
+  // 添加到期时间参数
+  let url = userInfo.value.mobileUrl
+  if (userInfo.value.expiryDate && userInfo.value.expiryDate !== '未设置') {
+    const urlObj = new URL(url)
+    const expiryDate = new Date(userInfo.value.expiryDate)
+    const expiryDateStr = expiryDate.toISOString().split('T')[0] // YYYY-MM-DD格式
+    urlObj.searchParams.set('expiry', expiryDateStr)
+    url = urlObj.toString()
+  }
+  
+  copyToClipboard(url, '通用订阅地址已复制到剪贴板')
+}
+
+const copyToClipboard = async (text, message) => {
+  try {
+    await navigator.clipboard.writeText(text)
+    ElMessage.success(message)
+  } catch (error) {
+    // 降级方案
+    const textArea = document.createElement('textarea')
+    textArea.value = text
+    document.body.appendChild(textArea)
+    textArea.select()
+    document.execCommand('copy')
+    document.body.removeChild(textArea)
+    ElMessage.success(message)
+  }
+}
+
+const importClashSubscription = () => {
+  if (!userInfo.value.clashUrl) {
+    ElMessage.error('Clash 订阅地址不可用，请刷新页面重试')
+    return
+  }
+  
+  try {
+    // 添加到期时间参数
+    let url = userInfo.value.clashUrl
+    if (userInfo.value.expiryDate && userInfo.value.expiryDate !== '未设置') {
+      const urlObj = new URL(url)
+      const expiryDate = new Date(userInfo.value.expiryDate)
+      const expiryDateStr = expiryDate.toISOString().split('T')[0] // YYYY-MM-DD格式
+      urlObj.searchParams.set('expiry', expiryDateStr)
+      url = urlObj.toString()
+    }
+    
+    // 参考原有的一键导入实现
+    oneclickImport('clashx', url)
+    ElMessage.success('正在打开 Clash 客户端...')
+  } catch (error) {
+    console.error('一键导入Clash失败:', error)
+    ElMessage.error('一键导入失败，请手动复制订阅地址')
+  }
+}
+
+const importShadowrocketSubscription = () => {
+  if (!userInfo.value.mobileUrl) {
+    ElMessage.error('Shadowrocket 订阅地址不可用，请刷新页面重试')
+    return
+  }
+  
+  try {
+    // 添加到期时间参数
+    let url = userInfo.value.mobileUrl
+    if (userInfo.value.expiryDate && userInfo.value.expiryDate !== '未设置') {
+      const urlObj = new URL(url)
+      const expiryDate = new Date(userInfo.value.expiryDate)
+      const expiryDateStr = expiryDate.toISOString().split('T')[0] // YYYY-MM-DD格式
+      urlObj.searchParams.set('expiry', expiryDateStr)
+      url = urlObj.toString()
+    }
+    
+    // 参考原有的一键导入实现
+    oneclickImport('shadowrocket', url)
+    ElMessage.success('正在打开 Shadowrocket 客户端...')
+  } catch (error) {
+    console.error('一键导入Shadowrocket失败:', error)
+    ElMessage.error('一键导入失败，请手动复制订阅地址')
+  }
+}
+
+const downloadApp = (appName) => {
+  let downloadUrl = ''
+  
+  switch (appName) {
+    case 'clash-windows':
+      downloadUrl = softwareConfig.value.clash_windows_url
+      break
+    case 'clash-android':
+      downloadUrl = softwareConfig.value.clash_android_url
+      break
+    case 'clash-macos':
+      downloadUrl = softwareConfig.value.clash_macos_url
+      break
+    case 'shadowrocket':
+      downloadUrl = softwareConfig.value.shadowrocket_url
+      break
+    case 'v2rayng':
+      downloadUrl = softwareConfig.value.v2rayng_url
+      break
+    case 'quantumult':
+      downloadUrl = softwareConfig.value.quantumult_url
+      break
+    case 'quantumult-x':
+      downloadUrl = softwareConfig.value.quantumult_x_url
+      break
+    case 'surfboard':
+      downloadUrl = softwareConfig.value.surfboard_url
+      break
+    default:
+      ElMessage.error('下载链接未配置')
+      return
+  }
+  
+  if (downloadUrl) {
+    window.open(downloadUrl, '_blank')
+  } else {
+    ElMessage.error('下载链接未配置，请联系管理员')
+  }
+}
+
+const openTutorial = (url) => {
+  window.open(url, '_blank')
+}
+
+const showAllAnnouncements = () => {
+  router.push('/announcements')
+}
+
+const showAnnouncementDetail = (announcement) => {
+  selectedAnnouncement.value = announcement
+  announcementDialogVisible.value = true
+}
+
+const closeAnnouncementDialog = () => {
+  announcementDialogVisible.value = false
+  selectedAnnouncement.value = null
+}
+
+const refreshDevices = () => {
+  loadDevices()
+  ElMessage.success('设备列表已刷新')
+}
+
+const getDeviceIcon = (osName) => {
+  const iconMap = {
+    'Windows': 'fab fa-windows',
+    'Android': 'fab fa-android',
+    'iOS': 'fab fa-apple',
+    'macOS': 'fab fa-apple',
+    'Linux': 'fab fa-linux'
+  }
+  return iconMap[osName] || 'fas fa-mobile-alt'
+}
+
+// 一键导入功能实现（参考原有实现）
+const oneclickImport = (client, url) => {
+  try {
+    switch (client) {
+      case 'clashx':
+        // Clash for Windows/macOS
+        window.open(`clash://install-config?url=${encodeURIComponent(url)}`, '_blank')
+        break
+      case 'clash':
+        // Clash for Android
+        window.open(`clash://install-config?url=${encodeURIComponent(url)}`, '_blank')
+        break
+      case 'shadowrocket':
+        // Shadowrocket (iOS)
+        const shadowrocketUrl = `shadowrocket://add/sub://${btoa(url)}`
+        window.open(shadowrocketUrl, '_blank')
+        break
+      case 'ssr':
+        // SSR客户端
+        window.open(`ssr://${btoa(url)}`, '_blank')
+        break
+      case 'quantumult':
+        // Quantumult
+        window.open(`quantumult://resource?url=${encodeURIComponent(url)}`, '_blank')
+        break
+      case 'quantumult_v2':
+        // Quantumult X
+        window.open(`quantumult-x://resource?url=${encodeURIComponent(url)}`, '_blank')
+        break
+      case 'v2rayng':
+        // V2rayNG
+        window.open(`v2rayng://install-config?url=${encodeURIComponent(url)}`, '_blank')
+        break
+      default:
+        console.warn(`未知的客户端类型: ${client}`)
+        // 尝试通用方式
+        window.open(url, '_blank')
+    }
+  } catch (error) {
+    console.error('一键导入失败:', error)
+    ElMessage.error('一键导入失败，请手动复制订阅地址')
+  }
+}
+
+// 生命周期
+onMounted(() => {
+  loadUserInfo()
+  loadAnnouncements()
+  loadSoftwareConfig()
+})
 </script>
 
 <style scoped>
@@ -379,235 +776,437 @@ export default {
   margin: 0 auto;
 }
 
-.page-header {
-  margin-bottom: 2rem;
-  text-align: center;
-}
-
-.page-header h1 {
-  color: #1677ff;
-  font-size: 2rem;
-  margin-bottom: 0.5rem;
-}
-
-.page-header p {
-  color: #666;
-  font-size: 1rem;
-}
-
-.stats-card {
+/* 欢迎横幅 */
+.welcome-banner {
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 16px;
+  padding: 40px;
+  margin-bottom: 30px;
   color: white;
-  border-radius: 12px;
-  padding: 2rem;
-  margin-bottom: 2rem;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+  position: relative;
+  overflow: hidden;
 }
 
-.stats-content h3 {
-  margin: 0 0 1rem 0;
-  font-size: 1.2rem;
+.welcome-banner::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  right: -50%;
+  width: 200%;
+  height: 200%;
+  background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%);
+  animation: float 6s ease-in-out infinite;
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0px) rotate(0deg); }
+  50% { transform: translateY(-20px) rotate(180deg); }
+}
+
+.banner-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  position: relative;
+  z-index: 1;
+}
+
+.welcome-title {
+  font-size: 2.5rem;
+  font-weight: 700;
+  margin: 0 0 10px 0;
+}
+
+.welcome-subtitle {
+  font-size: 1.1rem;
   opacity: 0.9;
+  margin: 0;
 }
 
-.stats-number {
-  font-size: 3rem;
-  font-weight: bold;
-  margin-bottom: 0.5rem;
+.welcome-icon {
+  font-size: 4rem;
+  opacity: 0.3;
 }
 
-.expiry-date {
-  font-size: 1rem;
-  opacity: 0.9;
-  margin-bottom: 1rem;
+/* 统计卡片 */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 20px;
+  margin-bottom: 30px;
 }
 
-.expiry-warning {
-  background: rgba(255, 255, 255, 0.2);
-  padding: 0.5rem 1rem;
-  border-radius: 6px;
-  margin-bottom: 1rem;
-}
-
-.device-stats {
-  font-size: 1.2rem;
-  margin-top: 1rem;
-}
-
-.current-devices {
-  color: #ffd700;
-  font-weight: bold;
-}
-
-.max-devices {
-  color: #42a5f5;
-  font-weight: bold;
-}
-
-.device-hint {
-  font-size: 0.95rem;
-  opacity: 0.8;
-  margin-left: 8px;
-}
-
-.device-warning {
-  background: rgba(255, 107, 107, 0.2);
-  padding: 0.5rem 1rem;
-  border-radius: 6px;
-  margin-top: 0.5rem;
-  font-size: 0.9rem;
-}
-
-.announcement-card,
-.subscription-card,
-.quick-config-card {
-  margin-bottom: 2rem;
+.stat-card {
+  background: white;
   border-radius: 12px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+  padding: 24px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+  border: 1px solid #e5e7eb;
+  display: flex;
+  align-items: center;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.stat-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+}
+
+.stat-icon {
+  width: 60px;
+  height: 60px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 16px;
+  font-size: 24px;
+  color: white;
+}
+
+.stat-card:nth-child(1) .stat-icon { background: linear-gradient(135deg, #667eea, #764ba2); }
+.stat-card:nth-child(2) .stat-icon { background: linear-gradient(135deg, #f093fb, #f5576c); }
+.stat-card:nth-child(3) .stat-icon { background: linear-gradient(135deg, #4facfe, #00f2fe); }
+.stat-card:nth-child(4) .stat-icon { background: linear-gradient(135deg, #43e97b, #38f9d7); }
+
+.stat-title {
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin: 0 0 4px 0;
+  color: #1f2937;
+}
+
+.stat-subtitle {
+  font-size: 0.875rem;
+  color: #6b7280;
+  margin: 0;
+}
+
+/* 主要内容区域 */
+.main-content {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 30px;
+}
+
+/* 卡片通用样式 */
+.card {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+  border: 1px solid #e5e7eb;
+  margin-bottom: 20px;
 }
 
 .card-header {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-weight: 600;
-}
-
-.announcement-content {
-  line-height: 1.6;
-}
-
-.device-management-tip {
-  padding: 12px;
-  background: #fff3cd;
-  border: 1px solid #ffeaa7;
-  border-radius: 6px;
-  margin: 15px 0;
-}
-
-.device-management-tip strong {
-  color: #856404;
-}
-
-.device-management-tip p {
-  margin: 8px 0 0 0;
-  color: #856404;
-  font-size: 14px;
-}
-
-.action-buttons {
-  margin: 1rem 0;
-  display: flex;
-  gap: 1rem;
-  flex-wrap: wrap;
-}
-
-.warning-text {
-  color: #666;
-  font-size: 0.9rem;
-  margin: 1rem 0;
-}
-
-.renewal-section {
-  margin-top: 1rem;
-  text-align: center;
-}
-
-.renewal-section hr {
-  margin: 1rem 0;
-}
-
-.subscription-item {
-  margin-bottom: 1.5rem;
-}
-
-.subscription-input {
-  margin-bottom: 0.5rem;
-}
-
-.subscription-tip {
-  padding: 8px 12px;
-  border-radius: 6px;
-  font-size: 0.95rem;
-  font-weight: 500;
-}
-
-.ssr-tip {
-  background: #e3f2fd;
-  color: #1976d2;
-}
-
-.clash-tip {
-  background: #e8f5e9;
-  color: #2e7d32;
-}
-
-.quick-import {
-  margin: 1.5rem 0;
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-}
-
-.import-tip {
-  font-size: 0.9rem;
-  color: #666;
-  margin-top: 0.5rem;
-}
-
-.qrcode-section {
-  text-align: center;
-  margin: 1.5rem 0;
-}
-
-.client-downloads {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: 1rem;
-  margin-top: 1rem;
-}
-
-.client-card {
-  background: #f8f9fa;
-  border-radius: 8px;
-  padding: 1rem;
-}
-
-.client-info {
+  padding: 20px 24px 0;
   display: flex;
   justify-content: space-between;
   align-items: center;
 }
 
-.client-name {
+.card-title {
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin: 0;
+  color: #1f2937;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.card-body {
+  padding: 20px 24px 24px;
+}
+
+/* 公告卡片 */
+.announcement-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.announcement-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin-bottom: 12px;
+}
+
+.announcement-item:hover {
+  border-color: #3b82f6;
+  background-color: #f8fafc;
+}
+
+.announcement-title {
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 0 0 4px 0;
+  color: #1f2937;
+}
+
+.announcement-preview {
+  font-size: 0.875rem;
+  color: #6b7280;
+  margin: 0 0 8px 0;
+  line-height: 1.4;
+}
+
+.announcement-time {
+  font-size: 0.75rem;
+  color: #9ca3af;
+}
+
+.announcement-arrow {
+  color: #9ca3af;
+}
+
+.no-announcements {
+  text-align: center;
+  padding: 40px 20px;
+  color: #9ca3af;
+}
+
+.no-announcements i {
+  font-size: 3rem;
+  margin-bottom: 16px;
+  display: block;
+}
+
+/* 教程卡片 */
+.tutorial-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
+.tutorial-tab {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-size: 0.875rem;
   font-weight: 500;
 }
 
-.reset-confirm-content {
+.tutorial-tab:hover {
+  border-color: #3b82f6;
+  background-color: #f8fafc;
+}
+
+.tutorial-tab.active {
+  border-color: #3b82f6;
+  background-color: #3b82f6;
+  color: white;
+}
+
+.tutorial-app {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  margin-bottom: 12px;
+}
+
+.app-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.app-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+}
+
+.app-name {
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 0 0 4px 0;
+  color: #1f2937;
+}
+
+.app-version {
+  font-size: 0.875rem;
+  color: #6b7280;
+  margin: 0;
+}
+
+.app-actions {
+  display: flex;
+  gap: 8px;
+}
+
+/* 订阅卡片 */
+.subscription-buttons {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.subscription-group {
+  display: flex;
+}
+
+.clash-btn {
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  border: none;
+  width: 100%;
+}
+
+.shadowrocket-btn {
+  background: linear-gradient(135deg, #f093fb, #f5576c);
+  border: none;
+  width: 100%;
+}
+
+.v2ray-btn {
+  background: linear-gradient(135deg, #4facfe, #00f2fe);
+  border: none;
+  width: 100%;
+}
+
+.universal-btn {
+  background: linear-gradient(135deg, #43e97b, #38f9d7);
+  border: none;
+  width: 100%;
+}
+
+.qr-code-section {
   text-align: center;
-  padding: 1rem 0;
+  padding-top: 20px;
+  border-top: 1px solid #e5e7eb;
 }
 
-.reset-confirm-content p {
-  margin: 1rem 0 0 0;
+.qr-code-container {
+  margin-top: 16px;
+}
+
+.qr-code img {
+  width: 200px;
+  height: 200px;
+  border-radius: 8px;
+}
+
+.qr-tip {
+  font-size: 0.875rem;
+  color: #6b7280;
+  margin: 12px 0 0 0;
+}
+
+/* 设备卡片 */
+.device-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.device-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  margin-bottom: 12px;
+}
+
+.device-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.device-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 18px;
+}
+
+.device-name {
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 0 0 4px 0;
+  color: #1f2937;
+}
+
+.device-os, .device-ip {
+  font-size: 0.875rem;
+  color: #6b7280;
+  margin: 0;
+}
+
+.no-devices {
+  text-align: center;
+  padding: 40px 20px;
+  color: #9ca3af;
+}
+
+.no-devices i {
+  font-size: 3rem;
+  margin-bottom: 16px;
+  display: block;
+}
+
+/* 公告详情对话框 */
+.announcement-detail {
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.announcement-meta {
+  margin-bottom: 20px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.announcement-content {
   line-height: 1.6;
+  color: #374151;
 }
 
+/* 响应式设计 */
 @media (max-width: 768px) {
-  .dashboard-container {
-    padding: 10px;
+  .main-content {
+    grid-template-columns: 1fr;
   }
   
-  .stats-number {
+  .stats-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .subscription-buttons {
+    grid-template-columns: 1fr;
+  }
+  
+  .welcome-title {
     font-size: 2rem;
   }
   
-  .action-buttons {
+  .banner-content {
     flex-direction: column;
-  }
-  
-  .client-downloads {
-    grid-template-columns: 1fr;
+    text-align: center;
+    gap: 20px;
   }
 }
-</style> 
+</style>

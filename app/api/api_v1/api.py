@@ -3,7 +3,8 @@ from fastapi import APIRouter
 from app.api.api_v1.endpoints import (
     auth, users, subscriptions, orders, packages,
     payment, payment_methods, payment_config, nodes, notifications, admin, config,
-    statistics, settings, email_templates, email_stats, device_management
+    statistics, settings, email_templates, email_stats, device_management, announcements,
+    software_config
 )
 
 api_router = APIRouter()
@@ -24,4 +25,6 @@ api_router.include_router(statistics.router, prefix="/statistics", tags=["统计
 api_router.include_router(settings.router, prefix="/settings", tags=["设置"])
 api_router.include_router(email_templates.router, prefix="/email-templates", tags=["邮件模板"])
 api_router.include_router(email_stats.router, prefix="/email-stats", tags=["邮件统计"])
-api_router.include_router(device_management.router, prefix="/admin/devices", tags=["设备管理"]) 
+api_router.include_router(device_management.router, prefix="/admin/devices", tags=["设备管理"])
+api_router.include_router(announcements.router, prefix="/announcements", tags=["公告"])
+api_router.include_router(software_config.router, prefix="/software-config", tags=["软件配置"]) 

@@ -67,10 +67,16 @@ def get_user_subscription(
         
         # 生成订阅URL
         base_url = settings.BASE_URL.rstrip('/')
-        ssr_url = f"{base_url}/api/v1/subscriptions/{subscription.id}/ssr"
-        clash_url = f"{base_url}/api/v1/subscriptions/{subscription.id}/clash"
-        v2ray_url = f"{base_url}/api/v1/subscriptions/{subscription.id}/v2ray"
-        qrcode_url = f"sub://{base64_encode(ssr_url)}#{urlencode(expiry_date)}"
+        if subscription.subscription_url:
+            ssr_url = f"{base_url}/api/v1/subscriptions/ssr/{subscription.subscription_url}"
+            clash_url = f"{base_url}/api/v1/subscriptions/clash/{subscription.subscription_url}"
+            v2ray_url = f"{base_url}/api/v1/subscriptions/ssr/{subscription.subscription_url}"  # V2Ray使用SSR端点
+            qrcode_url = f"sub://{base64_encode(ssr_url)}#{urlencode(expiry_date)}"
+        else:
+            ssr_url = ""
+            clash_url = ""
+            v2ray_url = ""
+            qrcode_url = ""
         
         return ResponseBase(
             data={

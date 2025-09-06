@@ -76,7 +76,11 @@ export const userAPI = {
   changePassword: (data) => api.post('/users/change-password', data),
   getLoginHistory: () => api.get('/users/login-history'),
   getUserActivities: () => api.get('/users/activities'),
-  getSubscriptionResets: () => api.get('/users/subscription-resets')
+  getSubscriptionResets: () => api.get('/users/subscription-resets'),
+  getUserInfo: () => api.get('/users/dashboard-info'),
+  getAnnouncements: () => api.get('/announcements/'),
+  getUserDevices: () => api.get('/users/devices'),
+  dailyCheckin: () => api.post('/users/daily-checkin')
 }
 
 // 订阅相关API
@@ -243,11 +247,11 @@ export const notificationAPI = {
 
 // 配置相关API
 export const configAPI = {
-  getConfigFiles: () => api.get('/admin/config-files'),
-  getConfigFileContent: (fileName) => api.get(`/admin/config-files/${fileName}`),
-  saveConfigFile: (fileName, content) => api.post(`/admin/config-files/${fileName}`, { content }),
-  backupConfigFile: (fileName) => api.post(`/admin/config-files/${fileName}/backup`),
-  restoreConfigFile: (fileName) => api.post(`/admin/config-files/${fileName}/restore`),
+  getConfigFiles: () => api.get('/config/admin/config-files'),
+  getConfigFileContent: (fileName) => api.get(`/config/admin/config-files/${fileName}`),
+  saveConfigFile: (fileName, content) => api.post(`/config/admin/config-files/${fileName}`, { content }),
+  backupConfigFile: (fileName) => api.post(`/config/admin/config-files/${fileName}/backup`),
+  restoreConfigFile: (fileName) => api.post(`/config/admin/config-files/${fileName}/restore`),
   getSystemConfig: () => api.get('/admin/system-config'),
   saveSystemConfig: (data) => api.post('/admin/system-config', data),
   getEmailConfig: () => api.get('/admin/email-config'),
@@ -327,6 +331,10 @@ export const settingsAPI = {
   toggleAnnouncementStatus: (announcementId) => api.post(`/admin/announcements/${announcementId}/toggle-status`),
   toggleAnnouncementPin: (announcementId) => api.post(`/admin/announcements/${announcementId}/toggle-pin`),
   
+  // 发布公告API
+  publishAnnouncement: (data) => api.post('/announcements/admin/publish', data),
+  getAdminAnnouncements: (page = 1, size = 20) => api.get(`/announcements/admin/list?page=${page}&size=${size}`),
+  
   // 主题配置API
   getThemeConfigs: () => api.get('/admin/themes'),
   createThemeConfig: (data) => api.post('/admin/themes', data),
@@ -335,6 +343,12 @@ export const settingsAPI = {
   
   // 邮件测试API
   testEmailSettings: (data) => api.post('/admin/test-email', data)
+}
+
+// 软件配置API (softwareConfigAPI) - NEW
+export const softwareConfigAPI = {
+  getSoftwareConfig: () => api.get('/software-config/'),
+  updateSoftwareConfig: (data) => api.put('/software-config/', data)
 }
 
 export default api 

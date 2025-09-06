@@ -62,6 +62,79 @@
           </el-form>
         </el-tab-pane>
 
+        <!-- 软件下载配置 -->
+        <el-tab-pane label="软件下载配置" name="software">
+          <div class="config-section">
+            <h3>软件下载链接配置</h3>
+            <el-form
+              ref="softwareFormRef"
+              :model="softwareForm"
+              label-width="150px"
+            >
+              <el-row :gutter="20">
+                <el-col :span="12">
+                  <el-form-item label="Clash for Windows">
+                    <el-input v-model="softwareForm.clash_windows_url" placeholder="请输入下载链接" />
+                  </el-form-item>
+                </el-col>
+                <el-col :span="12">
+                  <el-form-item label="Clash for Android">
+                    <el-input v-model="softwareForm.clash_android_url" placeholder="请输入下载链接" />
+                  </el-form-item>
+                </el-col>
+              </el-row>
+              
+              <el-row :gutter="20">
+                <el-col :span="12">
+                  <el-form-item label="Clash for macOS">
+                    <el-input v-model="softwareForm.clash_macos_url" placeholder="请输入下载链接" />
+                  </el-form-item>
+                </el-col>
+                <el-col :span="12">
+                  <el-form-item label="Shadowrocket">
+                    <el-input v-model="softwareForm.shadowrocket_url" placeholder="请输入下载链接" />
+                  </el-form-item>
+                </el-col>
+              </el-row>
+              
+              <el-row :gutter="20">
+                <el-col :span="12">
+                  <el-form-item label="V2rayNG">
+                    <el-input v-model="softwareForm.v2rayng_url" placeholder="请输入下载链接" />
+                  </el-form-item>
+                </el-col>
+                <el-col :span="12">
+                  <el-form-item label="Quantumult">
+                    <el-input v-model="softwareForm.quantumult_url" placeholder="请输入下载链接" />
+                  </el-form-item>
+                </el-col>
+              </el-row>
+              
+              <el-row :gutter="20">
+                <el-col :span="12">
+                  <el-form-item label="Quantumult X">
+                    <el-input v-model="softwareForm.quantumult_x_url" placeholder="请输入下载链接" />
+                  </el-form-item>
+                </el-col>
+                <el-col :span="12">
+                  <el-form-item label="Surfboard">
+                    <el-input v-model="softwareForm.surfboard_url" placeholder="请输入下载链接" />
+                  </el-form-item>
+                </el-col>
+              </el-row>
+              
+              <el-form-item>
+                <el-button type="primary" @click="saveSoftwareConfig" :loading="softwareLoading">
+                  保存软件配置
+                </el-button>
+                <el-button @click="loadSoftwareConfig">
+                  重新加载
+                </el-button>
+              </el-form-item>
+            </el-form>
+          </div>
+        </el-tab-pane>
+
         <!-- 节点配置 -->
         <el-tab-pane label="节点配置" name="nodes">
           <div class="config-section">
@@ -547,7 +620,7 @@
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Plus, Refresh, Delete, Search, View } from '@element-plus/icons-vue'
-import { configAPI } from '@/utils/api'
+import { configAPI, softwareConfigAPI } from '@/utils/api'
 import { adminAPI } from '@/utils/api'
 import { useRouter } from 'vue-router'
 
@@ -560,6 +633,7 @@ export default {
     const activeTab = ref('system')
     const systemFormRef = ref()
     const emailFormRef = ref()
+    const softwareFormRef = ref()
     
     const systemLoading = ref(false)
     const clashLoading = ref(false)
@@ -572,6 +646,7 @@ export default {
     const emailQueueLoading = ref(false)
     const paymentLoading = ref(false)
     const testPaymentLoading = ref(false)
+    const softwareLoading = ref(false)
     
     const clashConfig = ref('')
     const v2rayConfig = ref('')
@@ -630,6 +705,17 @@ export default {
       // 回调地址
       return_url: '',
       notify_url: ''
+    })
+
+    const softwareForm = reactive({
+      clash_windows_url: '',
+      clash_android_url: '',
+      clash_macos_url: '',
+      shadowrocket_url: '',
+      v2rayng_url: '',
+      quantumult_url: '',
+      quantumult_x_url: '',
+      surfboard_url: ''
     })
 
     const emailQueueStats = reactive({
@@ -695,6 +781,35 @@ export default {
       }
     }
 
+    // 保存软件配置
+    const saveSoftwareConfig = async () => {
+      softwareLoading.value = true
+      try {
+        await softwareConfigAPI.updateSoftwareConfig(softwareForm)
+        ElMessage.success('软件配置保存成功')
+      } catch (error) {
+        console.error('保存软件配置失败:', error)
+        ElMessage.error('保存失败')
+      } finally {
+        softwareLoading.value = false
+      }
+    }
+
+    // 加载软件配置
+    const loadSoftwareConfig = async () => {
+      try {
+        const response = await softwareConfigAPI.getSoftwareConfig()
+        if (response.data && response.data.success) {
+          // 后端返回的是ResponseBase格式，数据在response.data.data中
+          Object.assign(softwareForm, response.data.data)
+          ElMessage.success('软件配置加载成功')
+        }
+      } catch (error) {
+        console.error('加载软件配置失败:', error)
+        ElMessage.error('加载失败')
+      }
+    }
+
     // 保存邮件配置
     const saveEmailConfig = async () => {
       emailLoading.value = true
@@ -754,13 +869,9 @@ export default {
       try {
         const response = await configAPI.getClashConfig()
         console.log('Clash配置响应:', response)
-        if (response.data && response.data.data) {
-          // 如果返回的是嵌套对象，取内层的data字段
+        if (response.data && response.data.success) {
+          // 后端返回的是ResponseBase格式，数据在response.data.data中
           clashConfig.value = response.data.data
-          console.log('Clash配置已加载:', clashConfig.value)
-        } else if (response.data) {
-          // 如果直接返回数据
-          clashConfig.value = response.data
           console.log('Clash配置已加载:', clashConfig.value)
         }
       } catch (error) {
@@ -773,13 +884,9 @@ export default {
       try {
         const response = await configAPI.getV2rayConfig()
         console.log('V2Ray配置响应:', response)
-        if (response.data && response.data.data) {
-          // 如果返回的是嵌套对象，取内层的data字段
+        if (response.data && response.data.success) {
+          // 后端返回的是ResponseBase格式，数据在response.data.data中
           v2rayConfig.value = response.data.data
-          console.log('V2Ray配置已加载:', v2rayConfig.value)
-        } else if (response.data) {
-          // 如果直接返回数据
-          v2rayConfig.value = response.data
           console.log('V2Ray配置已加载:', v2rayConfig.value)
         }
       } catch (error) {
@@ -819,13 +926,9 @@ export default {
       try {
         const response = await configAPI.getClashConfigInvalid()
         console.log('Clash失效配置响应:', response)
-        if (response.data && response.data.data) {
-          // 如果返回的是嵌套对象，取内层的data字段
+        if (response.data && response.data.success) {
+          // 后端返回的是ResponseBase格式，数据在response.data.data中
           clashConfigInvalid.value = response.data.data
-          console.log('Clash失效配置已加载:', clashConfigInvalid.value)
-        } else if (response.data) {
-          // 如果直接返回数据
-          clashConfigInvalid.value = response.data
           console.log('Clash失效配置已加载:', clashConfigInvalid.value)
         }
       } catch (error) {
@@ -839,13 +942,9 @@ export default {
       try {
         const response = await configAPI.getV2rayConfigInvalid()
         console.log('V2Ray失效配置响应:', response)
-        if (response.data && response.data.data) {
-          // 如果返回的是嵌套对象，取内层的data字段
+        if (response.data && response.data.success) {
+          // 后端返回的是ResponseBase格式，数据在response.data.data中
           v2rayConfigInvalid.value = response.data.data
-          console.log('V2Ray失效配置已加载:', v2rayConfigInvalid.value)
-        } else if (response.data) {
-          // 如果直接返回数据
-          v2rayConfigInvalid.value = response.data
           console.log('V2Ray失效配置已加载:', v2rayConfigInvalid.value)
         }
       } catch (error) {
@@ -914,8 +1013,8 @@ export default {
       try {
         const response = await configAPI.getSystemConfig()
         console.log('系统配置响应:', response)
-        if (response.data && response.data.data) {
-          // 从ResponseBase的data字段中提取配置数据
+        if (response.data && response.data.success) {
+          // 后端返回的是ResponseBase格式，数据在response.data.data中
           const configData = response.data.data
           Object.assign(systemForm, configData)
           console.log('系统配置已加载:', systemForm)
@@ -931,8 +1030,8 @@ export default {
       try {
         const response = await configAPI.getEmailConfig()
         console.log('邮件配置响应:', response)
-        if (response.data && response.data.data) {
-          // 从ResponseBase的data字段中提取配置数据
+        if (response.data && response.data.success) {
+          // 后端返回的是ResponseBase格式，数据在response.data.data中
           const configData = response.data.data
           // 映射字段名称
           emailForm.smtp_host = configData.smtp_host || ''
@@ -1151,9 +1250,9 @@ export default {
       try {
         const response = await configAPI.getPaymentSettings()
         console.log('支付配置响应:', response)
-        if (response.data && response.data.data && response.data.data.payment_configs) {
-          // 将支付配置数组转换为表单对象
-          const configs = response.data.data.payment_configs
+        if (response.data && response.data.success) {
+          // 后端返回的是ResponseBase格式，数据在response.data.data中
+          const configs = response.data.data.payment_configs || []
           configs.forEach(config => {
             if (config.key && config.value !== undefined) {
               // 映射配置键名到表单字段
@@ -1186,10 +1285,11 @@ export default {
               
               if (fieldMapping[config.key]) {
                 const fieldName = fieldMapping[config.key]
-                if (config.type === 'boolean') {
+                // 根据字段名判断类型，而不是config.type
+                if (fieldName === 'payment_enabled') {
                   paymentForm[fieldName] = config.value === 'true' || config.value === true
-                } else if (config.type === 'number') {
-                  paymentForm[fieldName] = parseFloat(config.value) || 0
+                } else if (fieldName === 'currency' || fieldName === 'default_payment_method') {
+                  paymentForm[fieldName] = config.value
                 } else {
                   paymentForm[fieldName] = config.value
                 }
@@ -1214,6 +1314,7 @@ export default {
       loadEmailQueueStats()
       loadEmailQueueList()
       loadPaymentSettings()
+      loadSoftwareConfig()
     })
 
     return {
@@ -1231,9 +1332,11 @@ export default {
       emailQueueLoading,
       paymentLoading,
       testPaymentLoading,
+      softwareLoading,
       systemForm,
       emailForm,
       paymentForm,
+      softwareForm,
       clashConfig,
       v2rayConfig,
       clashConfigInvalid,
@@ -1243,6 +1346,8 @@ export default {
       saveSystemConfig,
       saveClashConfig,
       saveV2rayConfig,
+      saveSoftwareConfig,
+      loadSoftwareConfig,
       saveClashConfigInvalid,
       saveV2rayConfigInvalid,
       saveEmailConfig,
@@ -1274,7 +1379,8 @@ export default {
       getEmailStatusTagType,
       getEmailStatusText,
       savePaymentSettings,
-      testPaymentConfig
+      testPaymentConfig,
+      loadPaymentSettings
     }
   }
 }

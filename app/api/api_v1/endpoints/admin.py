@@ -766,7 +766,7 @@ def get_system_config(
         from sqlalchemy import text
         
         # 从数据库获取系统配置
-        query = text('SELECT "key", value FROM system_configs WHERE type = \'system\'')
+        query = text('SELECT key, value FROM system_configs WHERE type = \'system\'')
         result = db.execute(query)
         
         system_config = {
@@ -787,6 +787,9 @@ def get_system_config(
         
         return ResponseBase(data=system_config)
     except Exception as e:
+        print(f"获取系统配置失败: {e}")
+        import traceback
+        traceback.print_exc()
         return ResponseBase(success=False, message=f"获取系统配置失败: {str(e)}")
 
 @router.post("/system-config", response_model=ResponseBase)
@@ -805,7 +808,7 @@ def save_system_config(
         
         for key, value in config_data.items():
             # 检查配置是否已存在
-            check_query = text('SELECT id FROM system_configs WHERE "key" = :key AND type = \'system\'')
+            check_query = text('SELECT id FROM system_configs WHERE key = :key AND type = \'system\'')
             existing = db.execute(check_query, {"key": key}).first()
             
             if existing:
@@ -820,7 +823,7 @@ def save_system_config(
                     "updated_at": current_time,
                     "key": key
                 })
-        else:
+            else:
                 # 插入新配置
                 insert_query = text("""
                     INSERT INTO system_configs ("key", value, type, category, display_name, description, is_public, sort_order, created_at, updated_at)
@@ -851,7 +854,7 @@ def get_email_config(
         from sqlalchemy import text
         
         # 从数据库获取邮件配置
-        query = text("SELECT \"key\", value FROM system_configs WHERE type = 'email'")
+        query = text("SELECT key, value FROM system_configs WHERE type = 'email'")
         result = db.execute(query)
         
         email_config = {
@@ -892,7 +895,7 @@ def save_email_config(
         
         for key, value in config_data.items():
             # 检查配置是否已存在
-            check_query = text('SELECT id FROM system_configs WHERE "key" = :key AND type = \'email\'')
+            check_query = text('SELECT id FROM system_configs WHERE key = :key AND type = \'email\'')
             existing = db.execute(check_query, {"key": key}).first()
             
             if existing:
@@ -938,7 +941,7 @@ def get_clash_config(
         from sqlalchemy import text
         
         # 从数据库获取Clash配置
-        query = text('SELECT value FROM system_configs WHERE "key" = \'clash_config\' AND type = \'clash\'')
+        query = text('SELECT value FROM system_configs WHERE key = \'clash_config\' AND type = \'clash\'')
         result = db.execute(query).first()
         
         if result:
@@ -969,7 +972,7 @@ def save_clash_config(
         current_time = datetime.now()
         
         # 检查配置是否已存在
-        check_query = text('SELECT id FROM system_configs WHERE "key" = \'clash_config\' AND type = \'clash\'')
+        check_query = text('SELECT id FROM system_configs WHERE key = \'clash_config\' AND type = \'clash\'')
         existing = db.execute(check_query).first()
         
         if existing:
@@ -977,7 +980,7 @@ def save_clash_config(
             update_query = text("""
                 UPDATE system_configs 
                 SET value = :value, updated_at = :updated_at
-                WHERE "key" = 'clash_config' AND type = 'clash'
+                WHERE key = 'clash_config' AND type = 'clash'
             """)
             db.execute(update_query, {
                 "value": config_content,
@@ -1020,7 +1023,7 @@ def save_clash_config_invalid(
         current_time = datetime.now()
         
         # 检查失效配置是否已存在
-        check_query = text('SELECT id FROM system_configs WHERE "key" = \'clash_config_invalid\' AND type = \'clash_invalid\'')
+        check_query = text('SELECT id FROM system_configs WHERE key = \'clash_config_invalid\' AND type = \'clash_invalid\'')
         existing = db.execute(check_query).first()
         
         if existing:
@@ -1062,7 +1065,7 @@ def get_clash_config_invalid(
         from sqlalchemy import text
         
         # 从数据库获取Clash失效配置
-        query = text('SELECT value FROM system_configs WHERE "key" = \'clash_config_invalid\' AND type = \'clash_invalid\'')
+        query = text('SELECT value FROM system_configs WHERE key = \'clash_config_invalid\' AND type = \'clash_invalid\'')
         result = db.execute(query).first()
         
         if result:
@@ -1084,7 +1087,7 @@ def get_v2ray_config(
         from sqlalchemy import text
         
         # 从数据库获取V2Ray配置
-        query = text('SELECT value FROM system_configs WHERE "key" = \'v2ray_config\' AND type = \'v2ray\'')
+        query = text('SELECT value FROM system_configs WHERE key = \'v2ray_config\' AND type = \'v2ray\'')
         result = db.execute(query).first()
         
         if result:
@@ -1115,7 +1118,7 @@ def save_v2ray_config(
         current_time = datetime.now()
         
         # 检查配置是否已存在
-        check_query = text('SELECT id FROM system_configs WHERE "key" = \'v2ray_config\' AND type = \'v2ray\'')
+        check_query = text('SELECT id FROM system_configs WHERE key = \'v2ray_config\' AND type = \'v2ray\'')
         existing = db.execute(check_query).first()
         
         if existing:
@@ -1166,7 +1169,7 @@ def save_v2ray_config_invalid(
         current_time = datetime.now()
         
         # 检查失效配置是否已存在
-        check_query = text('SELECT id FROM system_configs WHERE "key" = \'v2ray_config_invalid\' AND type = \'v2ray_invalid\'')
+        check_query = text('SELECT id FROM system_configs WHERE key = \'v2ray_config_invalid\' AND type = \'v2ray_invalid\'')
         existing = db.execute(check_query).first()
         
         if existing:
@@ -1208,7 +1211,7 @@ def get_v2ray_config_invalid(
         from sqlalchemy import text
         
         # 从数据库获取V2Ray失效配置
-        query = text('SELECT value FROM system_configs WHERE "key" = \'v2ray_config_invalid\' AND type = \'v2ray_invalid\'')
+        query = text('SELECT value FROM system_configs WHERE key = \'v2ray_config_invalid\' AND type = \'v2ray_invalid\'')
         result = db.execute(query).first()
         
         if result:
@@ -1409,15 +1412,15 @@ def update_general_settings(
         
         for key, value in settings.items():
             # 检查配置是否已存在
-            check_query = text("SELECT id FROM system_configs WHERE config_key = :key AND config_type = 'general'")
+            check_query = text("SELECT id FROM system_configs WHERE key = :key AND type = 'general'")
             existing = db.execute(check_query, {"key": key}).first()
             
             if existing:
                 # 更新现有配置
                 update_query = text("""
                     UPDATE system_configs 
-                    SET config_value = :value, updated_at = :updated_at
-                    WHERE config_key = :key AND config_type = 'general'
+                    SET value = :value, updated_at = :updated_at
+                    WHERE key = :key AND type = 'general'
                 """)
                 db.execute(update_query, {
                     "value": str(value),
@@ -1427,8 +1430,8 @@ def update_general_settings(
         else:
                 # 插入新配置
                 insert_query = text("""
-                    INSERT INTO system_configs (config_key, config_value, config_type, created_at, updated_at)
-                    VALUES (:key, :value, 'general', :created_at, :updated_at)
+                    INSERT INTO system_configs (key, value, type, category, display_name, description, created_at, updated_at)
+                    VALUES (:key, :value, 'general', 'system', :key, :key, :created_at, :updated_at)
                 """)
                 db.execute(insert_query, {
                     "key": key,
@@ -2526,7 +2529,7 @@ def update_payment_configs(
         
         for key, value in payment_configs.items():
             # 检查配置是否已存在
-            check_query = text("SELECT id FROM system_configs WHERE \"key\" = :key AND type = 'payment'")
+            check_query = text("SELECT id FROM system_configs WHERE key = :key AND type = 'payment'")
             existing = db.execute(check_query, {"key": key}).first()
             
             if existing:
