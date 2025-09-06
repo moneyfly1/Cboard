@@ -75,7 +75,12 @@
         <el-table-column type="selection" width="55" />
         
         <!-- QQ号码/邮箱列 -->
-        <el-table-column label="QQ号码" width="140" fixed="left">
+        <el-table-column 
+          v-if="visibleColumns.includes('qq')" 
+          label="QQ号码" 
+          width="140" 
+          fixed="left"
+        >
           <template #default="scope">
             <div class="qq-info">
               <div class="qq-number">{{ scope.row.user?.email || scope.row.user?.username || '未知' }}</div>
@@ -92,7 +97,11 @@
         </el-table-column>
         
         <!-- 结束时间列 -->
-        <el-table-column label="结束时间" width="160">
+        <el-table-column 
+          v-if="visibleColumns.includes('expire_time')" 
+          label="结束时间" 
+          width="160"
+        >
           <template #default="scope">
             <div class="expire-time-section">
               <el-date-picker
@@ -115,7 +124,12 @@
         </el-table-column>
         
         <!-- 二维码列 -->
-        <el-table-column label="二维码" width="100" align="center">
+        <el-table-column 
+          v-if="visibleColumns.includes('qr_code')" 
+          label="二维码" 
+          width="100" 
+          align="center"
+        >
           <template #default="scope">
             <div class="qr-code-section">
               <div 
@@ -131,7 +145,11 @@
         </el-table-column>
         
         <!-- 手机短链列 -->
-        <el-table-column label="手机短链" width="180">
+        <el-table-column 
+          v-if="visibleColumns.includes('v2ray_url')" 
+          label="手机短链" 
+          width="180"
+        >
           <template #default="scope">
             <div class="subscription-link">
               <el-link 
@@ -149,7 +167,11 @@
         </el-table-column>
         
         <!-- CLASH短链列 -->
-        <el-table-column label="CLASH短链" width="180">
+        <el-table-column 
+          v-if="visibleColumns.includes('clash_url')" 
+          label="CLASH短链" 
+          width="180"
+        >
           <template #default="scope">
             <div class="subscription-link">
               <el-link 
@@ -166,30 +188,61 @@
           </template>
         </el-table-column>
         
+        <!-- 添加时间列 -->
+        <el-table-column 
+          v-if="visibleColumns.includes('created_at')" 
+          label="添加时间" 
+          width="160"
+        >
+          <template #default="scope">
+            <div class="created-time">
+              {{ formatDate(scope.row.created_at) }}
+            </div>
+          </template>
+        </el-table-column>
         
         <!-- 苹果列 -->
-        <el-table-column label="苹果" width="70" align="center">
+        <el-table-column 
+          v-if="visibleColumns.includes('apple_count')" 
+          label="苹果" 
+          width="70" 
+          align="center"
+        >
           <template #default="scope">
             <el-tag type="info" size="small">{{ scope.row.apple_count || 0 }}</el-tag>
           </template>
         </el-table-column>
         
         <!-- CLASH列 -->
-        <el-table-column label="CLASH" width="70" align="center">
+        <el-table-column 
+          v-if="visibleColumns.includes('clash_count')" 
+          label="CLASH" 
+          width="70" 
+          align="center"
+        >
           <template #default="scope">
             <el-tag type="warning" size="small">{{ scope.row.clash_count || 0 }}</el-tag>
           </template>
         </el-table-column>
         
         <!-- 在线列 -->
-        <el-table-column label="在线" width="70" align="center">
+        <el-table-column 
+          v-if="visibleColumns.includes('online_devices')" 
+          label="在线" 
+          width="70" 
+          align="center"
+        >
           <template #default="scope">
             <el-tag type="success" size="small">{{ scope.row.online_devices || 0 }}</el-tag>
           </template>
         </el-table-column>
         
         <!-- 最大设备数列 -->
-        <el-table-column label="最大设备数" width="130">
+        <el-table-column 
+          v-if="visibleColumns.includes('device_limit')" 
+          label="最大设备数" 
+          width="130"
+        >
           <template #default="scope">
             <div class="device-limit-section">
               <el-input-number
@@ -210,7 +263,12 @@
         </el-table-column>
         
         <!-- 操作列 -->
-        <el-table-column label="操作" width="220" fixed="right">
+        <el-table-column 
+          v-if="visibleColumns.includes('actions')" 
+          label="操作" 
+          width="220" 
+          fixed="right"
+        >
           <template #default="scope">
             <div class="action-buttons">
               <div class="button-row">
@@ -384,20 +442,43 @@
     </el-dialog>
 
     <!-- 列设置对话框 -->
-    <el-dialog v-model="showColumnSettings" title="列设置" width="500px">
-      <el-checkbox-group v-model="visibleColumns">
-        <el-checkbox label="qq">QQ号码</el-checkbox>
-        <el-checkbox label="expire_time">结束时间</el-checkbox>
-        <el-checkbox label="qr_code">二维码</el-checkbox>
-        <el-checkbox label="v2ray_url">手机短链</el-checkbox>
-        <el-checkbox label="clash_url">CLASH短链</el-checkbox>
-        <el-checkbox label="created_at">添加时间</el-checkbox>
-        <el-checkbox label="apple_count">苹果</el-checkbox>
-        <el-checkbox label="clash_count">CLASH</el-checkbox>
-        <el-checkbox label="online_devices">在线</el-checkbox>
-        <el-checkbox label="device_limit">最大设备数</el-checkbox>
-        <el-checkbox label="actions">操作</el-checkbox>
-      </el-checkbox-group>
+    <el-dialog v-model="showColumnSettings" title="列设置" width="600px">
+      <div class="column-settings">
+        <div class="settings-header">
+          <p>选择要显示的列，取消勾选将隐藏对应列：</p>
+          <div class="quick-actions">
+            <el-button size="small" @click="selectAllColumns">全选</el-button>
+            <el-button size="small" @click="clearAllColumns">全不选</el-button>
+            <el-button size="small" @click="resetToDefault">恢复默认</el-button>
+          </div>
+        </div>
+        
+        <el-checkbox-group v-model="visibleColumns" class="column-checkboxes">
+          <div class="checkbox-row">
+            <el-checkbox label="qq">QQ号码</el-checkbox>
+            <el-checkbox label="expire_time">结束时间</el-checkbox>
+            <el-checkbox label="qr_code">二维码</el-checkbox>
+          </div>
+          <div class="checkbox-row">
+            <el-checkbox label="v2ray_url">手机短链</el-checkbox>
+            <el-checkbox label="clash_url">CLASH短链</el-checkbox>
+            <el-checkbox label="created_at">添加时间</el-checkbox>
+          </div>
+          <div class="checkbox-row">
+            <el-checkbox label="apple_count">苹果</el-checkbox>
+            <el-checkbox label="clash_count">CLASH</el-checkbox>
+            <el-checkbox label="online_devices">在线</el-checkbox>
+          </div>
+          <div class="checkbox-row">
+            <el-checkbox label="device_limit">最大设备数</el-checkbox>
+            <el-checkbox label="actions">操作</el-checkbox>
+          </div>
+        </el-checkbox-group>
+        
+        <div class="settings-footer">
+          <p class="tip">💡 提示：至少需要保留一列显示，建议保留"QQ号码"和"操作"列</p>
+        </div>
+      </div>
     </el-dialog>
   </div>
 </template>
@@ -787,6 +868,28 @@ export default {
       loadSubscriptions()
     }
 
+    // 列设置相关方法
+    const selectAllColumns = () => {
+      visibleColumns.value = [
+        'qq', 'expire_time', 'qr_code', 'v2ray_url', 'clash_url', 
+        'created_at', 'apple_count', 'clash_count', 'online_devices', 
+        'device_limit', 'actions'
+      ]
+    }
+
+    const clearAllColumns = () => {
+      // 至少保留一列，建议保留QQ号码和操作列
+      visibleColumns.value = ['qq', 'actions']
+    }
+
+    const resetToDefault = () => {
+      visibleColumns.value = [
+        'qq', 'expire_time', 'qr_code', 'v2ray_url', 'clash_url', 
+        'created_at', 'apple_count', 'clash_count', 'online_devices', 
+        'device_limit', 'actions'
+      ]
+    }
+
     // 组件挂载时加载数据
     onMounted(() => {
       loadSubscriptions()
@@ -837,7 +940,10 @@ export default {
       formatDate,
       handleSelectionChange,
       handleSizeChange,
-      handleCurrentChange
+      handleCurrentChange,
+      selectAllColumns,
+      clearAllColumns,
+      resetToDefault
     }
   }
 }
@@ -1105,6 +1211,69 @@ export default {
   .qr-code img {
     width: 40px;
     height: 40px;
+  }
+}
+
+/* 列设置对话框样式 */
+.column-settings {
+  .settings-header {
+    margin-bottom: 20px;
+    
+    p {
+      margin: 0 0 15px 0;
+      color: #606266;
+      font-size: 14px;
+    }
+    
+    .quick-actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+  }
+  
+  .column-checkboxes {
+    .checkbox-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 20px;
+      margin-bottom: 15px;
+      
+      .el-checkbox {
+        min-width: 120px;
+        margin-right: 0;
+      }
+    }
+  }
+  
+  .settings-footer {
+    margin-top: 20px;
+    padding-top: 15px;
+    border-top: 1px solid #ebeef5;
+    
+    .tip {
+      margin: 0;
+      color: #909399;
+      font-size: 12px;
+      line-height: 1.5;
+    }
+  }
+}
+
+@media (max-width: 768px) {
+  .column-settings {
+    .column-checkboxes .checkbox-row {
+      flex-direction: column;
+      gap: 10px;
+      
+      .el-checkbox {
+        min-width: auto;
+      }
+    }
+    
+    .settings-header .quick-actions {
+      flex-direction: column;
+    }
   }
 }
 </style>
