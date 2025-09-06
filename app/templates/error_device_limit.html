@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>设备数量已达上限</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            margin: 0;
+            padding: 0;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .error-container {
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            text-align: center;
+            max-width: 500px;
+            width: 90%;
+        }
+        .error-icon {
+            font-size: 80px;
+            color: #ffa726;
+            margin-bottom: 20px;
+        }
+        .error-title {
+            font-size: 28px;
+            color: #333;
+            margin-bottom: 15px;
+            font-weight: 600;
+        }
+        .error-message {
+            font-size: 16px;
+            color: #666;
+            line-height: 1.6;
+            margin-bottom: 30px;
+        }
+        .error-details {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 30px;
+            text-align: left;
+        }
+        .error-details h3 {
+            margin: 0 0 15px 0;
+            color: #333;
+            font-size: 18px;
+        }
+        .error-details p {
+            margin: 8px 0;
+            color: #666;
+            font-size: 14px;
+        }
+        .device-info {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 15px 0;
+            text-align: left;
+        }
+        .device-info h4 {
+            margin: 0 0 10px 0;
+            color: #856404;
+            font-size: 16px;
+        }
+        .device-info p {
+            margin: 5px 0;
+            color: #856404;
+            font-size: 14px;
+        }
+        .action-buttons {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 25px;
+            font-size: 14px;
+            font-weight: 500;
+            text-decoration: none;
+            display: inline-block;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(102, 126, 234, 0.4);
+        }
+        .btn-secondary {
+            background: #f8f9fa;
+            color: #666;
+            border: 1px solid #e9ecef;
+        }
+        .btn-secondary:hover {
+            background: #e9ecef;
+            transform: translateY(-1px);
+        }
+        .btn-warning {
+            background: #ffa726;
+            color: white;
+        }
+        .btn-warning:hover {
+            background: #ff9800;
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(255, 167, 38, 0.4);
+        }
+        .footer {
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #e9ecef;
+            color: #999;
+            font-size: 12px;
+        }
+        .tips {
+            background: #e3f2fd;
+            border: 1px solid #bbdefb;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 20px 0;
+            text-align: left;
+        }
+        .tips h4 {
+            margin: 0 0 10px 0;
+            color: #1976d2;
+            font-size: 16px;
+        }
+        .tips ul {
+            margin: 0;
+            padding-left: 20px;
+            color: #1976d2;
+        }
+        .tips li {
+            margin: 5px 0;
+            font-size: 14px;
+        }
+        @media (max-width: 600px) {
+            .error-container {
+                padding: 30px 20px;
+            }
+            .error-title {
+                font-size: 24px;
+            }
+            .action-buttons {
+                flex-direction: column;
+            }
+            .btn {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="error-container">
+        <div class="error-icon">📱</div>
+        <h1 class="error-title">设备数量已达上限</h1>
+        <p class="error-message">
+            很抱歉，您的订阅已达到最大设备数量限制，无法添加新设备。请管理现有设备或联系管理员。
+        </p>
+        
+        <div class="error-details">
+            <h3>📋 详细信息</h3>
+            <p><strong>错误类型：</strong>设备数量限制</p>
+            <p><strong>状态码：</strong>403 Forbidden</p>
+            <p><strong>当前设备：</strong><span id="current-devices">-</span></p>
+            <p><strong>最大设备：</strong><span id="max-devices">-</span></p>
+        </div>
+        
+        <div class="device-info">
+            <h4>🔍 当前设备信息</h4>
+            <p><strong>软件：</strong><span id="software-name">-</span></p>
+            <p><strong>系统：</strong><span id="os-info">-</span></p>
+            <p><strong>设备：</strong><span id="device-info">-</span></p>
+            <p><strong>IP地址：</strong><span id="ip-address">-</span></p>
+        </div>
+        
+        <div class="tips">
+            <h4>💡 解决方案</h4>
+            <ul>
+                <li>登录管理后台，删除不需要的设备</li>
+                <li>联系管理员增加设备数量限制</li>
+                <li>升级到更高级别的订阅套餐</li>
+                <li>检查是否有重复的设备记录</li>
+            </ul>
+        </div>
+        
+        <div class="action-buttons">
+            <a href="/dashboard" class="btn btn-primary">管理设备</a>
+            <a href="/contact" class="btn btn-warning">联系客服</a>
+            <a href="/" class="btn btn-secondary">返回首页</a>
+        </div>
+        
+        <div class="footer">
+            <p>此页面由系统自动生成 | 如有疑问请联系客服</p>
+        </div>
+    </div>
+    
+    <script>
+        // 从URL参数获取设备信息
+        const urlParams = new URLSearchParams(window.location.search);
+        const currentDevices = urlParams.get('current') || '-';
+        const maxDevices = urlParams.get('max') || '-';
+        const softwareName = urlParams.get('software') || '-';
+        const osInfo = urlParams.get('os') || '-';
+        const deviceInfo = urlParams.get('device') || '-';
+        const ipAddress = urlParams.get('ip') || '-';
+        
+        // 更新页面信息
+        document.getElementById('current-devices').textContent = currentDevices;
+        document.getElementById('max-devices').textContent = maxDevices;
+        document.getElementById('software-name').textContent = softwareName;
+        document.getElementById('os-info').textContent = osInfo;
+        document.getElementById('device-info').textContent = deviceInfo;
+        document.getElementById('ip-address').textContent = ipAddress;
+    </script>
+</body>
+</html>

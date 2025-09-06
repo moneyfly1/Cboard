@@ -530,47 +530,68 @@ def clear_user_devices(
 @router.get("/ssr/{subscription_key}")
 def get_ssr_subscription(
     subscription_key: str,
+    request: Request,
     db: Session = Depends(get_db)
 ) -> Any:
     """获取SSR/V2Ray订阅内容"""
+    from app.services.device_manager import DeviceManager
+    from fastapi.responses import HTMLResponse
+    
     try:
+        device_manager = DeviceManager(db)
         subscription_service = SubscriptionService(db)
         
-        # 根据订阅密钥查找订阅
+        # 获取请求信息
+        user_agent = request.headers.get("user-agent", "")
+        client_ip = request.client.host if request.client else "unknown"
+        
+        # 检查订阅访问权限
+        access_result = device_manager.check_subscription_access(
+            subscription_key, user_agent, client_ip
+        )
+        
+        if not access_result['allowed']:
+            # 根据访问类型返回不同的错误页面
+            if access_result['access_type'] == 'blocked_expired':
+                # 返回过期错误页面
+                with open('app/templates/error_expired.html', 'r', encoding='utf-8') as f:
+                    error_html = f.read()
+                return HTMLResponse(content=error_html, status_code=403)
+            elif access_result['access_type'] == 'blocked_device_limit':
+                # 返回设备限制错误页面
+                with open('app/templates/error_device_limit.html', 'r', encoding='utf-8') as f:
+                    error_html = f.read()
+                
+                # 替换页面中的动态信息
+                device_info = access_result.get('device_info', {})
+                error_html = error_html.replace('id="current-devices"', f'id="current-devices" data-current="{access_result.get("current_devices", 0)}"')
+                error_html = error_html.replace('id="max-devices"', f'id="max-devices" data-max="{access_result.get("max_devices", 0)}"')
+                error_html = error_html.replace('id="software-name"', f'id="software-name" data-software="{device_info.get("software_name", "Unknown")}"')
+                error_html = error_html.replace('id="os-info"', f'id="os-info" data-os="{device_info.get("os_name", "Unknown")} {device_info.get("os_version", "")}"')
+                error_html = error_html.replace('id="device-info"', f'id="device-info" data-device="{device_info.get("device_brand", "")} {device_info.get("device_model", "")}"')
+                error_html = error_html.replace('id="ip-address"', f'id="ip-address" data-ip="{client_ip}"')
+                
+                return HTMLResponse(content=error_html, status_code=403)
+            else:
+                # 其他错误，返回无效配置
+                invalid_config = subscription_service.get_invalid_v2ray_config()
+                return Response(content=invalid_config, media_type="text/plain")
+        
+        # 获取订阅信息
         subscription = db.query(Subscription).filter(
             Subscription.subscription_url == subscription_key
         ).first()
         
         if not subscription:
-            # 返回无效配置
             invalid_config = subscription_service.get_invalid_v2ray_config()
             return Response(content=invalid_config, media_type="text/plain")
         
-        # 检查订阅是否有效
-        if not subscription.is_active:
-            # 订阅被禁用，返回无效配置
-            invalid_config = subscription_service.get_invalid_v2ray_config()
-            return Response(content=invalid_config, media_type="text/plain")
-        
-        # 检查是否过期
-        if subscription.expire_time and subscription.expire_time < datetime.utcnow():
-            # 订阅过期，返回无效配置
-            invalid_config = subscription_service.get_invalid_v2ray_config()
-            return Response(content=invalid_config, media_type="text/plain")
-        
-        # 检查设备数量限制
-        devices = subscription_service.get_devices_by_subscription_id(subscription.id)
-        if len(devices) >= subscription.device_limit:
-            # 设备数量超限，返回无效配置
-            invalid_config = subscription_service.get_invalid_v2ray_config()
-            return Response(content=invalid_config, media_type="text/plain")
-        
-        # 直接返回数据库中的V2Ray配置文件内容
+        # 返回有效的V2Ray配置
         v2ray_config = subscription_service.get_v2ray_config()
         return Response(content=v2ray_config, media_type="text/plain")
         
     except Exception as e:
-        # 发生错误，返回无效配置
+        print(f"获取SSR订阅失败: {e}")
         subscription_service = SubscriptionService(db)
         invalid_config = subscription_service.get_invalid_v2ray_config()
         return Response(content=invalid_config, media_type="text/plain")
@@ -578,47 +599,68 @@ def get_ssr_subscription(
 @router.get("/clash/{subscription_key}")
 def get_clash_subscription(
     subscription_key: str,
+    request: Request,
     db: Session = Depends(get_db)
 ) -> Any:
     """获取Clash订阅内容"""
+    from app.services.device_manager import DeviceManager
+    from fastapi.responses import HTMLResponse
+    
     try:
+        device_manager = DeviceManager(db)
         subscription_service = SubscriptionService(db)
         
-        # 根据订阅密钥查找订阅
+        # 获取请求信息
+        user_agent = request.headers.get("user-agent", "")
+        client_ip = request.client.host if request.client else "unknown"
+        
+        # 检查订阅访问权限
+        access_result = device_manager.check_subscription_access(
+            subscription_key, user_agent, client_ip
+        )
+        
+        if not access_result['allowed']:
+            # 根据访问类型返回不同的错误页面
+            if access_result['access_type'] == 'blocked_expired':
+                # 返回过期错误页面
+                with open('app/templates/error_expired.html', 'r', encoding='utf-8') as f:
+                    error_html = f.read()
+                return HTMLResponse(content=error_html, status_code=403)
+            elif access_result['access_type'] == 'blocked_device_limit':
+                # 返回设备限制错误页面
+                with open('app/templates/error_device_limit.html', 'r', encoding='utf-8') as f:
+                    error_html = f.read()
+                
+                # 替换页面中的动态信息
+                device_info = access_result.get('device_info', {})
+                error_html = error_html.replace('id="current-devices"', f'id="current-devices" data-current="{access_result.get("current_devices", 0)}"')
+                error_html = error_html.replace('id="max-devices"', f'id="max-devices" data-max="{access_result.get("max_devices", 0)}"')
+                error_html = error_html.replace('id="software-name"', f'id="software-name" data-software="{device_info.get("software_name", "Unknown")}"')
+                error_html = error_html.replace('id="os-info"', f'id="os-info" data-os="{device_info.get("os_name", "Unknown")} {device_info.get("os_version", "")}"')
+                error_html = error_html.replace('id="device-info"', f'id="device-info" data-device="{device_info.get("device_brand", "")} {device_info.get("device_model", "")}"')
+                error_html = error_html.replace('id="ip-address"', f'id="ip-address" data-ip="{client_ip}"')
+                
+                return HTMLResponse(content=error_html, status_code=403)
+            else:
+                # 其他错误，返回无效配置
+                invalid_config = subscription_service.get_invalid_clash_config()
+                return Response(content=invalid_config, media_type="text/plain")
+        
+        # 获取订阅信息
         subscription = db.query(Subscription).filter(
             Subscription.subscription_url == subscription_key
         ).first()
         
         if not subscription:
-            # 返回无效配置
             invalid_config = subscription_service.get_invalid_clash_config()
             return Response(content=invalid_config, media_type="text/plain")
         
-        # 检查订阅是否有效
-        if not subscription.is_active:
-            # 订阅被禁用，返回无效配置
-            invalid_config = subscription_service.get_invalid_clash_config()
-            return Response(content=invalid_config, media_type="text/plain")
-        
-        # 检查是否过期
-        if subscription.expire_time and subscription.expire_time < datetime.utcnow():
-            # 订阅过期，返回无效配置
-            invalid_config = subscription_service.get_invalid_clash_config()
-            return Response(content=invalid_config, media_type="text/plain")
-        
-        # 检查设备数量限制
-        devices = subscription_service.get_devices_by_subscription_id(subscription.id)
-        if len(devices) >= subscription.device_limit:
-            # 设备数量超限，返回无效配置
-            invalid_config = subscription_service.get_invalid_clash_config()
-            return Response(content=invalid_config, media_type="text/plain")
-        
-        # 直接返回数据库中的Clash配置文件内容
+        # 返回有效的Clash配置
         clash_config = subscription_service.get_clash_config()
         return Response(content=clash_config, media_type="text/plain")
         
     except Exception as e:
-        # 发生错误，返回无效配置
+        print(f"获取Clash订阅失败: {e}")
         subscription_service = SubscriptionService(db)
         invalid_config = subscription_service.get_invalid_clash_config()
         return Response(content=invalid_config, media_type="text/plain") 
