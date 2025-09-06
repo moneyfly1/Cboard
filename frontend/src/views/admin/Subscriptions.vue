@@ -703,15 +703,15 @@ export default {
         
         const response = await adminAPI.loginAsUser(subscription.user.id)
         
-        // 保存用户token并跳转
-        localStorage.setItem('token', response.data.token)
-        localStorage.setItem('user', JSON.stringify(response.data.user))
-        
-        // 保存管理员信息，用于返回管理员后台
-        const adminToken = localStorage.getItem('admin_token') || localStorage.getItem('token')
-        const adminUser = localStorage.getItem('admin_user') || localStorage.getItem('user')
+        // 先保存管理员信息，用于返回管理员后台
+        const adminToken = localStorage.getItem('token')
+        const adminUser = localStorage.getItem('user')
         localStorage.setItem('admin_token', adminToken)
         localStorage.setItem('admin_user', adminUser)
+        
+        // 然后保存用户token
+        localStorage.setItem('token', response.data.token)
+        localStorage.setItem('user', JSON.stringify(response.data.user))
         
         ElMessage.success('登录成功，正在跳转...')
         
