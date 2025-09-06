@@ -236,6 +236,27 @@ def create_user(
         # 获取新创建的用户ID
         user_id = result.lastrowid
         
+        # 自动创建默认订阅
+        try:
+            from app.services.subscription import SubscriptionService
+            from app.schemas.subscription import SubscriptionCreate
+            from datetime import datetime, timedelta
+            
+            subscription_service = SubscriptionService(db)
+            
+            # 创建默认订阅（30天试用期）
+            default_subscription = SubscriptionCreate(
+                user_id=user_id,
+                device_limit=3,
+                expire_time=datetime.utcnow() + timedelta(days=30)
+            )
+            
+            subscription_service.create(default_subscription)
+            
+        except Exception as e:
+            # 如果创建订阅失败，记录错误但不影响用户创建
+            print(f"创建默认订阅失败: {e}")
+        
         return ResponseBase(message="用户创建成功", data={"user_id": user_id})
     except Exception as e:
         db.rollback()
