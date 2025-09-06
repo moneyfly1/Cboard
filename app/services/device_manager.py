@@ -10,8 +10,8 @@ from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Tuple, Any
 from sqlalchemy.orm import Session
 from sqlalchemy import text
-from app.models.subscription import Subscription
-from app.models.user import User
+# from app.models.subscription import Subscription
+# from app.models.user import User
 
 
 class DeviceManager:
@@ -221,7 +221,8 @@ class DeviceManager:
         try:
             # 获取订阅信息
             subscription = self.db.execute(text("""
-                SELECT s.*, u.id as user_id, u.username, u.email
+                SELECT s.id, s.user_id, s.device_limit, s.expire_time, s.is_active,
+                       u.id as user_id, u.username, u.email
                 FROM subscriptions s
                 JOIN users u ON s.user_id = u.id
                 WHERE s.subscription_url = :subscription_url
@@ -234,12 +235,23 @@ class DeviceManager:
                 return result
             
             # 检查订阅是否过期
-            if subscription.expire_time and subscription.expire_time < datetime.utcnow():
-                result['status_code'] = 403
-                result['message'] = '订阅已过期'
-                result['access_type'] = 'blocked_expired'
-                self._log_access(subscription.id, None, ip_address, user_agent, 'blocked_expired', 403, '订阅已过期')
-                return result
+            if subscription.expire_time:
+                # 处理字符串格式的日期
+                if isinstance(subscription.expire_time, str):
+                    from datetime import datetime
+                    try:
+                        expire_time = datetime.fromisoformat(subscription.expire_time.replace('Z', '+00:00'))
+                    except:
+                        expire_time = datetime.strptime(subscription.expire_time, '%Y-%m-%d %H:%M:%S.%f')
+                else:
+                    expire_time = subscription.expire_time
+                
+                if expire_time < datetime.utcnow():
+                    result['status_code'] = 403
+                    result['message'] = '订阅已过期'
+                    result['access_type'] = 'blocked_expired'
+                    self._log_access(subscription.id, None, ip_address, user_agent, 'blocked_expired', 403, '订阅已过期')
+                    return result
             
             # 解析设备信息
             device_info = self.parse_user_agent(user_agent)
@@ -425,6 +437,44 @@ class DeviceManager:
             print(f"获取用户设备列表失败: {e}")
             return []
     
+    def update_device_status(self, device_id: int, device_data: dict) -> bool:
+        """更新设备状态"""
+        try:
+            # 验证设备存在
+            device = self.db.execute(text("""
+                SELECT id FROM user_devices WHERE id = :device_id
+            """), {'device_id': device_id}).fetchone()
+            
+            if not device:
+                return False
+            
+            # 构建更新SQL
+            update_fields = []
+            params = {'device_id': device_id}
+            
+            if 'is_allowed' in device_data:
+                update_fields.append("is_allowed = :is_allowed")
+                params['is_allowed'] = device_data['is_allowed']
+            
+            if not update_fields:
+                return True  # 没有需要更新的字段
+            
+            # 执行更新
+            update_sql = f"""
+                UPDATE user_devices 
+                SET {', '.join(update_fields)}, updated_at = CURRENT_TIMESTAMP
+                WHERE id = :device_id
+            """
+            
+            self.db.execute(text(update_sql), params)
+            self.db.commit()
+            return True
+            
+        except Exception as e:
+            print(f"更新设备状态失败: {e}")
+            self.db.rollback()
+            return False
+
     def delete_device(self, device_id: int, user_id: int) -> bool:
         """删除设备"""
         try:
@@ -450,6 +500,29 @@ class DeviceManager:
             self.db.rollback()
             return False
     
+    def clear_user_devices(self, subscription_id: int) -> int:
+        """清理订阅的所有设备"""
+        try:
+            # 获取要删除的设备数量
+            count_result = self.db.execute(text("""
+                SELECT COUNT(*) FROM user_devices WHERE subscription_id = :subscription_id
+            """), {'subscription_id': subscription_id}).fetchone()
+            
+            device_count = count_result[0] if count_result else 0
+            
+            # 删除所有设备
+            self.db.execute(text("""
+                DELETE FROM user_devices WHERE subscription_id = :subscription_id
+            """), {'subscription_id': subscription_id})
+            
+            self.db.commit()
+            return device_count
+            
+        except Exception as e:
+            print(f"清理用户设备失败: {e}")
+            self.db.rollback()
+            return 0
+
     def get_subscription_device_stats(self, subscription_id: int) -> Dict[str, int]:
         """获取订阅设备统计"""
         try:

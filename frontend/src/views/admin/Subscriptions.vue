@@ -138,9 +138,9 @@
               <div 
                 class="qr-code" 
                 @click="showQRCode(scope.row)"
-                v-if="scope.row.subscription_url"
+                v-if="scope.row.subscription_url || scope.row.v2ray_url"
               >
-                <img :src="generateQRCode(scope.row.subscription_url)" alt="QR Code" />
+                <img :src="generateQRCode(scope.row)" alt="QR Code" />
               </div>
               <el-text v-else type="info" size="small">无订阅</el-text>
             </div>
@@ -403,20 +403,102 @@
         <!-- 在线设备列表 -->
         <el-card class="detail-section">
           <template #header>
-            <h4>在线设备列表</h4>
+            <div class="device-header">
+              <h4>在线设备列表</h4>
+              <div class="device-actions">
+                <el-button size="small" type="primary" @click="refreshDeviceList">
+                  <el-icon><Refresh /></el-icon>
+                  刷新
+                </el-button>
+                <el-button size="small" type="warning" @click="clearAllUserDevices">
+                  <el-icon><Delete /></el-icon>
+                  清理所有设备
+                </el-button>
+              </div>
+            </div>
           </template>
-          <el-table :data="selectedUser.devices || []" size="small">
-            <el-table-column prop="device_name" label="设备名称" />
-            <el-table-column prop="device_type" label="设备类型" />
-            <el-table-column prop="user_agent" label="User Agent" />
-            <el-table-column prop="ip_address" label="IP地址" />
-            <el-table-column prop="last_seen" label="最后在线" />
-            <el-table-column label="操作" width="100">
-              <template #default="scope">
-                <el-button size="small" type="danger" @click="removeDevice(scope.row)">移除</el-button>
-              </template>
-            </el-table-column>
-          </el-table>
+          
+          <div v-if="selectedUser.devices && selectedUser.devices.length > 0" class="device-list-container">
+            <div 
+              v-for="device in selectedUser.devices" 
+              :key="device.id" 
+              class="device-card"
+            >
+              <div class="device-main-info">
+                <div class="device-header-info">
+                  <div class="device-software">
+                    <el-tag 
+                      :type="device.is_allowed ? 'success' : 'danger'" 
+                      size="small"
+                      class="software-tag"
+                    >
+                      {{ device.software_name || '未知软件' }}
+                    </el-tag>
+                    <span class="software-version">{{ device.software_version || '' }}</span>
+                  </div>
+                  <div class="device-status">
+                    <el-tag 
+                      :type="device.is_allowed ? 'success' : 'danger'" 
+                      size="small"
+                    >
+                      {{ device.is_allowed ? '已启用' : '已禁用' }}
+                    </el-tag>
+                  </div>
+                </div>
+                
+                <div class="device-details">
+                  <div class="device-info-row">
+                    <span class="info-label">设备型号:</span>
+                    <span class="info-value">{{ device.device_model || '未知设备' }}</span>
+                  </div>
+                  <div class="device-info-row">
+                    <span class="info-label">操作系统:</span>
+                    <span class="info-value">{{ device.os_name || '未知' }} {{ device.os_version || '' }}</span>
+                  </div>
+                  <div class="device-info-row">
+                    <span class="info-label">IP地址:</span>
+                    <span class="info-value">{{ device.ip_address }}</span>
+                  </div>
+                  <div class="device-info-row">
+                    <span class="info-label">最后在线:</span>
+                    <span class="info-value">{{ formatDate(device.last_seen) }}</span>
+                  </div>
+                  <div class="device-info-row">
+                    <span class="info-label">访问次数:</span>
+                    <span class="info-value">{{ device.access_count || 0 }}</span>
+                  </div>
+                </div>
+                
+                <div class="device-ua-section">
+                  <div class="ua-label">User Agent:</div>
+                  <div class="ua-content" :title="device.user_agent">
+                    {{ device.user_agent }}
+                  </div>
+                </div>
+              </div>
+              
+              <div class="device-actions">
+                <el-button 
+                  size="small" 
+                  :type="device.is_allowed ? 'warning' : 'success'"
+                  @click="toggleDeviceStatus(device)"
+                >
+                  {{ device.is_allowed ? '禁用设备' : '启用设备' }}
+                </el-button>
+                <el-button 
+                  size="small" 
+                  type="danger" 
+                  @click="removeDevice(device)"
+                >
+                  移除设备
+                </el-button>
+              </div>
+            </div>
+          </div>
+          
+          <div v-else class="no-devices">
+            <el-empty description="暂无设备记录" />
+          </div>
         </el-card>
 
         <!-- UA记录 -->
@@ -441,7 +523,8 @@
           <img :src="currentQRCode" alt="QR Code" />
         </div>
         <div class="qr-info">
-          <p>扫描二维码即可添加订阅</p>
+          <p>扫描二维码即可在Shadowrocket中添加订阅</p>
+          <p class="qr-tip">支持V2Ray和通用订阅格式，包含到期时间信息</p>
           <el-button type="primary" @click="downloadQRCode">下载二维码</el-button>
         </div>
       </div>
@@ -493,14 +576,14 @@
 import { ref, reactive, onMounted, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { 
-  Download, Delete, Setting, Apple, Monitor, ArrowDown, View
+  Download, Delete, Setting, Apple, Monitor, ArrowDown, View, Refresh
 } from '@element-plus/icons-vue'
 import { adminAPI } from '@/utils/api'
 
 export default {
   name: 'AdminSubscriptions',
   components: {
-    Download, Delete, Setting, Apple, Monitor, ArrowDown, View
+    Download, Delete, Setting, Apple, Monitor, ArrowDown, View, Refresh
   },
   setup() {
     const loading = ref(false)
@@ -639,16 +722,58 @@ export default {
     }
 
     // 生成二维码
-    const generateQRCode = (url) => {
-      if (!url) return ''
-      // 这里应该使用二维码生成库，暂时返回占位符
-      return `https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=${encodeURIComponent(url)}`
+    const generateQRCode = (subscription) => {
+      if (!subscription) return ''
+      
+      // 生成Shadowrocket兼容的订阅链接
+      let qrData = ''
+      
+      if (subscription.v2ray_url) {
+        // 使用V2Ray订阅URL，添加到期时间参数
+        const v2rayUrl = new URL(subscription.v2ray_url)
+        if (subscription.expire_time) {
+          const expireDate = new Date(subscription.expire_time)
+          const expiryDate = expireDate.toISOString().split('T')[0] // YYYY-MM-DD格式
+          v2rayUrl.searchParams.set('expiry', expiryDate)
+        }
+        qrData = v2rayUrl.toString()
+      } else if (subscription.subscription_url) {
+        // 生成sub://格式的订阅链接
+        const baseUrl = window.location.origin
+        const subscriptionUrl = `${baseUrl}/api/v1/subscriptions/ssr/${subscription.subscription_url}`
+        
+        // 添加到期时间参数到订阅URL
+        const urlWithExpiry = new URL(subscriptionUrl)
+        if (subscription.expire_time) {
+          const expireDate = new Date(subscription.expire_time)
+          const expiryDate = expireDate.toISOString().split('T')[0] // YYYY-MM-DD格式
+          urlWithExpiry.searchParams.set('expiry', expiryDate)
+        }
+        
+        // Base64编码订阅URL
+        const encodedUrl = btoa(urlWithExpiry.toString())
+        
+        // 格式化到期时间用于Shadowrocket显示
+        let expiryDate = ''
+        if (subscription.expire_time) {
+          const expireDate = new Date(subscription.expire_time)
+          expiryDate = expireDate.toISOString().replace('T', ' ').replace('Z', '')
+        }
+        
+        // 生成sub://格式的链接
+        qrData = `sub://${encodedUrl}${expiryDate ? `#${encodeURIComponent(expiryDate)}` : ''}`
+      } else {
+        return ''
+      }
+      
+      // 生成二维码，使用更高的质量设置
+      return `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(qrData)}&ecc=M&margin=10`
     }
 
     // 显示二维码
     const showQRCode = (subscription) => {
-      if (subscription.subscription_url) {
-        currentQRCode.value = generateQRCode(subscription.subscription_url)
+      if (subscription.subscription_url || subscription.v2ray_url) {
+        currentQRCode.value = generateQRCode(subscription)
         showQRDialog.value = true
       }
     }
@@ -664,12 +789,19 @@ export default {
     // 显示用户详情
     const showUserDetails = async (subscription) => {
       try {
-        const response = await adminAPI.getUser(subscription.user.id)
-        console.log('用户详情API响应:', response)
+        // 并行加载用户信息和设备列表
+        const [userResponse, devicesResponse] = await Promise.all([
+          adminAPI.getUser(subscription.user.id),
+          adminAPI.getUserDevices(subscription.user.id)
+        ])
+        
+        console.log('用户详情API响应:', userResponse)
+        console.log('设备列表API响应:', devicesResponse)
         
         selectedUser.value = {
           ...subscription,
-          user: response.data?.data || response.data
+          user: userResponse.data?.data || userResponse.data,
+          devices: devicesResponse.data?.devices || []
         }
         showUserDetailDialog.value = true
       } catch (error) {
@@ -856,18 +988,96 @@ export default {
       ElMessage.info('在线设备统计功能待实现')
     }
 
+
+    // 切换设备状态
+    const toggleDeviceStatus = async (device) => {
+      try {
+        const newStatus = !device.is_allowed
+        await adminAPI.updateDeviceStatus(device.id, { is_allowed: newStatus })
+        device.is_allowed = newStatus
+        ElMessage.success(`设备已${newStatus ? '启用' : '禁用'}`)
+      } catch (error) {
+        ElMessage.error('更新设备状态失败')
+        console.error('更新设备状态失败:', error)
+      }
+    }
+
     // 移除设备
     const removeDevice = async (device) => {
       try {
+        await ElMessageBox.confirm('确定要移除该设备吗？', '确认移除', {
+          type: 'warning'
+        })
+        
         await adminAPI.removeDevice(device.id)
         ElMessage.success('设备移除成功')
+        
+        // 从设备列表中移除
+        const subscription = subscriptions.value.find(sub => 
+          sub.devices && sub.devices.some(d => d.id === device.id)
+        )
+        if (subscription && subscription.devices) {
+          const index = subscription.devices.findIndex(d => d.id === device.id)
+          if (index > -1) {
+            subscription.devices.splice(index, 1)
+          }
+        }
+        
         // 重新加载用户详情
         if (selectedUser.value) {
           showUserDetails(selectedUser.value)
         }
       } catch (error) {
-        ElMessage.error('移除设备失败')
-        console.error('移除设备失败:', error)
+        if (error !== 'cancel') {
+          ElMessage.error('移除设备失败')
+          console.error('移除设备失败:', error)
+        }
+      }
+    }
+
+
+    // 刷新设备列表
+    const refreshDeviceList = async () => {
+      if (!selectedUser.value) return
+      
+      try {
+        const response = await adminAPI.getUserDevices(selectedUser.value.user.id)
+        selectedUser.value.devices = response.data?.devices || []
+        ElMessage.success('设备列表已刷新')
+      } catch (error) {
+        ElMessage.error('刷新设备列表失败')
+        console.error('刷新设备列表失败:', error)
+      }
+    }
+
+    // 清理用户所有设备
+    const clearAllUserDevices = async () => {
+      if (!selectedUser.value) return
+      
+      try {
+        await ElMessageBox.confirm(
+          '确定要清理该用户的所有设备吗？这将清除所有设备记录和UA记录。',
+          '确认清理',
+          {
+            type: 'warning',
+            confirmButtonText: '确定清理',
+            cancelButtonText: '取消'
+          }
+        )
+        
+        await adminAPI.clearUserDevices(selectedUser.value.user.id)
+        ElMessage.success('所有设备清理成功')
+        
+        // 刷新设备列表
+        await refreshDeviceList()
+        
+        // 重新加载订阅列表
+        loadSubscriptions()
+      } catch (error) {
+        if (error !== 'cancel') {
+          ElMessage.error('清理设备失败')
+          console.error('清理设备失败:', error)
+        }
       }
     }
 
@@ -1022,7 +1232,10 @@ export default {
       sortByApple,
       sortByOnline,
       sortByCreatedTime,
-      handleDeviceLimitSort
+      handleDeviceLimitSort,
+      toggleDeviceStatus,
+      refreshDeviceList,
+      clearAllUserDevices
     }
   }
 }
@@ -1214,8 +1427,8 @@ export default {
 }
 
 .qr-code-large img {
-  width: 200px;
-  height: 200px;
+  width: 250px;
+  height: 250px;
   border-radius: 8px;
   margin-bottom: 16px;
 }
@@ -1226,6 +1439,12 @@ export default {
 
 .qr-info p {
   margin-bottom: 16px;
+}
+
+.qr-tip {
+  font-size: 12px;
+  color: #909399;
+  margin-bottom: 16px !important;
 }
 
 /* 响应式设计 */
@@ -1291,6 +1510,118 @@ export default {
     width: 40px;
     height: 40px;
   }
+}
+
+
+/* 用户详情对话框中的设备列表样式 */
+.device-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.device-header h4 {
+  margin: 0;
+}
+
+.device-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.device-list-container {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.device-card {
+  border: 1px solid #e4e7ed;
+  border-radius: 8px;
+  padding: 16px;
+  background-color: #fafafa;
+}
+
+.device-main-info {
+  margin-bottom: 12px;
+}
+
+.device-header-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.device-software {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.software-tag {
+  font-weight: 500;
+}
+
+.software-version {
+  font-size: 12px;
+  color: #606266;
+}
+
+.device-details {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.device-info-row {
+  display: flex;
+  align-items: center;
+  font-size: 13px;
+}
+
+.info-label {
+  font-weight: 500;
+  color: #606266;
+  margin-right: 8px;
+  min-width: 80px;
+}
+
+.info-value {
+  color: #303133;
+  font-family: monospace;
+}
+
+.device-ua-section {
+  border-top: 1px solid #e4e7ed;
+  padding-top: 12px;
+}
+
+.ua-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: #606266;
+  margin-bottom: 4px;
+}
+
+.ua-content {
+  font-size: 11px;
+  color: #909399;
+  font-family: monospace;
+  background-color: #f5f7fa;
+  padding: 8px;
+  border-radius: 4px;
+  word-break: break-all;
+  line-height: 1.4;
+  max-height: 60px;
+  overflow-y: auto;
+}
+
+.device-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
 }
 
 /* 列设置对话框样式 */

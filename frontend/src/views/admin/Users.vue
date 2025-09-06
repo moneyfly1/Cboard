@@ -234,10 +234,10 @@
             <el-button 
               size="small" 
               type="info" 
-              @click="clearUserDevices(scope.row)"
+              @click="manageUserDevices(scope.row)"
             >
-              <el-icon><Connection /></el-icon>
-              清理设备
+              <el-icon><Monitor /></el-icon>
+              管理设备
             </el-button>
             <el-button 
               size="small" 
@@ -487,6 +487,95 @@
         </el-table>
       </div>
     </el-dialog>
+
+    <!-- 设备管理对话框 -->
+    <el-dialog v-model="showDeviceDialog" title="设备管理" width="1000px">
+      <div class="device-management">
+        <div class="device-header">
+          <h4>用户：{{ currentUser?.username }}</h4>
+          <div class="device-actions">
+            <el-button type="danger" size="small" @click="clearAllDevices">
+              <el-icon><Delete /></el-icon>
+              清理所有设备
+            </el-button>
+          </div>
+        </div>
+        
+        <el-table :data="userDevices" size="small" v-loading="false">
+          <el-table-column prop="id" label="ID" width="60" />
+          <el-table-column prop="software_name" label="软件名称" width="120">
+            <template #default="scope">
+              <el-tag v-if="scope.row.software_name" type="primary" size="small">
+                {{ scope.row.software_name }}
+              </el-tag>
+              <el-text v-else type="info" size="small">未知</el-text>
+            </template>
+          </el-table-column>
+          <el-table-column prop="software_category" label="软件类型" width="100">
+            <template #default="scope">
+              <el-tag v-if="scope.row.software_category" type="success" size="small">
+                {{ scope.row.software_category }}
+              </el-tag>
+              <el-text v-else type="info" size="small">-</el-text>
+            </template>
+          </el-table-column>
+          <el-table-column prop="os_name" label="操作系统" width="100">
+            <template #default="scope">
+              <el-tag v-if="scope.row.os_name" type="warning" size="small">
+                {{ scope.row.os_name }}
+              </el-tag>
+              <el-text v-else type="info" size="small">-</el-text>
+            </template>
+          </el-table-column>
+          <el-table-column prop="device_brand" label="设备品牌" width="100">
+            <template #default="scope">
+              <span v-if="scope.row.device_brand">{{ scope.row.device_brand }}</span>
+              <el-text v-else type="info" size="small">-</el-text>
+            </template>
+          </el-table-column>
+          <el-table-column prop="device_model" label="设备型号" width="120">
+            <template #default="scope">
+              <span v-if="scope.row.device_model">{{ scope.row.device_model }}</span>
+              <el-text v-else type="info" size="small">-</el-text>
+            </template>
+          </el-table-column>
+          <el-table-column prop="ip_address" label="IP地址" width="120" />
+          <el-table-column prop="access_count" label="访问次数" width="80" />
+          <el-table-column prop="is_allowed" label="状态" width="80">
+            <template #default="scope">
+              <el-tag :type="scope.row.is_allowed ? 'success' : 'danger'" size="small">
+                {{ scope.row.is_allowed ? '允许' : '拒绝' }}
+              </el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column prop="first_seen" label="首次访问" width="150">
+            <template #default="scope">
+              {{ formatDate(scope.row.first_seen) }}
+            </template>
+          </el-table-column>
+          <el-table-column prop="last_seen" label="最后访问" width="150">
+            <template #default="scope">
+              {{ formatDate(scope.row.last_seen) }}
+            </template>
+          </el-table-column>
+          <el-table-column label="操作" width="100" fixed="right">
+            <template #default="scope">
+              <el-button 
+                size="small" 
+                type="danger" 
+                @click="deleteDevice(scope.row)"
+              >
+                删除
+              </el-button>
+            </template>
+          </el-table-column>
+        </el-table>
+        
+        <div v-if="userDevices.length === 0" class="no-devices">
+          <el-empty description="暂无设备记录" />
+        </div>
+      </div>
+    </el-dialog>
   </div>
 </template>
 
@@ -519,12 +608,15 @@ export default {
     const showBulkImportDialog = ref(false)
     const showStatisticsDialog = ref(false)
     const showSubscriptionDialog = ref(false)
+    const showDeviceDialog = ref(false)
     const editingUser = ref(null)
     const selectedUser = ref(null)
     const userFormRef = ref()
     const bulkImportLoading = ref(false)
     const fileList = ref([])
     const userSubscriptions = ref([])
+    const userDevices = ref([])
+    const currentUser = ref(null)
 
     const searchForm = reactive({
       email: '',
@@ -1078,6 +1170,68 @@ export default {
       }
     }
 
+    const manageUserDevices = async (user) => {
+      try {
+        const response = await api.get(`/admin/devices/user/${user.id}`)
+        userDevices.value = response.data
+        currentUser.value = user
+        showDeviceDialog.value = true
+      } catch (error) {
+        ElMessage.error('获取设备列表失败')
+        console.error('获取设备列表失败:', error)
+      }
+    }
+
+    const deleteDevice = async (device) => {
+      try {
+        await ElMessageBox.confirm(
+          `确定要删除设备 "${device.software_name || '未知设备'}" 吗？`,
+          '确认删除',
+          {
+            confirmButtonText: '确定',
+            cancelButtonText: '取消',
+            type: 'warning'
+          }
+        )
+        
+        await api.delete(`/admin/devices/${device.id}`)
+        ElMessage.success('设备删除成功')
+        
+        // 重新加载设备列表
+        await manageUserDevices(currentUser.value)
+      } catch (error) {
+        if (error !== 'cancel') {
+          ElMessage.error('删除设备失败')
+          console.error('删除设备失败:', error)
+        }
+      }
+    }
+
+    const clearAllDevices = async () => {
+      try {
+        await ElMessageBox.confirm(
+          `确定要清理用户 ${currentUser.value.username} 的所有设备吗？`,
+          '确认清理',
+          {
+            confirmButtonText: '确定',
+            cancelButtonText: '取消',
+            type: 'warning'
+          }
+        )
+        
+        await api.post(`/admin/devices/user/${currentUser.value.id}/clear`)
+        ElMessage.success('所有设备清理成功')
+        
+        // 重新加载设备列表
+        await manageUserDevices(currentUser.value)
+      } catch (error) {
+        if (error !== 'cancel') {
+          ElMessage.error('清理设备失败')
+          console.error('清理设备失败:', error)
+        }
+      }
+    }
+
     const loginAsUser = async (user) => {
       try {
         await ElMessageBox.confirm(
@@ -1270,15 +1424,21 @@ export default {
       formatDate,
       resetUserSubscription,
       clearUserDevices,
+      manageUserDevices,
+      deleteDevice,
+      clearAllDevices,
       loginAsUser,
       // 新增的响应式变量
       showBulkImportDialog,
       showStatisticsDialog,
       showSubscriptionDialog,
+      showDeviceDialog,
       bulkImportForm,
       bulkImportLoading,
       fileList,
       userSubscriptions,
+      userDevices,
+      currentUser,
       statistics,
       // 新增的方法
       resetUserPassword,
@@ -1587,5 +1747,35 @@ export default {
 .chart-container h4 {
   margin-bottom: 15px;
   color: #606266;
+}
+
+/* 设备管理样式 */
+.device-management {
+  padding: 0;
+}
+
+.device-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  padding-bottom: 15px;
+  border-bottom: 1px solid #ebeef5;
+}
+
+.device-header h4 {
+  margin: 0;
+  color: #303133;
+  font-size: 16px;
+}
+
+.device-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.no-devices {
+  text-align: center;
+  padding: 40px 0;
 }
 </style> 

@@ -178,6 +178,47 @@ def get_device_detail(
             detail=f"获取设备详情失败: {str(e)}"
         )
 
+@router.put("/devices/{device_id}", response_model=ResponseBase)
+def update_device(
+    device_id: int,
+    device_data: dict,
+    db: Session = Depends(get_db),
+    current_admin = Depends(get_current_admin_user)
+) -> Any:
+    """更新设备状态"""
+    try:
+        device_manager = DeviceManager(db)
+        
+        # 获取设备信息
+        device = db.execute("""
+            SELECT id, user_id, subscription_id FROM user_devices WHERE id = :device_id
+        """, {'device_id': device_id}).fetchone()
+        
+        if not device:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="设备不存在"
+            )
+        
+        # 更新设备状态
+        success = device_manager.update_device_status(device_id, device_data)
+        
+        if success:
+            return ResponseBase(message="设备状态更新成功")
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="设备状态更新失败"
+            )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"更新设备状态失败: {str(e)}"
+        )
+
 @router.delete("/devices/{device_id}", response_model=ResponseBase)
 def delete_device(
     device_id: int,
@@ -237,6 +278,58 @@ def get_user_devices(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"获取用户设备列表失败: {str(e)}"
+        )
+
+@router.get("/user/{user_id}", response_model=ResponseBase)
+def get_user_devices_alt(
+    user_id: int,
+    subscription_id: Optional[int] = Query(None),
+    db: Session = Depends(get_db),
+    current_admin = Depends(get_current_admin_user)
+) -> Any:
+    """获取用户设备列表（兼容路径）"""
+    try:
+        device_manager = DeviceManager(db)
+        
+        devices = device_manager.get_user_devices(user_id, subscription_id)
+        
+        return ResponseBase(data=devices)
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"获取用户设备列表失败: {str(e)}"
+        )
+
+@router.post("/user/{user_id}/clear", response_model=ResponseBase)
+def clear_user_devices(
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_admin = Depends(get_current_admin_user)
+) -> Any:
+    """清理用户所有设备"""
+    try:
+        device_manager = DeviceManager(db)
+        
+        # 获取用户的所有订阅
+        subscriptions = db.execute("""
+            SELECT id FROM subscriptions WHERE user_id = :user_id
+        """, {'user_id': user_id}).fetchall()
+        
+        cleared_count = 0
+        for sub in subscriptions:
+            count = device_manager.clear_user_devices(sub.id)
+            cleared_count += count
+        
+        return ResponseBase(
+            message=f"成功清理 {cleared_count} 个设备",
+            data={'cleared_count': cleared_count}
+        )
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"清理用户设备失败: {str(e)}"
         )
 
 @router.get("/subscriptions/{subscription_id}/devices", response_model=ResponseBase)
