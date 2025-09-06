@@ -63,10 +63,48 @@ def get_users(
         
         print(f"用户服务返回: {len(users)} 个用户，总数: {total}")
         
-        # 获取每个用户的订阅信息
+        # 获取每个用户的订阅信息和设备信息
         user_list = []
         for user in users:
             subscription = subscription_service.get_by_user_id(user.id)
+            
+            # 获取用户设备信息
+            device_count = 0
+            online_devices = 0
+            if subscription:
+                try:
+                    from app.services.device import DeviceService
+                    device_service = DeviceService(db)
+                    devices = device_service.get_devices_by_user_id(user.id)
+                    device_count = len(devices)
+                    online_devices = len([d for d in devices if d.is_online])
+                except:
+                    device_count = subscription.current_devices if subscription else 0
+                    online_devices = 0
+            
+            # 计算订阅状态和到期信息
+            subscription_status = "inactive"
+            days_until_expire = None
+            is_expired = False
+            
+            if subscription and subscription.expire_time:
+                from datetime import datetime, timezone
+                now = datetime.now(timezone.utc)
+                expire_time = subscription.expire_time
+                if isinstance(expire_time, str):
+                    expire_time = datetime.fromisoformat(expire_time.replace('Z', '+00:00'))
+                elif expire_time.tzinfo is None:
+                    # 如果expire_time没有时区信息，假设为UTC
+                    expire_time = expire_time.replace(tzinfo=timezone.utc)
+                
+                if expire_time > now:
+                    subscription_status = "active" if subscription.is_active else "inactive"
+                    days_until_expire = (expire_time - now).days
+                else:
+                    subscription_status = "expired"
+                    is_expired = True
+                    days_until_expire = 0
+            
             user_data = {
                 "id": user.id,
                 "username": user.username,
@@ -78,12 +116,17 @@ def get_users(
                 "created_at": user.created_at.isoformat() if user.created_at else None,
                 "last_login": user.last_login.isoformat() if user.last_login else None,
                 "subscription_count": 1 if subscription else 0,
+                "device_count": device_count,
+                "online_devices": online_devices,
                 "subscription": {
                     "id": subscription.id if subscription else None,
-                    "status": "active" if subscription and subscription.is_active else "inactive",
+                    "status": subscription_status,
                     "expire_time": subscription.expire_time.isoformat() if subscription and subscription.expire_time else None,
                     "device_limit": subscription.device_limit if subscription else 0,
-                    "current_devices": subscription.current_devices if subscription else 0
+                    "current_devices": device_count,
+                    "online_devices": online_devices,
+                    "days_until_expire": days_until_expire,
+                    "is_expired": is_expired
                 } if subscription else None
             }
             user_list.append(user_data)
@@ -346,18 +389,39 @@ def update_user(
             user.is_active = user_data["is_active"]
         if "is_verified" in user_data:
             user.is_verified = user_data["is_verified"]
+        if "is_admin" in user_data:
+            user.is_admin = user_data["is_admin"]
+        
+        # 更新密码（如果提供）
+        if "password" in user_data and user_data["password"]:
+            from app.utils.security import get_password_hash
+            user.hashed_password = get_password_hash(user_data["password"])
         
         user_service.db.commit()
         
         # 更新订阅信息
         if "subscription" in user_data:
             subscription = subscription_service.get_by_user_id(user.id)
-            if subscription and "device_limit" in user_data["subscription"]:
-                subscription.device_limit = user_data["subscription"]["device_limit"]
-            if subscription and "expire_time" in user_data["subscription"]:
-                from datetime import datetime
-                subscription.expire_time = datetime.fromisoformat(user_data["subscription"]["expire_time"])
-            subscription_service.db.commit()
+            if subscription:
+                if "device_limit" in user_data["subscription"]:
+                    subscription.device_limit = user_data["subscription"]["device_limit"]
+                if "expire_time" in user_data["subscription"]:
+                    from datetime import datetime
+                    subscription.expire_time = datetime.fromisoformat(user_data["subscription"]["expire_time"])
+                if "is_active" in user_data["subscription"]:
+                    subscription.is_active = user_data["subscription"]["is_active"]
+                subscription_service.db.commit()
+        
+        # 记录管理员操作日志
+        try:
+            user_service.log_user_activity(
+                user_id=user.id,
+                activity_type="admin_update",
+                description=f"管理员 {current_admin.username} 更新了用户信息",
+                metadata={"updated_fields": list(user_data.keys())}
+            )
+        except:
+            pass  # 如果记录日志失败，不影响主要功能
         
         return ResponseBase(message="用户信息更新成功")
     except HTTPException:
@@ -461,6 +525,49 @@ def clear_user_devices(
         raise
     except Exception as e:
         return ResponseBase(success=False, message=f"清理设备失败: {str(e)}")
+
+@router.post("/users/{user_id}/reset-password", response_model=ResponseBase)
+def reset_user_password(
+    user_id: int,
+    password_data: dict,
+    db: Session = Depends(get_db),
+    current_admin = Depends(get_current_admin_user)
+) -> Any:
+    """重置用户密码"""
+    try:
+        user_service = UserService(db)
+        
+        user = user_service.get(user_id)
+        if not user:
+            raise HTTPException(status_code=404, detail="用户不存在")
+        
+        new_password = password_data.get("password")
+        if not new_password:
+            raise HTTPException(status_code=400, detail="新密码不能为空")
+        
+        if len(new_password) < 6:
+            raise HTTPException(status_code=400, detail="密码长度不能少于6位")
+        
+        # 更新密码
+        from app.utils.security import get_password_hash
+        user.hashed_password = get_password_hash(new_password)
+        user_service.db.commit()
+        
+        # 记录操作日志
+        try:
+            user_service.log_user_activity(
+                user_id=user.id,
+                activity_type="admin_password_reset",
+                description=f"管理员 {current_admin.username} 重置了用户密码"
+            )
+        except:
+            pass
+        
+        return ResponseBase(message="密码重置成功")
+    except HTTPException:
+        raise
+    except Exception as e:
+        return ResponseBase(success=False, message=f"密码重置失败: {str(e)}")
 
 @router.post("/users/{user_id}/login-as", response_model=ResponseBase)
 def login_as_user(
@@ -692,7 +799,7 @@ def save_system_config(
                     "updated_at": current_time,
                     "key": key
                 })
-            else:
+        else:
                 # 插入新配置
                 insert_query = text("""
                     INSERT INTO system_configs ("key", value, type, category, display_name, description, is_public, sort_order, created_at, updated_at)
@@ -777,7 +884,7 @@ def save_email_config(
                     "updated_at": current_time,
                     "key": key
                 })
-            else:
+        else:
                 # 插入新配置
                 insert_query = text("""
                     INSERT INTO system_configs ("key", value, type, category, display_name, description, is_public, sort_order, created_at, updated_at)
@@ -1217,7 +1324,7 @@ def update_general_settings(
                     "updated_at": current_time,
                     "key": key
                 })
-            else:
+        else:
                 # 插入新配置
                 insert_query = text("""
                     INSERT INTO system_configs (config_key, config_value, config_type, created_at, updated_at)
@@ -1245,7 +1352,7 @@ def update_registration_settings(
     try:
         # 这里应该将设置保存到数据库或配置文件
         # 暂时返回成功
-        return ResponseBase(message="注册设置保存成功")
+            return ResponseBase(message="注册设置保存成功")
     except Exception as e:
         return ResponseBase(success=False, message=f"保存注册设置失败: {str(e)}")
 
@@ -1258,7 +1365,7 @@ def update_notification_settings(
     try:
         # 这里应该将设置保存到数据库或配置文件
         # 暂时返回成功
-        return ResponseBase(message="通知设置保存成功")
+            return ResponseBase(message="通知设置保存成功")
     except Exception as e:
         return ResponseBase(success=False, message=f"保存通知设置失败: {str(e)}")
 
@@ -1271,7 +1378,7 @@ def update_security_settings(
     try:
         # 这里应该将设置保存到数据库或配置文件
         # 暂时返回成功
-        return ResponseBase(message="安全设置保存成功")
+            return ResponseBase(message="安全设置保存成功")
     except Exception as e:
         return ResponseBase(success=False, message=f"保存安全设置失败: {str(e)}")
 
@@ -1289,102 +1396,147 @@ def get_revenue_trend_statistics(current_admin = Depends(get_current_admin_user)
 def get_subscriptions(
     page: int = Query(1, ge=1),
     size: int = Query(20, ge=1, le=100),
+    search: str = Query("", description="搜索关键词（QQ、邮箱、订阅地址）"),
+    status: str = Query("", description="状态筛选"),
+    subscription_type: str = Query("", description="订阅类型筛选"),
+    sort: str = Query("add_time_desc", description="排序方式"),
     db: Session = Depends(get_db),
     current_admin = Depends(get_current_admin_user)
 ) -> Any:
     """获取订阅列表"""
     try:
         subscription_service = SubscriptionService(db)
+        user_service = UserService(db)
+        
         skip = (page - 1) * size
-        subscriptions, total = subscription_service.get_subscriptions_with_pagination(skip=skip, limit=size)
+        
+        # 构建查询条件
+        query_params = {}
+        if search:
+            query_params['search'] = search
+        if status:
+            query_params['status'] = status
+            
+        # 获取订阅数据
+        subscriptions, total = subscription_service.get_subscriptions_with_pagination(
+            skip=skip, 
+            limit=size,
+            **query_params
+        )
         
         subscription_list = []
-        # 按用户分组订阅
-        user_subscriptions = {}
         for subscription in subscriptions:
-            user_id = subscription.user_id
-            if user_id not in user_subscriptions:
-                user_subscriptions[user_id] = {
-                    "user": {
-                        "id": subscription.user.id,
-                        "username": subscription.user.username,
-                        "email": subscription.user.email
-                    },
-                    "v2ray_subscription": None,
-                    "clash_subscription": None,
-                    "total_devices": 0,
-                    "max_device_limit": 3
-                }
+            # 获取用户设备信息
+            device_count = 0
+            online_devices = 0
+            apple_count = 0
+            clash_count = 0
+            v2ray_count = 0
             
-            # 根据订阅ID的奇偶性分配类型，确保每个用户都有两个订阅
-            if subscription.id % 2 == 1:  # 奇数ID为V2Ray
-                if not user_subscriptions[user_id].get("v2ray_subscription"):
-                    user_subscriptions[user_id]["v2ray_subscription"] = {
-                        "id": subscription.id,
-                        "subscription_url": subscription.subscription_url,
-                        "full_url": f"http://localhost:8000/api/v1/subscriptions/ssr/{subscription.subscription_url}",
-                        "status": "active" if subscription.is_active else "paused",
-                        "device_limit": subscription.device_limit,
-                        "current_devices": subscription.current_devices,
-                        "expires_at": subscription.expire_time.isoformat() if subscription.expire_time else None,
-                        "created_at": subscription.created_at.isoformat() if subscription.created_at else None
-                    }
-            else:  # 偶数ID为Clash
-                if not user_subscriptions[user_id].get("clash_subscription"):
-                    user_subscriptions[user_id]["clash_subscription"] = {
-                        "id": subscription.id,
-                        "subscription_url": subscription.subscription_url,
-                        "full_url": f"http://localhost:8000/api/v1/subscriptions/clash/{subscription.subscription_url}",
-                        "status": "active" if subscription.is_active else "paused",
-                        "device_limit": subscription.device_limit,
-                        "current_devices": subscription.current_devices,
-                        "expires_at": subscription.expire_time.isoformat() if subscription.expire_time else None,
-                        "created_at": subscription.created_at.isoformat() if subscription.created_at else None
-                    }
+            try:
+                from app.services.device import DeviceService
+                device_service = DeviceService(db)
+                devices = device_service.get_devices_by_user_id(subscription.user_id)
+                device_count = len(devices)
+                online_devices = len([d for d in devices if d.is_online])
+                
+                # 统计设备类型
+                for device in devices:
+                    if 'apple' in device.device_type.lower() or 'ios' in device.device_type.lower():
+                        apple_count += 1
+                    if 'clash' in device.user_agent.lower():
+                        clash_count += 1
+                    if 'v2ray' in device.user_agent.lower() or 'shadowrocket' in device.user_agent.lower():
+                        v2ray_count += 1
+            except:
+                device_count = subscription.current_devices if subscription else 0
+                online_devices = 0
             
-            # 累计设备数量和设备限制
-            user_subscriptions[user_id]["total_devices"] += subscription.current_devices
-            user_subscriptions[user_id]["max_device_limit"] = max(user_subscriptions[user_id]["max_device_limit"], subscription.device_limit)
+            # 计算订阅状态和到期信息
+            subscription_status = "inactive"
+            days_until_expire = None
+            is_expired = False
+            
+            if subscription.expire_time:
+                from datetime import datetime, timezone
+                now = datetime.now(timezone.utc)
+                expire_time = subscription.expire_time
+                if isinstance(expire_time, str):
+                    expire_time = datetime.fromisoformat(expire_time.replace('Z', '+00:00'))
+                elif expire_time.tzinfo is None:
+                    expire_time = expire_time.replace(tzinfo=timezone.utc)
+                
+                if expire_time > now:
+                    subscription_status = "active" if subscription.is_active else "inactive"
+                    days_until_expire = (expire_time - now).days
+                else:
+                    subscription_status = "expired"
+                    is_expired = True
+                    days_until_expire = 0
+            
+            # 生成订阅地址
+            base_url = "http://localhost:8000"
+            v2ray_url = f"{base_url}/api/v1/subscriptions/ssr/{subscription.subscription_url}" if subscription.subscription_url else None
+            clash_url = f"{base_url}/api/v1/subscriptions/clash/{subscription.subscription_url}" if subscription.subscription_url else None
+            
+            subscription_data = {
+                "id": subscription.id,
+                "user": {
+                    "id": subscription.user.id,
+                    "username": subscription.user.username,
+                    "email": subscription.user.email,
+                    "created_at": subscription.user.created_at.isoformat() if subscription.user.created_at else None,
+                    "last_login": subscription.user.last_login.isoformat() if subscription.user.last_login else None,
+                    "is_active": subscription.user.is_active,
+                    "is_verified": subscription.user.is_verified,
+                    "is_admin": subscription.user.is_admin
+                },
+                "subscription_url": subscription.subscription_url,
+                "v2ray_url": v2ray_url,
+                "clash_url": clash_url,
+                "status": subscription_status,
+                "is_active": subscription.is_active,
+                "expire_time": subscription.expire_time.isoformat() if subscription.expire_time else None,
+                "created_at": subscription.created_at.isoformat() if subscription.created_at else None,
+                "device_limit": subscription.device_limit,
+                "current_devices": device_count,
+                "online_devices": online_devices,
+                "apple_count": apple_count,
+                "clash_count": clash_count,
+                "v2ray_count": v2ray_count,
+                "days_until_expire": days_until_expire,
+                "is_expired": is_expired
+            }
+            subscription_list.append(subscription_data)
         
-        # 转换为用户列表格式
-        for user_id, user_data in user_subscriptions.items():
-            # 如果缺少某个类型的订阅，创建占位符
-            if not user_data["v2ray_subscription"]:
-                user_data["v2ray_subscription"] = {
-                    "id": f"placeholder_v2ray_{user_id}",
-                    "subscription_url": "未配置",
-                    "full_url": "未配置",
-                    "status": "inactive",
-                    "device_limit": 3,
-                    "current_devices": 0,
-                    "expires_at": None,
-                    "created_at": None,
-                    "is_placeholder": True
-                }
-            
-            if not user_data["clash_subscription"]:
-                user_data["clash_subscription"] = {
-                    "id": f"placeholder_clash_{user_id}",
-                    "subscription_url": "未配置",
-                    "full_url": "未配置",
-                    "status": "inactive",
-                    "device_limit": 3,
-                    "current_devices": 0,
-                    "expires_at": None,
-                    "created_at": None,
-                    "is_placeholder": True
-                }
-            
-            subscription_list.append(user_data)
+        # 应用排序
+        if sort:
+            if sort == "add_time_desc":
+                subscription_list.sort(key=lambda x: x["created_at"] or "", reverse=True)
+            elif sort == "add_time_asc":
+                subscription_list.sort(key=lambda x: x["created_at"] or "")
+            elif sort == "expire_time_desc":
+                subscription_list.sort(key=lambda x: x["expire_time"] or "", reverse=True)
+            elif sort == "expire_time_asc":
+                subscription_list.sort(key=lambda x: x["expire_time"] or "")
+            elif sort == "device_count_desc":
+                subscription_list.sort(key=lambda x: x["current_devices"], reverse=True)
+            elif sort == "device_count_asc":
+                subscription_list.sort(key=lambda x: x["current_devices"])
         
-        return ResponseBase(data={
+        response_data = {
             "subscriptions": subscription_list,
-            "total": total, 
-            "page": page, 
-            "size": size, 
+            "total": total,
+            "page": page,
+            "size": size,
             "pages": (total + size - 1) // size
-        })
+        }
+        
+        return ResponseBase(data=response_data)
     except Exception as e:
+        print(f"获取订阅列表失败: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return ResponseBase(success=False, message=f"获取订阅列表失败: {str(e)}")
 
 @router.get("/subscriptions/statistics", response_model=ResponseBase)
@@ -2277,7 +2429,7 @@ def update_payment_configs(
                     "updated_at": current_time,
                     "key": key
                 })
-            else:
+        else:
                 # 插入新配置
                 insert_query = text("""
                     INSERT INTO system_configs ("key", value, type, category, display_name, description, is_public, sort_order, created_at, updated_at)
@@ -2310,7 +2462,7 @@ def test_payment_config(
         # 例如测试API密钥、连接支付网关等
         
         # 暂时返回成功（模拟测试通过）
-        return ResponseBase(message="支付配置测试成功")
+            return ResponseBase(message="支付配置测试成功")
     except Exception as e:
         return ResponseBase(success=False, message=f"支付配置测试失败: {str(e)}")
 
@@ -2541,7 +2693,6 @@ def update_package(
             
             db.execute(update_query, update_values)
             db.commit()
-            
             return ResponseBase(message="套餐更新成功")
         else:
             return ResponseBase(message="没有需要更新的字段")
@@ -2881,7 +3032,7 @@ def update_admin_security_settings(
     try:
         # 这里需要实现安全设置更新服务
         # 暂时返回成功
-        return ResponseBase(message="安全设置更新成功")
+            return ResponseBase(message="安全设置更新成功")
     except Exception as e:
         return ResponseBase(success=False, message=f"更新安全设置失败: {str(e)}")
 
@@ -2913,7 +3064,7 @@ def update_admin_notification_settings(
     try:
         # 这里需要实现通知设置更新服务
         # 暂时返回成功
-        return ResponseBase(message="通知设置更新成功")
+            return ResponseBase(message="通知设置更新成功")
     except Exception as e:
         return ResponseBase(success=False, message=f"更新通知设置失败: {str(e)}")
 
@@ -3060,3 +3211,149 @@ def get_subscription_devices(
         })
     except Exception as e:
         return ResponseBase(success=False, message=f"获取设备列表失败: {str(e)}")
+
+# 新增的订阅管理API端点
+
+@router.post("/subscriptions/batch-clear-devices", response_model=ResponseBase)
+def batch_clear_devices(
+    db: Session = Depends(get_db),
+    current_admin = Depends(get_current_admin_user)
+) -> Any:
+    """批量清理所有用户设备"""
+    try:
+        subscription_service = SubscriptionService(db)
+        
+        # 获取所有订阅
+        all_subscriptions = subscription_service.get_all()
+        
+        cleared_count = 0
+        for subscription in all_subscriptions:
+            # 清理设备
+            subscription_service.clear_devices(subscription.id)
+            # 重置设备计数
+            subscription.current_devices = 0
+            cleared_count += 1
+        
+        db.commit()
+        
+        return ResponseBase(message=f"成功清理 {cleared_count} 个用户的设备")
+    except Exception as e:
+        db.rollback()
+        return ResponseBase(success=False, message=f"批量清理设备失败: {str(e)}")
+
+@router.post("/subscriptions/{subscription_id}/send-email", response_model=ResponseBase)
+def send_subscription_email(
+    subscription_id: int,
+    db: Session = Depends(get_db),
+    current_admin = Depends(get_current_admin_user)
+) -> Any:
+    """发送订阅邮件"""
+    try:
+        subscription_service = SubscriptionService(db)
+        subscription = subscription_service.get(subscription_id)
+        
+        if not subscription:
+            raise HTTPException(status_code=404, detail="订阅不存在")
+        
+        # 发送订阅邮件
+        success = subscription_service.send_subscription_email(subscription.user_id)
+        
+        if success:
+            return ResponseBase(message="订阅邮件发送成功")
+        else:
+            return ResponseBase(success=False, message="订阅邮件发送失败")
+    except HTTPException:
+        raise
+    except Exception as e:
+        return ResponseBase(success=False, message=f"发送订阅邮件失败: {str(e)}")
+
+@router.get("/subscriptions/export", response_model=ResponseBase)
+def export_subscriptions(
+    db: Session = Depends(get_db),
+    current_admin = Depends(get_current_admin_user)
+) -> Any:
+    """导出订阅数据"""
+    try:
+        subscription_service = SubscriptionService(db)
+        subscriptions = subscription_service.get_all()
+        
+        export_data = []
+        for subscription in subscriptions:
+            export_item = {
+                "用户ID": subscription.user_id,
+                "用户名": subscription.user.username if subscription.user else "未知",
+                "邮箱": subscription.user.email if subscription.user else "未知",
+                "订阅地址": subscription.subscription_url,
+                "V2Ray地址": f"http://localhost:8000/api/v1/subscriptions/ssr/{subscription.subscription_url}",
+                "Clash地址": f"http://localhost:8000/api/v1/subscriptions/clash/{subscription.subscription_url}",
+                "设备限制": subscription.device_limit,
+                "当前设备": subscription.current_devices,
+                "状态": "活跃" if subscription.is_active else "暂停",
+                "到期时间": subscription.expire_time.isoformat() if subscription.expire_time else "无",
+                "创建时间": subscription.created_at.isoformat() if subscription.created_at else "无"
+            }
+            export_data.append(export_item)
+        
+        return ResponseBase(data={
+            "subscriptions": export_data,
+            "total": len(export_data)
+        })
+    except Exception as e:
+        return ResponseBase(success=False, message=f"导出订阅数据失败: {str(e)}")
+
+@router.get("/subscriptions/apple-stats", response_model=ResponseBase)
+def get_apple_stats(
+    db: Session = Depends(get_db),
+    current_admin = Depends(get_current_admin_user)
+) -> Any:
+    """获取苹果设备统计"""
+    try:
+        subscription_service = SubscriptionService(db)
+        
+        # 统计苹果设备
+        apple_count = 0
+        total_devices = 0
+        
+        all_subscriptions = subscription_service.get_all()
+        for subscription in all_subscriptions:
+            devices = subscription_service.get_devices(subscription.id)
+            total_devices += len(devices)
+            for device in devices:
+                if 'apple' in device.device_type.lower() or 'ios' in device.device_type.lower():
+                    apple_count += 1
+        
+        return ResponseBase(data={
+            "apple_devices": apple_count,
+            "total_devices": total_devices,
+            "apple_percentage": (apple_count / total_devices * 100) if total_devices > 0 else 0
+        })
+    except Exception as e:
+        return ResponseBase(success=False, message=f"获取苹果设备统计失败: {str(e)}")
+
+@router.get("/subscriptions/online-stats", response_model=ResponseBase)
+def get_online_stats(
+    db: Session = Depends(get_db),
+    current_admin = Depends(get_current_admin_user)
+) -> Any:
+    """获取在线设备统计"""
+    try:
+        subscription_service = SubscriptionService(db)
+        
+        online_count = 0
+        total_devices = 0
+        
+        all_subscriptions = subscription_service.get_all()
+        for subscription in all_subscriptions:
+            devices = subscription_service.get_devices(subscription.id)
+            total_devices += len(devices)
+            for device in devices:
+                if device.is_online:
+                    online_count += 1
+        
+        return ResponseBase(data={
+            "online_devices": online_count,
+            "total_devices": total_devices,
+            "online_percentage": (online_count / total_devices * 100) if total_devices > 0 else 0
+        })
+    except Exception as e:
+        return ResponseBase(success=False, message=f"获取在线设备统计失败: {str(e)}")

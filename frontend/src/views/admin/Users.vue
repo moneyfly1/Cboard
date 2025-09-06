@@ -118,11 +118,54 @@
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="subscription_count" label="订阅数" width="100" align="center">
+        <el-table-column label="设备信息" width="140" align="center">
           <template #default="scope">
-            <el-badge :value="scope.row.subscription_count || 0" :max="99">
-              <el-icon><Connection /></el-icon>
-            </el-badge>
+            <div class="device-info">
+              <div class="device-stats">
+                <div class="device-item online">
+                  <el-icon class="device-icon online-icon"><Monitor /></el-icon>
+                  <span class="device-count">{{ scope.row.online_devices || 0 }}</span>
+                  <span class="device-label">在线</span>
+                </div>
+                <div class="device-separator">/</div>
+                <div class="device-item total">
+                  <el-icon class="device-icon total-icon"><Connection /></el-icon>
+                  <span class="device-count">{{ scope.row.device_count || 0 }}</span>
+                  <span class="device-label">总计</span>
+                </div>
+              </div>
+              <div class="device-limit" v-if="scope.row.subscription">
+                <el-text size="small" type="info">
+                  限制: {{ scope.row.subscription.device_limit || 0 }}
+                </el-text>
+              </div>
+            </div>
+          </template>
+        </el-table-column>
+        <el-table-column label="订阅状态" width="140" align="center">
+          <template #default="scope">
+            <div v-if="scope.row.subscription" class="subscription-info">
+              <div class="subscription-status">
+                <el-tag 
+                  :type="getSubscriptionStatusType(scope.row.subscription.status)" 
+                  size="small"
+                  effect="dark"
+                >
+                  {{ getSubscriptionStatusText(scope.row.subscription.status) }}
+                </el-tag>
+              </div>
+              <div v-if="scope.row.subscription.days_until_expire !== null" class="expire-info">
+                <el-text 
+                  size="small" 
+                  :type="scope.row.subscription.is_expired ? 'danger' : (scope.row.subscription.days_until_expire <= 7 ? 'warning' : 'success')"
+                >
+                  {{ scope.row.subscription.is_expired ? '已过期' : `${scope.row.subscription.days_until_expire}天后到期` }}
+                </el-text>
+              </div>
+            </div>
+            <div v-else class="no-subscription">
+              <el-tag type="info" size="small" effect="plain">无订阅</el-tag>
+            </div>
           </template>
         </el-table-column>
         <el-table-column prop="created_at" label="注册时间" width="180">
@@ -133,6 +176,24 @@
         <el-table-column prop="last_login" label="最后登录" width="180">
           <template #default="scope">
             {{ formatDate(scope.row.last_login) || '从未登录' }}
+          </template>
+        </el-table-column>
+        <el-table-column label="到期时间" width="180">
+          <template #default="scope">
+            <div v-if="scope.row.subscription && scope.row.subscription.expire_time" class="expire-time-info">
+              <div class="expire-date">{{ formatDate(scope.row.subscription.expire_time) }}</div>
+              <div class="expire-countdown">
+                <el-text 
+                  size="small" 
+                  :type="scope.row.subscription.is_expired ? 'danger' : (scope.row.subscription.days_until_expire <= 7 ? 'warning' : 'success')"
+                >
+                  {{ scope.row.subscription.is_expired ? '已过期' : `${scope.row.subscription.days_until_expire}天后到期` }}
+                </el-text>
+              </div>
+            </div>
+            <div v-else class="no-expire">
+              <el-text type="info" size="small">无订阅</el-text>
+            </div>
           </template>
         </el-table-column>
         <el-table-column label="操作" width="320" fixed="right">
@@ -189,6 +250,14 @@
             <el-button 
               size="small" 
               type="danger" 
+              @click="resetUserPassword(scope.row)"
+            >
+              <el-icon><Key /></el-icon>
+              重置密码
+            </el-button>
+            <el-button 
+              size="small" 
+              type="danger" 
               @click="deleteUser(scope.row)"
             >
               <el-icon><Delete /></el-icon>
@@ -235,6 +304,20 @@
             <el-option label="待激活" value="inactive" />
             <el-option label="禁用" value="disabled" />
           </el-select>
+        </el-form-item>
+        <el-form-item label="管理员权限" v-if="editingUser">
+          <el-switch 
+            v-model="userForm.is_admin" 
+            active-text="是管理员"
+            inactive-text="普通用户"
+          />
+        </el-form-item>
+        <el-form-item label="邮箱验证" v-if="editingUser">
+          <el-switch 
+            v-model="userForm.is_verified" 
+            active-text="已验证"
+            inactive-text="未验证"
+          />
         </el-form-item>
         <el-form-item label="备注" prop="note">
           <el-input 
@@ -412,7 +495,7 @@ import { ref, reactive, onMounted, computed, nextTick } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { 
   Plus, Edit, Delete, View, Search, Refresh, Download, 
-  Message, Switch, Connection, Upload, DataAnalysis
+  Message, Switch, Connection, Upload, DataAnalysis, Monitor, Key
 } from '@element-plus/icons-vue'
 import { adminAPI } from '@/utils/api'
 
@@ -420,7 +503,7 @@ export default {
   name: 'AdminUsers',
   components: {
     Plus, Edit, Delete, View, Search, Refresh, Download, 
-    Message, Switch, Connection
+    Message, Switch, Connection, Monitor, Key
   },
   setup() {
     const api = adminAPI
@@ -455,6 +538,8 @@ export default {
       username: '',
       password: '',
       status: 'active',
+      is_admin: false,
+      is_verified: false,
       note: ''
     })
 
@@ -622,6 +707,8 @@ export default {
         email: user.email,
         username: user.username,
         status: user.status,
+        is_admin: user.is_admin || false,
+        is_verified: user.is_verified || false,
         note: user.note || ''
       })
       showAddUserDialog.value = true
@@ -638,7 +725,8 @@ export default {
             username: userForm.username,
             email: userForm.email,
             is_active: userForm.status === 'active',
-            is_verified: false
+            is_verified: userForm.is_verified,
+            is_admin: userForm.is_admin
           }
           console.log('发送更新用户数据:', userData)
           await api.updateUser(editingUser.value.id, userData)
@@ -1059,6 +1147,61 @@ export default {
       }
     }
 
+    // 重置用户密码
+    const resetUserPassword = async (user) => {
+      try {
+        const { value: newPassword } = await ElMessageBox.prompt(
+          `为用户 ${user.username} 设置新密码`,
+          '重置密码',
+          {
+            confirmButtonText: '确定',
+            cancelButtonText: '取消',
+            inputType: 'password',
+            inputPlaceholder: '请输入新密码（至少6位）',
+            inputValidator: (value) => {
+              if (!value) {
+                return '密码不能为空'
+              }
+              if (value.length < 6) {
+                return '密码长度不能少于6位'
+              }
+              return true
+            }
+          }
+        )
+
+        await api.post(`/admin/users/${user.id}/reset-password`, {
+          password: newPassword
+        })
+        
+        ElMessage.success('密码重置成功')
+      } catch (error) {
+        if (error !== 'cancel') {
+          ElMessage.error(`密码重置失败: ${error.response?.data?.message || error.message}`)
+        }
+      }
+    }
+
+    // 获取订阅状态类型
+    const getSubscriptionStatusType = (status) => {
+      const statusMap = {
+        'active': 'success',
+        'inactive': 'info',
+        'expired': 'danger'
+      }
+      return statusMap[status] || 'info'
+    }
+
+    // 获取订阅状态文本
+    const getSubscriptionStatusText = (status) => {
+      const statusMap = {
+        'active': '活跃',
+        'inactive': '未激活',
+        'expired': '已过期'
+      }
+      return statusMap[status] || '未知'
+    }
+
     onMounted(() => {
       console.log('Users.vue 组件已挂载，开始加载数据...')
       console.log('当前token:', localStorage.getItem('token'))
@@ -1128,7 +1271,11 @@ export default {
       bulkImportLoading,
       fileList,
       userSubscriptions,
-      statistics
+      statistics,
+      // 新增的方法
+      resetUserPassword,
+      getSubscriptionStatusType,
+      getSubscriptionStatusText
     }
   }
 }
@@ -1192,6 +1339,178 @@ export default {
 .username {
   font-size: 12px;
   color: #909399;
+}
+
+.device-info {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.device-stats {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  background: #f5f7fa;
+  border-radius: 6px;
+  border: 1px solid #e4e7ed;
+}
+
+.device-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-width: 40px;
+}
+
+.device-icon {
+  font-size: 16px;
+  margin-bottom: 2px;
+}
+
+.online-icon {
+  color: #67c23a;
+}
+
+.total-icon {
+  color: #409eff;
+}
+
+.device-count {
+  font-weight: bold;
+  font-size: 14px;
+  line-height: 1;
+}
+
+.device-label {
+  font-size: 10px;
+  color: #909399;
+  line-height: 1;
+}
+
+.device-separator {
+  font-size: 14px;
+  color: #c0c4cc;
+  font-weight: bold;
+}
+
+.device-limit {
+  margin-top: 2px;
+  padding: 2px 6px;
+  background: #ecf5ff;
+  border-radius: 4px;
+  border: 1px solid #d9ecff;
+}
+
+.subscription-info {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.subscription-status {
+  display: flex;
+  justify-content: center;
+}
+
+.no-subscription {
+  display: flex;
+  justify-content: center;
+}
+
+.expire-info {
+  margin-top: 2px;
+  text-align: center;
+  padding: 2px 6px;
+  background: #f0f9ff;
+  border-radius: 4px;
+  border: 1px solid #e1f5fe;
+}
+
+.expire-time-info {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.expire-date {
+  font-size: 12px;
+  color: #606266;
+  font-weight: 500;
+}
+
+.expire-countdown {
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: #f0f9ff;
+  border: 1px solid #e1f5fe;
+}
+
+.no-expire {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100%;
+}
+
+.stat-card {
+  text-align: center;
+  padding: 20px;
+}
+
+.stat-number {
+  font-size: 24px;
+  font-weight: bold;
+  color: #409eff;
+  margin-bottom: 8px;
+}
+
+.stat-label {
+  font-size: 14px;
+  color: #666;
+}
+
+/* 响应式设计 */
+@media (max-width: 1200px) {
+  .device-stats {
+    flex-direction: column;
+    gap: 4px;
+  }
+  
+  .device-separator {
+    display: none;
+  }
+  
+  .device-item {
+    min-width: 35px;
+  }
+}
+
+@media (max-width: 768px) {
+  .device-info {
+    gap: 4px;
+  }
+  
+  .device-stats {
+    padding: 2px 4px;
+  }
+  
+  .device-icon {
+    font-size: 14px;
+  }
+  
+  .device-count {
+    font-size: 12px;
+  }
+  
+  .device-label {
+    font-size: 9px;
+  }
 }
 
 .pagination {

@@ -9,227 +9,236 @@
               <el-icon><Download /></el-icon>
               导出订阅
             </el-button>
-            <el-button type="warning" @click="showBulkOperationsDialog = true">
-              <el-icon><Operation /></el-icon>
-              批量操作
+            <el-button type="warning" @click="clearAllDevices">
+              <el-icon><Delete /></el-icon>
+              清理设备数
             </el-button>
-            <el-button type="info" @click="showStatisticsDialog = true">
-              <el-icon><DataAnalysis /></el-icon>
-              订阅统计
+            <el-button type="info" @click="showColumnSettings = true">
+              <el-icon><Setting /></el-icon>
+              列设置
             </el-button>
-            <el-button type="primary" @click="showAddSubscriptionDialog = true">
-              <el-icon><Plus /></el-icon>
-              添加订阅
+            <el-button type="primary" @click="showAppleStats">
+              <el-icon><Apple /></el-icon>
+              苹果
             </el-button>
+            <el-button type="success" @click="showOnlineStats">
+              <el-icon><Monitor /></el-icon>
+              在线
+            </el-button>
+            <el-dropdown @command="handleSortCommand">
+              <el-button type="default">
+                最新↓<el-icon class="el-icon--right"><arrow-down /></el-icon>
+              </el-button>
+              <template #dropdown>
+                <el-dropdown-menu>
+                  <el-dropdown-item command="add_time_desc">添加时间 (降序)</el-dropdown-item>
+                  <el-dropdown-item command="add_time_asc">添加时间 (升序)</el-dropdown-item>
+                  <el-dropdown-item command="expire_time_desc">到期时间 (降序)</el-dropdown-item>
+                  <el-dropdown-item command="expire_time_asc">到期时间 (升序)</el-dropdown-item>
+                  <el-dropdown-item command="device_count_desc">设备数量 (降序)</el-dropdown-item>
+                  <el-dropdown-item command="device_count_asc">设备数量 (升序)</el-dropdown-item>
+                </el-dropdown-menu>
+              </template>
+            </el-dropdown>
           </div>
         </div>
       </template>
 
-      <!-- 搜索和排序栏 -->
-      <el-form :inline="true" :model="searchForm" class="search-form">
-        <el-form-item label="用户邮箱">
-          <el-input v-model="searchForm.user_email" placeholder="搜索用户邮箱" />
-        </el-form-item>
-        <el-form-item label="状态">
-          <el-select v-model="searchForm.status" placeholder="选择状态">
-            <el-option label="全部" value="" />
-            <el-option label="活跃" value="active" />
-            <el-option label="过期" value="expired" />
-            <el-option label="暂停" value="paused" />
-            <el-option label="未配置" value="inactive" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="订阅类型">
-          <el-select v-model="searchForm.subscription_type" placeholder="选择类型">
-            <el-option label="全部" value="" />
-            <el-option label="V2Ray" value="v2ray" />
-            <el-option label="Clash" value="clash" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="排序">
-          <el-select v-model="searchForm.sort_by" placeholder="选择排序">
-            <el-option label="默认" value="" />
-            <el-option label="用户名" value="username" />
-            <el-option label="到期时间" value="expires_at" />
-            <el-option label="设备数量" value="device_count" />
-            <el-option label="创建时间" value="created_at" />
-          </el-select>
-        </el-form-item>
-        <el-form-item>
-          <el-button type="primary" @click="searchSubscriptions">搜索</el-button>
-          <el-button @click="resetSearch">重置</el-button>
-        </el-form-item>
-      </el-form>
+      <!-- 搜索栏 -->
+      <div class="search-section">
+        <el-input
+          v-model="searchQuery"
+          placeholder="输入QQ或任意订阅地址查询"
+          class="search-input"
+          @keyup.enter="searchSubscriptions"
+        >
+          <template #append>
+            <el-button type="primary" @click="searchSubscriptions">搜索</el-button>
+          </template>
+        </el-input>
+        
+        <div class="sort-info">
+          <span class="current-sort">当前排序: {{ currentSortText }}</span>
+          <el-button size="small" @click="clearSort">清除排序</el-button>
+        </div>
+      </div>
 
       <!-- 订阅列表 -->
-      <el-table :data="subscriptions" style="width: 100%" v-loading="loading" row-key="user.id" @selection-change="handleSelectionChange">
+      <el-table 
+        :data="subscriptions" 
+        style="width: 100%" 
+        v-loading="loading"
+        @selection-change="handleSelectionChange"
+        row-key="id"
+      >
         <!-- 选择列 -->
         <el-table-column type="selection" width="55" />
         
-        <!-- 用户信息 -->
-        <el-table-column label="用户信息" width="200">
+        <!-- QQ号码/邮箱列 -->
+        <el-table-column label="QQ号码" width="140" fixed="left">
           <template #default="scope">
-                          <div class="user-info">
-                <div class="user-id">ID: {{ scope.row.user?.id || '未知' }}</div>
-                <div class="username">{{ scope.row.user?.username || '未知用户' }}</div>
-                <div class="email">{{ scope.row.user?.email || '未知邮箱' }}</div>
-                <div class="user-actions">
-                  <el-button size="small" type="primary" @click="showUserDetails(scope.row.user)">
-                    <el-icon><View /></el-icon>
-                    详情
-                  </el-button>
-                </div>
-              </div>
-          </template>
-        </el-table-column>
-        
-        <!-- 订阅地址 -->
-        <el-table-column label="订阅地址" min-width="220">
-          <template #default="scope">
-            <div class="subscription-addresses">
-              <!-- V2Ray订阅 -->
-              <div class="subscription-row v2ray">
-                <div class="subscription-header">
-                  <el-tag type="primary" size="small">V2Ray</el-tag>
-                  <el-tag :type="getStatusType(scope.row.v2ray_subscription?.status || 'inactive')" size="small">
-                    {{ getStatusText(scope.row.v2ray_subscription?.status || 'inactive') }}
-                  </el-tag>
-                </div>
-                <div class="subscription-url-section">
-                  <div v-if="!scope.row.v2ray_subscription || scope.row.v2ray_subscription.is_placeholder" class="placeholder-url">
-                    <el-tag type="info" size="small">未配置</el-tag>
-                  </div>
-                  <div v-else class="subscription-url-container">
-                    <span class="subscription-url-text">{{ scope.row.v2ray_subscription.full_url }}</span>
-                    <el-button 
-                      type="text" 
-                      class="copy-btn" 
-                      @click="copyUrl(scope.row.v2ray_subscription.full_url)"
-                    >
-                      复制
-                    </el-button>
-                  </div>
-                </div>
-              </div>
-              
-              <!-- Clash订阅 -->
-              <div class="subscription-row clash">
-                <div class="subscription-header">
-                  <el-tag type="success" size="small">Clash</el-tag>
-                  <el-tag :type="getStatusType(scope.row.clash_subscription?.status || 'inactive')" size="small">
-                    {{ getStatusText(scope.row.clash_subscription?.status || 'inactive') }}
-                  </el-tag>
-                </div>
-                <div class="subscription-url-section">
-                  <div v-if="!scope.row.clash_subscription || scope.row.clash_subscription.is_placeholder" class="placeholder-url">
-                    <el-tag type="info" size="small">未配置</el-tag>
-                  </div>
-                  <div v-else class="subscription-url-container">
-                    <span class="subscription-url-text">{{ scope.row.clash_subscription.full_url }}</span>
-                    <el-button 
-                      type="text" 
-                      class="copy-btn" 
-                      @click="copyUrl(scope.row.clash_subscription.full_url)"
-                    >
-                      复制
-                    </el-button>
-                  </div>
-                </div>
-              </div>
+            <div class="qq-info">
+              <div class="qq-number">{{ scope.row.user?.email || scope.row.user?.username || '未知' }}</div>
+              <el-button 
+                size="small" 
+                type="success" 
+                @click="showUserDetails(scope.row)"
+                class="detail-btn"
+              >
+                详情
+              </el-button>
             </div>
           </template>
         </el-table-column>
         
-        <!-- 到期时间 -->
-        <el-table-column label="到期时间" width="160">
+        <!-- 结束时间列 -->
+        <el-table-column label="结束时间" width="160">
           <template #default="scope">
             <div class="expire-time-section">
               <el-date-picker
-                v-model="scope.row.v2ray_subscription.expires_at"
-                type="datetime"
-                placeholder="选择到期时间"
-                format="YYYY-MM-DD HH:mm:ss"
-                value-format="YYYY-MM-DDTHH:mm:ss"
+                v-model="scope.row.expire_time"
+                type="date"
+                placeholder="年/月/日"
+                format="YYYY/MM/DD"
+                value-format="YYYY-MM-DD"
                 size="small"
-                @change="(value) => updateExpireTime(scope.row.v2ray_subscription.id, value)"
-                :disabled="!scope.row.v2ray_subscription || scope.row.v2ray_subscription.is_placeholder"
-                style="width: 180px"
+                @change="updateExpireTime(scope.row)"
+                class="expire-picker"
               />
+              <div class="quick-buttons">
+                <el-button size="small" @click="addTime(scope.row, 180)">+半年</el-button>
+                <el-button size="small" @click="addTime(scope.row, 365)">+一年</el-button>
+                <el-button size="small" @click="addTime(scope.row, 730)">+两年</el-button>
+              </div>
             </div>
           </template>
         </el-table-column>
         
-        <!-- 设备数量限制 -->
-        <el-table-column label="设备数量限制" width="120">
+        <!-- 二维码列 -->
+        <el-table-column label="二维码" width="100" align="center">
+          <template #default="scope">
+            <div class="qr-code-section">
+              <div 
+                class="qr-code" 
+                @click="showQRCode(scope.row)"
+                v-if="scope.row.subscription_url"
+              >
+                <img :src="generateQRCode(scope.row.subscription_url)" alt="QR Code" />
+              </div>
+              <el-text v-else type="info" size="small">无订阅</el-text>
+            </div>
+          </template>
+        </el-table-column>
+        
+        <!-- 手机短链列 -->
+        <el-table-column label="手机短链" width="180">
+          <template #default="scope">
+            <div class="subscription-link">
+              <el-link 
+                v-if="scope.row.v2ray_url" 
+                :href="scope.row.v2ray_url" 
+                target="_blank"
+                type="primary"
+                class="link-text"
+              >
+                {{ scope.row.v2ray_url }}
+              </el-link>
+              <el-text v-else type="info" size="small">未配置</el-text>
+            </div>
+          </template>
+        </el-table-column>
+        
+        <!-- CLASH短链列 -->
+        <el-table-column label="CLASH短链" width="180">
+          <template #default="scope">
+            <div class="subscription-link">
+              <el-link 
+                v-if="scope.row.clash_url" 
+                :href="scope.row.clash_url" 
+                target="_blank"
+                type="primary"
+                class="link-text"
+              >
+                {{ scope.row.clash_url }}
+              </el-link>
+              <el-text v-else type="info" size="small">未配置</el-text>
+            </div>
+          </template>
+        </el-table-column>
+        
+        
+        <!-- 苹果列 -->
+        <el-table-column label="苹果" width="70" align="center">
+          <template #default="scope">
+            <el-tag type="info" size="small">{{ scope.row.apple_count || 0 }}</el-tag>
+          </template>
+        </el-table-column>
+        
+        <!-- CLASH列 -->
+        <el-table-column label="CLASH" width="70" align="center">
+          <template #default="scope">
+            <el-tag type="warning" size="small">{{ scope.row.clash_count || 0 }}</el-tag>
+          </template>
+        </el-table-column>
+        
+        <!-- 在线列 -->
+        <el-table-column label="在线" width="70" align="center">
+          <template #default="scope">
+            <el-tag type="success" size="small">{{ scope.row.online_devices || 0 }}</el-tag>
+          </template>
+        </el-table-column>
+        
+        <!-- 最大设备数列 -->
+        <el-table-column label="最大设备数" width="130">
           <template #default="scope">
             <div class="device-limit-section">
               <el-input-number
-                v-model="scope.row.v2ray_subscription.device_limit"
-                :min="1"
-                :max="20"
+                v-model="scope.row.device_limit"
+                :min="0"
+                :max="999"
                 size="small"
-                @change="(value) => updateDeviceLimit(scope.row.v2ray_subscription.id, value)"
-                :disabled="!scope.row.v2ray_subscription || scope.row.v2ray_subscription.is_placeholder"
-                style="width: 100px"
+                @change="updateDeviceLimit(scope.row)"
+                class="device-limit-input"
               />
-            </div>
-          </template>
-        </el-table-column>
-        
-        <!-- 设备管理 -->
-        <el-table-column label="设备管理" width="160">
-          <template #default="scope">
-            <div class="device-management">
-              <div class="device-summary">
-                <el-tag :type="(scope.row.total_devices || 0) >= (scope.row.max_device_limit || 3) ? 'danger' : 'success'" size="small">
-                  {{ scope.row.total_devices || 0 }}/{{ scope.row.max_device_limit || 3 }}
-                </el-tag>
-                <span class="device-text">设备</span>
-              </div>
-              <div class="device-actions">
-                <el-button 
-                  size="small" 
-                  type="info" 
-                  @click="viewUserDevices(scope.row)"
-                  :disabled="(scope.row.total_devices || 0) === 0"
-                >
-                  <el-icon><Monitor /></el-icon>
-                  查看设备
-                </el-button>
-                <el-button 
-                  size="small" 
-                  type="warning" 
-                  @click="clearUserAllDevices(scope.row)"
-                  :disabled="(scope.row.total_devices || 0) === 0"
-                >
-                  <el-icon><Delete /></el-icon>
-                  清空设备
-                </el-button>
+              <div class="quick-device-buttons">
+                <el-button size="small" @click="addDeviceLimit(scope.row, 5)">+5</el-button>
+                <el-button size="small" @click="addDeviceLimit(scope.row, 10)">+10</el-button>
+                <el-button size="small" @click="addDeviceLimit(scope.row, 15)">+15</el-button>
               </div>
             </div>
           </template>
         </el-table-column>
         
-        <!-- 操作 -->
-        <el-table-column label="操作" width="160">
+        <!-- 操作列 -->
+        <el-table-column label="操作" width="220" fixed="right">
           <template #default="scope">
             <div class="action-buttons">
-              <el-button 
-                size="small" 
-                type="warning" 
-                @click="resetUserAllSubscriptions(scope.row.user?.id)"
-              >
-                <el-icon><RefreshLeft /></el-icon>
-                重置全部
-              </el-button>
-              <el-button 
-                size="small" 
-                type="danger" 
-                @click="deleteUserAllData(scope.row.user?.id)"
-              >
-                <el-icon><Delete /></el-icon>
-                删除用户
-              </el-button>
+              <div class="button-row">
+                <el-button size="small" type="success" @click="goToUserBackend(scope.row)">
+                  后台
+                </el-button>
+                <el-button size="small" type="primary" @click="resetSubscription(scope.row)">
+                  重置
+                </el-button>
+                <el-button size="small" type="info" @click="sendSubscriptionEmail(scope.row)">
+                  发送
+                </el-button>
+              </div>
+              <div class="button-row">
+                <el-button 
+                  size="small" 
+                  :type="scope.row.is_active ? 'warning' : 'success'"
+                  @click="toggleSubscriptionStatus(scope.row)"
+                >
+                  {{ scope.row.is_active ? '禁用' : '启用' }}
+                </el-button>
+                <el-button size="small" type="danger" @click="deleteUser(scope.row)">
+                  删除
+                </el-button>
+                <el-button size="small" type="danger" @click="clearUserDevices(scope.row)">
+                  清理
+                </el-button>
+              </div>
             </div>
           </template>
         </el-table-column>
@@ -249,1005 +258,586 @@
       </div>
     </el-card>
 
-    <!-- 添加/编辑订阅对话框 -->
-    <el-dialog 
-      v-model="showAddSubscriptionDialog" 
-      :title="editingSubscription ? '编辑订阅' : '添加订阅'"
-      width="500px"
-    >
-      <el-form :model="subscriptionForm" :rules="subscriptionRules" ref="subscriptionFormRef" label-width="100px">
-        <el-form-item label="用户" prop="user_id">
-          <el-select v-model="subscriptionForm.user_id" placeholder="选择用户" filterable>
-            <el-option 
-              v-for="user in users" 
-              :key="user.id" 
-              :label="user.email" 
-              :value="user.id" 
-            />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="到期时间" prop="expires_at">
-          <el-date-picker
-            v-model="subscriptionForm.expires_at"
-            type="datetime"
-            placeholder="选择到期时间"
-          />
-        </el-form-item>
-        <el-form-item label="设备限制" prop="device_limit">
-          <el-input-number v-model="subscriptionForm.device_limit" :min="1" :max="10" />
-        </el-form-item>
-        <el-form-item label="状态" prop="status">
-          <el-select v-model="subscriptionForm.status" placeholder="选择状态">
-            <el-option label="活跃" value="active" />
-            <el-option label="暂停" value="paused" />
-            <el-option label="过期" value="expired" />
-          </el-select>
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <span class="dialog-footer">
-          <el-button @click="showAddSubscriptionDialog = false">取消</el-button>
-          <el-button type="primary" @click="saveSubscription">确定</el-button>
-        </span>
-      </template>
-    </el-dialog>
-
-    <!-- 批量操作对话框 -->
-    <el-dialog v-model="showBulkOperationsDialog" title="批量操作" width="500px">
-      <el-form :model="bulkForm" label-width="100px">
-        <el-form-item label="操作类型">
-          <el-select v-model="bulkForm.operation" placeholder="选择操作">
-            <el-option label="批量续费" value="renew" />
-            <el-option label="批量重置" value="reset" />
-            <el-option label="批量删除" value="delete" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="续费天数" v-if="bulkForm.operation === 'renew'">
-          <el-input-number v-model="bulkForm.days" :min="1" :max="365" />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <span class="dialog-footer">
-          <el-button @click="showBulkOperationsDialog = false">取消</el-button>
-          <el-button type="primary" @click="executeBulkOperation" :loading="bulkLoading">确定</el-button>
-        </span>
-      </template>
-    </el-dialog>
-    
     <!-- 用户详情对话框 -->
-    <el-dialog v-model="userDetailDialogVisible" title="用户详情" width="600px">
-      <div v-if="selectedUser" class="user-detail">
-        <div class="detail-row">
-          <span class="label">用户ID:</span>
-          <span class="value">{{ selectedUser.id }}</span>
+    <el-dialog v-model="showUserDetailDialog" title="用户详细信息" width="900px" :close-on-click-modal="false">
+      <div v-if="selectedUser" class="user-detail-content">
+        <!-- 基本信息 -->
+        <el-card class="detail-section">
+          <template #header>
+            <h4>基本信息</h4>
+          </template>
+          <el-descriptions :column="2" border>
+            <el-descriptions-item label="用户ID">{{ selectedUser.user?.id }}</el-descriptions-item>
+            <el-descriptions-item label="用户名">{{ selectedUser.user?.username }}</el-descriptions-item>
+            <el-descriptions-item label="邮箱">{{ selectedUser.user?.email }}</el-descriptions-item>
+            <el-descriptions-item label="注册时间">{{ formatDate(selectedUser.user?.created_at) }}</el-descriptions-item>
+            <el-descriptions-item label="最后登录">{{ formatDate(selectedUser.user?.last_login) || '从未登录' }}</el-descriptions-item>
+            <el-descriptions-item label="激活状态">
+              <el-tag :type="selectedUser.user?.is_active ? 'success' : 'danger'">
+                {{ selectedUser.user?.is_active ? '已激活' : '未激活' }}
+              </el-tag>
+            </el-descriptions-item>
+            <el-descriptions-item label="邮箱验证">
+              <el-tag :type="selectedUser.user?.is_verified ? 'success' : 'warning'">
+                {{ selectedUser.user?.is_verified ? '已验证' : '未验证' }}
+              </el-tag>
+            </el-descriptions-item>
+            <el-descriptions-item label="管理员权限">
+              <el-tag :type="selectedUser.user?.is_admin ? 'danger' : 'info'">
+                {{ selectedUser.user?.is_admin ? '是' : '否' }}
+              </el-tag>
+            </el-descriptions-item>
+          </el-descriptions>
+        </el-card>
+
+        <!-- 订阅信息 -->
+        <el-card class="detail-section">
+          <template #header>
+            <h4>订阅信息</h4>
+          </template>
+          <el-descriptions :column="2" border>
+            <el-descriptions-item label="订阅状态">
+              <el-tag :type="getSubscriptionStatusType(selectedUser.status)">
+                {{ getSubscriptionStatusText(selectedUser.status) }}
+              </el-tag>
+            </el-descriptions-item>
+            <el-descriptions-item label="到期时间">{{ formatDate(selectedUser.expire_time) }}</el-descriptions-item>
+            <el-descriptions-item label="设备限制">{{ selectedUser.device_limit }}</el-descriptions-item>
+            <el-descriptions-item label="当前设备">{{ selectedUser.current_devices || 0 }}</el-descriptions-item>
+            <el-descriptions-item label="在线设备">{{ selectedUser.online_devices || 0 }}</el-descriptions-item>
+            <el-descriptions-item label="V2Ray订阅次数">{{ selectedUser.v2ray_count || 0 }}</el-descriptions-item>
+            <el-descriptions-item label="Clash订阅次数">{{ selectedUser.clash_count || 0 }}</el-descriptions-item>
+            <el-descriptions-item label="苹果设备数">{{ selectedUser.apple_count || 0 }}</el-descriptions-item>
+          </el-descriptions>
+        </el-card>
+
+        <!-- 订阅地址 -->
+        <el-card class="detail-section">
+          <template #header>
+            <h4>订阅地址</h4>
+          </template>
+          <div class="subscription-urls">
+            <div class="url-item">
+              <label>V2Ray订阅地址:</label>
+              <el-input v-model="selectedUser.v2ray_url" readonly>
+                <template #append>
+                  <el-button @click="copyToClipboard(selectedUser.v2ray_url)">复制</el-button>
+                </template>
+              </el-input>
+            </div>
+            <div class="url-item">
+              <label>Clash订阅地址:</label>
+              <el-input v-model="selectedUser.clash_url" readonly>
+                <template #append>
+                  <el-button @click="copyToClipboard(selectedUser.clash_url)">复制</el-button>
+                </template>
+              </el-input>
+            </div>
+          </div>
+        </el-card>
+
+        <!-- 在线设备列表 -->
+        <el-card class="detail-section">
+          <template #header>
+            <h4>在线设备列表</h4>
+          </template>
+          <el-table :data="selectedUser.devices || []" size="small">
+            <el-table-column prop="device_name" label="设备名称" />
+            <el-table-column prop="device_type" label="设备类型" />
+            <el-table-column prop="user_agent" label="User Agent" />
+            <el-table-column prop="ip_address" label="IP地址" />
+            <el-table-column prop="last_seen" label="最后在线" />
+            <el-table-column label="操作" width="100">
+              <template #default="scope">
+                <el-button size="small" type="danger" @click="removeDevice(scope.row)">移除</el-button>
+              </template>
+            </el-table-column>
+          </el-table>
+        </el-card>
+
+        <!-- UA记录 -->
+        <el-card class="detail-section">
+          <template #header>
+            <h4>UA记录</h4>
+          </template>
+          <el-table :data="selectedUser.ua_records || []" size="small">
+            <el-table-column prop="user_agent" label="User Agent" />
+            <el-table-column prop="device_type" label="设备类型" />
+            <el-table-column prop="created_at" label="记录时间" />
+            <el-table-column prop="ip_address" label="IP地址" />
+          </el-table>
+        </el-card>
+      </div>
+    </el-dialog>
+
+    <!-- 二维码放大对话框 -->
+    <el-dialog v-model="showQRDialog" title="订阅二维码" width="400px" center>
+      <div class="qr-dialog-content">
+        <div class="qr-code-large">
+          <img :src="currentQRCode" alt="QR Code" />
         </div>
-        <div class="detail-row">
-          <span class="label">用户名:</span>
-          <span class="value">{{ selectedUser.username }}</span>
-        </div>
-        <div class="detail-row">
-          <span class="label">邮箱:</span>
-          <span class="value">{{ selectedUser.email }}</span>
-        </div>
-        <div class="detail-row">
-          <span class="label">注册时间:</span>
-          <span class="value">{{ selectedUser.created_at }}</span>
-        </div>
-        <div class="detail-row">
-          <span class="label">最后登录:</span>
-          <span class="value">{{ selectedUser.last_login_at || '从未登录' }}</span>
+        <div class="qr-info">
+          <p>扫描二维码即可添加订阅</p>
+          <el-button type="primary" @click="downloadQRCode">下载二维码</el-button>
         </div>
       </div>
     </el-dialog>
 
-    <!-- 统计对话框 -->
-    <el-dialog v-model="showStatisticsDialog" title="订阅统计" width="600px">
-      <div class="statistics-content">
-        <el-row :gutter="20">
-          <el-col :span="12">
-            <el-card class="stat-card">
-              <div class="stat-number">{{ statistics.totalSubscriptions }}</div>
-              <div class="stat-label">总订阅数</div>
-            </el-card>
-          </el-col>
-          <el-col :span="12">
-            <el-card class="stat-card">
-              <div class="stat-number">{{ statistics.activeSubscriptions }}</div>
-              <div class="stat-label">活跃订阅</div>
-            </el-card>
-          </el-col>
-        </el-row>
-        <el-row :gutter="20" style="margin-top: 20px;">
-          <el-col :span="12">
-            <el-card class="stat-card">
-              <div class="stat-number">{{ statistics.expiredSubscriptions }}</div>
-              <div class="stat-label">过期订阅</div>
-            </el-card>
-          </el-col>
-          <el-col :span="12">
-            <el-card class="stat-card">
-              <div class="stat-number">{{ statistics.totalDevices }}</div>
-              <div class="stat-label">总设备数</div>
-            </el-card>
-          </el-col>
-        </el-row>
-      </div>
-    </el-dialog>
-
-    <!-- 设备管理对话框 -->
-    <el-dialog 
-      v-model="showDevicesDialog" 
-      title="设备管理" 
-      width="800px"
-      :close-on-click-modal="false"
-    >
-      <div v-if="currentSubscription" class="devices-dialog-content">
-        <div class="subscription-info">
-          <h4>订阅信息</h4>
-          <p><strong>用户:</strong> {{ currentSubscription.user.username }} ({{ currentSubscription.user.email }})</p>
-          <p><strong>订阅类型:</strong> {{ currentSubscription.subscription_type === 'v2ray' ? 'V2Ray' : 'Clash' }}</p>
-          <p><strong>设备限制:</strong> {{ currentSubscription.device_count }}/{{ currentSubscription.device_limit }}</p>
-        </div>
-        
-        <div class="devices-actions">
-          <el-button type="warning" @click="clearAllDevices(currentSubscription)" :loading="clearingDevices">
-            <el-icon><Delete /></el-icon>
-            清空所有设备
-          </el-button>
-          <el-button type="info" @click="refreshDevices">
-            <el-icon><Refresh /></el-icon>
-            刷新设备列表
-          </el-button>
-        </div>
-        
-        <el-table :data="devices" style="width: 100%" v-loading="devicesLoading">
-          <el-table-column prop="id" label="ID" width="60" />
-          <el-table-column prop="subscription_type" label="订阅类型" width="100">
-            <template #default="scope">
-              <el-tag :type="scope.row.subscription_type === 'V2Ray' ? 'primary' : 'success'" size="small">
-                {{ scope.row.subscription_type }}
-              </el-tag>
-            </template>
-          </el-table-column>
-          <el-table-column prop="name" label="设备名称" width="150" />
-          <el-table-column prop="type" label="设备类型" width="100">
-            <template #default="scope">
-              <el-tag :type="getDeviceTypeColor(scope.row.type)" size="small">
-                {{ scope.row.type }}
-              </el-tag>
-            </template>
-          </el-table-column>
-          <el-table-column prop="ip" label="IP地址" width="120" />
-          <el-table-column prop="last_access" label="最后访问" width="180">
-            <template #default="scope">
-              {{ formatDateTime(scope.row.last_access) }}
-            </template>
-          </el-table-column>
-          <el-table-column prop="is_active" label="状态" width="80">
-            <template #default="scope">
-              <el-tag :type="scope.row.is_active ? 'success' : 'danger'" size="small">
-                {{ scope.row.is_active ? '活跃' : '离线' }}
-              </el-tag>
-            </template>
-          </el-table-column>
-          <el-table-column label="操作" width="120">
-            <template #default="scope">
-              <el-button 
-                size="small" 
-                type="danger" 
-                @click="removeDevice(scope.row)"
-                :loading="removingDevice === scope.row.id"
-              >
-                <el-icon><Delete /></el-icon>
-                删除
-              </el-button>
-            </template>
-          </el-table-column>
-        </el-table>
-        
-        <div class="devices-footer">
-          <p>共 {{ devices.length }} 个设备</p>
-        </div>
-      </div>
+    <!-- 列设置对话框 -->
+    <el-dialog v-model="showColumnSettings" title="列设置" width="500px">
+      <el-checkbox-group v-model="visibleColumns">
+        <el-checkbox label="qq">QQ号码</el-checkbox>
+        <el-checkbox label="expire_time">结束时间</el-checkbox>
+        <el-checkbox label="qr_code">二维码</el-checkbox>
+        <el-checkbox label="v2ray_url">手机短链</el-checkbox>
+        <el-checkbox label="clash_url">CLASH短链</el-checkbox>
+        <el-checkbox label="created_at">添加时间</el-checkbox>
+        <el-checkbox label="apple_count">苹果</el-checkbox>
+        <el-checkbox label="clash_count">CLASH</el-checkbox>
+        <el-checkbox label="online_devices">在线</el-checkbox>
+        <el-checkbox label="device_limit">最大设备数</el-checkbox>
+        <el-checkbox label="actions">操作</el-checkbox>
+      </el-checkbox-group>
     </el-dialog>
   </div>
 </template>
 
 <script>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { 
-  Download, Operation, DataAnalysis, Plus, Edit, 
-  Refresh, RefreshLeft, Monitor, Delete, View 
+  Download, Delete, Setting, Apple, Monitor, ArrowDown, View
 } from '@element-plus/icons-vue'
-import { useApi } from '@/utils/api'
+import { adminAPI } from '@/utils/api'
 
 export default {
   name: 'AdminSubscriptions',
   components: {
-    Download, Operation, DataAnalysis, Plus, Edit, 
-    Refresh, RefreshLeft, Monitor, Delete, View
+    Download, Delete, Setting, Apple, Monitor, ArrowDown, View
   },
   setup() {
-    const api = useApi()
     const loading = ref(false)
     const subscriptions = ref([])
-    const users = ref([])
-    const devices = ref([])
+    const selectedSubscriptions = ref([])
     const currentPage = ref(1)
     const pageSize = ref(20)
     const total = ref(0)
-    const showAddSubscriptionDialog = ref(false)
-    const showDevicesDialog = ref(false)
-    const showBulkOperationsDialog = ref(false)
-    const showStatisticsDialog = ref(false)
-    const editingSubscription = ref(null)
-    const subscriptionFormRef = ref()
-    const bulkLoading = ref(false)
-    const currentSubscription = ref(null)
-    const devicesLoading = ref(false)
-    const removingDevice = ref(null)
-    const clearingDevices = ref(false)
-
-    const searchForm = reactive({
-      user_email: '',
-      status: '',
-      subscription_type: '',
-      sort_by: ''
-    })
-
-    const subscriptionForm = reactive({
-      user_id: '',
-      expires_at: '',
-      device_limit: 3,
-      status: 'active'
-    })
-
-    const bulkForm = reactive({
-      operation: '',
-      days: 30,
-      selectedIds: []
-    })
-    
-    const selectedUsers = ref([])
-    const userDetailDialogVisible = ref(false)
+    const searchQuery = ref('')
+    const currentSort = ref('add_time_desc')
+    const showUserDetailDialog = ref(false)
+    const showQRDialog = ref(false)
+    const showColumnSettings = ref(false)
     const selectedUser = ref(null)
+    const currentQRCode = ref('')
+    const visibleColumns = ref([
+      'qq', 'expire_time', 'qr_code', 'v2ray_url', 'clash_url', 
+      'created_at', 'apple_count', 'clash_count', 'online_devices', 
+      'device_limit', 'actions'
+    ])
 
-    const statistics = reactive({
-      totalSubscriptions: 0,
-      activeSubscriptions: 0,
-      expiredSubscriptions: 0,
-      totalDevices: 0
+    // 计算当前排序文本
+    const currentSortText = computed(() => {
+      const sortMap = {
+        'add_time_desc': '添加时间 (降序)',
+        'add_time_asc': '添加时间 (升序)',
+        'expire_time_desc': '到期时间 (降序)',
+        'expire_time_asc': '到期时间 (升序)',
+        'device_count_desc': '设备数量 (降序)',
+        'device_count_asc': '设备数量 (升序)'
+      }
+      return sortMap[currentSort.value] || '添加时间 (降序)'
     })
 
-    const subscriptionRules = {
-      user_id: [
-        { required: true, message: '请选择用户', trigger: 'change' }
-      ],
-      expires_at: [
-        { required: true, message: '请选择到期时间', trigger: 'change' }
-      ],
-      device_limit: [
-        { required: true, message: '请设置设备限制', trigger: 'blur' }
-      ],
-      status: [
-        { required: true, message: '请选择状态', trigger: 'change' }
-      ]
-    }
-
+    // 加载订阅列表
     const loadSubscriptions = async () => {
       loading.value = true
       try {
         const params = {
           page: currentPage.value,
           size: pageSize.value,
-          ...searchForm
+          search: searchQuery.value,
+          sort: currentSort.value
         }
         
-        console.log('=== 开始加载订阅列表 ===')
-        console.log('请求参数:', params)
+        const response = await adminAPI.getSubscriptions(params)
+        console.log('订阅管理API响应:', response)
         
-        const response = await api.get('/admin/subscriptions', { params })
-        console.log('订阅列表响应:', response.data)
-        
-        if (response.data && response.data.success && response.data.data) {
-          const responseData = response.data.data
-          subscriptions.value = responseData.subscriptions || []
-          total.value = responseData.total || 0
-          console.log('订阅列表加载成功，共', subscriptions.value.length, '个订阅')
-          console.log('前3个订阅示例:', subscriptions.value.slice(0, 3))
+        if (response.data?.success !== false) {
+          subscriptions.value = response.data?.data?.subscriptions || []
+          total.value = response.data?.data?.total || 0
+          console.log('加载的订阅数据:', subscriptions.value)
         } else {
-          console.warn('订阅列表响应格式异常:', response.data)
-          subscriptions.value = []
-          total.value = 0
-          if (response.data?.message) {
-            ElMessage.error(`加载订阅列表失败: ${response.data.message}`)
-          }
+          ElMessage.error('加载订阅列表失败')
         }
       } catch (error) {
         console.error('加载订阅列表失败:', error)
         ElMessage.error('加载订阅列表失败')
-        subscriptions.value = []
-        total.value = 0
       } finally {
         loading.value = false
       }
     }
 
-    const loadUsers = async () => {
-      try {
-        const response = await api.get('/admin/users')
-        console.log('订阅管理页面 - 加载用户列表响应:', response.data)
-        
-        if (response.data && response.data.success && response.data.data) {
-          const responseData = response.data.data
-          users.value = responseData.users || []
-          console.log('订阅管理页面 - 用户列表加载成功，共', users.value.length, '个用户')
-        } else {
-          console.warn('订阅管理页面 - 用户列表响应格式异常:', response.data)
-          users.value = []
-          if (response.data?.message) {
-            ElMessage.error(`加载用户列表失败: ${response.data.message}`)
-          }
-        }
-      } catch (error) {
-        console.error('订阅管理页面 - 加载用户列表失败:', error)
-        ElMessage.error('加载用户列表失败')
-        users.value = []
-      }
-    }
-
+    // 搜索订阅
     const searchSubscriptions = () => {
       currentPage.value = 1
       loadSubscriptions()
     }
 
-    const resetSearch = () => {
-      Object.assign(searchForm, { user_email: '', status: '' })
-      searchSubscriptions()
-    }
-
-    const handleSizeChange = (val) => {
-      pageSize.value = val
+    // 处理排序命令
+    const handleSortCommand = (command) => {
+      currentSort.value = command
       loadSubscriptions()
     }
 
-    const handleCurrentChange = (val) => {
-      currentPage.value = val
+    // 清除排序
+    const clearSort = () => {
+      currentSort.value = 'add_time_desc'
       loadSubscriptions()
     }
 
-    const editSubscription = (subscription) => {
-      editingSubscription.value = subscription
-      Object.assign(subscriptionForm, {
-        user_id: subscription.user_id,
-        expires_at: subscription.expires_at,
-        device_limit: subscription.device_limit,
-        status: subscription.status
-      })
-      showAddSubscriptionDialog.value = true
-    }
-
-    const saveSubscription = async () => {
+    // 更新到期时间
+    const updateExpireTime = async (subscription) => {
       try {
-        await subscriptionFormRef.value.validate()
-        if (editingSubscription.value) {
-          await api.put(`/admin/subscriptions/${editingSubscription.value.id}`, subscriptionForm)
-          ElMessage.success('订阅更新成功')
-        } else {
-          await api.post('/admin/subscriptions', subscriptionForm)
-          ElMessage.success('订阅创建成功')
-        }
-        showAddSubscriptionDialog.value = false
-        loadSubscriptions()
-      } catch (error) {
-        ElMessage.error('操作失败')
-      }
-    }
-
-    const deleteSubscription = async (subscription) => {
-      try {
-        await ElMessageBox.confirm('确定要删除这个订阅吗？', '提示', {
-          confirmButtonText: '确定',
-          cancelButtonText: '取消',
-          type: 'warning'
+        await adminAPI.updateSubscription(subscription.id, {
+          expire_time: subscription.expire_time
         })
-        await api.delete(`/admin/subscriptions/${subscription.id}`)
-        ElMessage.success('订阅删除成功')
-        loadSubscriptions()
+        ElMessage.success('到期时间更新成功')
       } catch (error) {
-        if (error !== 'cancel') {
-          ElMessage.error('删除失败')
-        }
+        ElMessage.error('更新到期时间失败')
+        console.error('更新到期时间失败:', error)
       }
     }
 
+    // 添加时间
+    const addTime = async (subscription, days) => {
+      try {
+        const currentDate = new Date(subscription.expire_time)
+        const newDate = new Date(currentDate.getTime() + days * 24 * 60 * 60 * 1000)
+        subscription.expire_time = newDate.toISOString().split('T')[0]
+        await updateExpireTime(subscription)
+      } catch (error) {
+        ElMessage.error('添加时间失败')
+        console.error('添加时间失败:', error)
+      }
+    }
+
+    // 更新设备限制
+    const updateDeviceLimit = async (subscription) => {
+      try {
+        await adminAPI.updateSubscription(subscription.id, {
+          device_limit: subscription.device_limit
+        })
+        ElMessage.success('设备限制更新成功')
+      } catch (error) {
+        ElMessage.error('更新设备限制失败')
+        console.error('更新设备限制失败:', error)
+      }
+    }
+
+    // 添加设备限制
+    const addDeviceLimit = async (subscription, count) => {
+      try {
+        subscription.device_limit = (subscription.device_limit || 0) + count
+        await updateDeviceLimit(subscription)
+      } catch (error) {
+        ElMessage.error('添加设备限制失败')
+        console.error('添加设备限制失败:', error)
+      }
+    }
+
+    // 生成二维码
+    const generateQRCode = (url) => {
+      if (!url) return ''
+      // 这里应该使用二维码生成库，暂时返回占位符
+      return `https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=${encodeURIComponent(url)}`
+    }
+
+    // 显示二维码
+    const showQRCode = (subscription) => {
+      if (subscription.subscription_url) {
+        currentQRCode.value = generateQRCode(subscription.subscription_url)
+        showQRDialog.value = true
+      }
+    }
+
+    // 下载二维码
+    const downloadQRCode = () => {
+      const link = document.createElement('a')
+      link.href = currentQRCode.value
+      link.download = 'subscription-qr.png'
+      link.click()
+    }
+
+    // 显示用户详情
+    const showUserDetails = async (subscription) => {
+      try {
+        const response = await adminAPI.getUser(subscription.user.id)
+        console.log('用户详情API响应:', response)
+        
+        selectedUser.value = {
+          ...subscription,
+          user: response.data?.data || response.data
+        }
+        showUserDetailDialog.value = true
+      } catch (error) {
+        ElMessage.error('加载用户详情失败')
+        console.error('加载用户详情失败:', error)
+      }
+    }
+
+    // 复制到剪贴板
+    const copyToClipboard = async (text) => {
+      try {
+        await navigator.clipboard.writeText(text)
+        ElMessage.success('已复制到剪贴板')
+      } catch (error) {
+        ElMessage.error('复制失败')
+      }
+    }
+
+    // 进入用户后台
+    const goToUserBackend = (subscription) => {
+      // 这里应该实现跳转到用户后台的逻辑
+      ElMessage.info('跳转到用户后台功能待实现')
+    }
+
+    // 重置订阅
     const resetSubscription = async (subscription) => {
       try {
-        await ElMessageBox.confirm('确定要重置这个订阅吗？这将清空所有设备记录', '提示', {
-          confirmButtonText: '确定',
-          cancelButtonText: '取消',
+        await ElMessageBox.confirm('确定要重置该用户的订阅地址吗？', '确认重置', {
           type: 'warning'
         })
-        await api.post(`/admin/subscriptions/${subscription.id}/reset`)
-        ElMessage.success('订阅重置成功')
+        
+        await adminAPI.resetUserSubscription(subscription.user.id)
+        ElMessage.success('订阅地址重置成功')
         loadSubscriptions()
       } catch (error) {
         if (error !== 'cancel') {
-          ElMessage.error('重置失败')
+          ElMessage.error('重置订阅失败')
+          console.error('重置订阅失败:', error)
         }
       }
     }
 
-    const viewUserDevices = async (userData) => {
-      currentSubscription.value = userData
-      showDevicesDialog.value = true
-      // 加载用户所有设备的汇总信息
-      await loadUserDevices(userData.user.id)
-    }
-
-    const loadUserDevices = async (userId) => {
-      devicesLoading.value = true
+    // 发送订阅邮件
+    const sendSubscriptionEmail = async (subscription) => {
       try {
-        // 获取用户的所有订阅设备
-        const allDevices = []
-        const userSubscriptions = subscriptions.value.find(s => s.user.id === userId)
-        
-        if (userSubscriptions) {
-          // 加载V2Ray订阅的设备
-          if (userSubscriptions.v2ray_subscription && !userSubscriptions.v2ray_subscription.is_placeholder) {
-            const v2rayResponse = await api.get(`/admin/subscriptions/${userSubscriptions.v2ray_subscription.id}/devices`)
-            if (v2rayResponse.data && v2rayResponse.data.success && v2rayResponse.data.data) {
-              allDevices.push(...v2rayResponse.data.data.devices.map(d => ({ ...d, subscription_type: 'V2Ray' })))
-            }
-          }
-          
-          // 加载Clash订阅的设备
-          if (userSubscriptions.clash_subscription && !userSubscriptions.clash_subscription.is_placeholder) {
-            const clashResponse = await api.get(`/admin/subscriptions/${userSubscriptions.clash_subscription.id}/devices`)
-            if (clashResponse.data && clashResponse.data.success && clashResponse.data.data) {
-              allDevices.push(...clashResponse.data.data.devices.map(d => ({ ...d, subscription_type: 'Clash' })))
-            }
-          }
-        }
-        
-        devices.value = allDevices
+        await adminAPI.sendSubscriptionEmail(subscription.user.id)
+        ElMessage.success('订阅邮件发送成功')
       } catch (error) {
-        console.error('加载用户设备失败:', error)
-        ElMessage.error('加载用户设备失败')
-        devices.value = []
-      } finally {
-        devicesLoading.value = false
+        ElMessage.error('发送订阅邮件失败')
+        console.error('发送订阅邮件失败:', error)
       }
     }
 
-    const clearUserAllDevices = async (userData) => {
+    // 切换订阅状态
+    const toggleSubscriptionStatus = async (subscription) => {
+      try {
+        const newStatus = !subscription.is_active
+        await adminAPI.updateSubscription(subscription.id, {
+          is_active: newStatus
+        })
+        subscription.is_active = newStatus
+        ElMessage.success(`订阅已${newStatus ? '启用' : '禁用'}`)
+      } catch (error) {
+        ElMessage.error('更新订阅状态失败')
+        console.error('更新订阅状态失败:', error)
+      }
+    }
+
+    // 删除用户
+    const deleteUser = async (subscription) => {
       try {
         await ElMessageBox.confirm(
-          `确定要清空用户 "${userData.user.username}" 的所有设备吗？此操作不可恢复！`,
-          '确认清空',
-          {
-            confirmButtonText: '确定',
-            cancelButtonText: '取消',
-            type: 'warning',
-          }
-        )
-        
-        clearingDevices.value = true
-        
-        // 清空用户所有订阅的设备
-        if (userData.v2ray_subscription && !userData.v2ray_subscription.is_placeholder) {
-          await api.delete(`/admin/subscriptions/${userData.v2ray_subscription.id}/devices`)
-        }
-        if (userData.clash_subscription && !userData.clash_subscription.is_placeholder) {
-          await api.delete(`/admin/subscriptions/${userData.clash_subscription.id}/devices`)
-        }
-        
-        ElMessage.success('用户所有设备已清空')
-        // 重新加载数据
-        await loadSubscriptions()
-        if (currentSubscription.value && currentSubscription.value.user.id === userData.user.id) {
-          await loadUserDevices(userData.user.id)
-        }
-      } catch (error) {
-        if (error !== 'cancel') {
-          console.error('清空用户设备失败:', error)
-          ElMessage.error('清空用户设备失败')
-        }
-      } finally {
-        clearingDevices.value = false
-      }
-    }
-
-    const loadSubscriptionDevices = async (subscriptionId) => {
-      devicesLoading.value = true
-      try {
-        const response = await api.get(`/admin/subscriptions/${subscriptionId}/devices`)
-        if (response.data && response.data.success && response.data.data) {
-          devices.value = response.data.data.devices || []
-        } else {
-          devices.value = []
-          ElMessage.error('加载设备列表失败')
-        }
-      } catch (error) {
-        console.error('加载设备列表失败:', error)
-        ElMessage.error('加载设备列表失败')
-        devices.value = []
-      } finally {
-        devicesLoading.value = false
-      }
-    }
-
-    const removeDevice = async (device) => {
-      try {
-        await ElMessageBox.confirm(
-          `确定要删除设备 "${device.name}" 吗？`,
+          '确定要删除该用户吗？这将删除用户的所有信息，包括设备记录、账号信息、邮件信息、UA记录等。此操作不可恢复！',
           '确认删除',
           {
-            confirmButtonText: '确定',
-            cancelButtonText: '取消',
-            type: 'warning',
+            type: 'error',
+            confirmButtonText: '确定删除',
+            cancelButtonText: '取消'
           }
         )
         
-        removingDevice.value = device.id
-        const response = await api.delete(`/admin/subscriptions/${currentSubscription.value.id}/devices/${device.id}`)
-        
-        if (response.data && response.data.success) {
-          ElMessage.success('设备删除成功')
-          // 重新加载设备列表和订阅列表
-          await loadSubscriptionDevices(currentSubscription.value.id)
-          await loadSubscriptions()
-        } else {
-          ElMessage.error('设备删除失败')
-        }
-      } catch (error) {
-        if (error !== 'cancel') {
-          console.error('删除设备失败:', error)
-          ElMessage.error('删除设备失败')
-        }
-      } finally {
-        removingDevice.value = null
-      }
-    }
-
-    const copyUrl = (url) => {
-      navigator.clipboard.writeText(url).then(() => {
-        ElMessage.success('订阅地址已复制到剪贴板')
-      }).catch(() => {
-        ElMessage.error('复制失败')
-      })
-    }
-
-    const renewSubscription = async (subscription) => {
-      try {
-        const { value: days } = await ElMessageBox.prompt(
-          '请输入续费天数',
-          '续费订阅',
-          {
-            confirmButtonText: '确定',
-            cancelButtonText: '取消',
-            inputType: 'number',
-            inputValue: 30,
-            inputValidator: (value) => {
-              if (value < 1 || value > 365) {
-                return '天数必须在1-365之间'
-              }
-              return true
-            }
-          }
-        )
-        
-        await api.post(`/admin/subscriptions/${subscription.id}/renew`, { days: parseInt(days) })
-        ElMessage.success('订阅续费成功')
+        await adminAPI.deleteUser(subscription.user.id)
+        ElMessage.success('用户删除成功')
         loadSubscriptions()
       } catch (error) {
         if (error !== 'cancel') {
-          ElMessage.error('续费失败')
+          ElMessage.error('删除用户失败')
+          console.error('删除用户失败:', error)
         }
       }
     }
 
+    // 清理用户设备
+    const clearUserDevices = async (subscription) => {
+      try {
+        await ElMessageBox.confirm('确定要清理该用户的在线设备吗？这将清除所有设备记录和UA记录。', '确认清理', {
+          type: 'warning'
+        })
+        
+        await adminAPI.clearUserDevices(subscription.user.id)
+        ElMessage.success('设备清理成功')
+        loadSubscriptions()
+      } catch (error) {
+        if (error !== 'cancel') {
+          ElMessage.error('清理设备失败')
+          console.error('清理设备失败:', error)
+        }
+      }
+    }
+
+    // 清理所有设备
+    const clearAllDevices = async () => {
+      try {
+        await ElMessageBox.confirm('确定要清理所有用户的设备吗？这将清除所有设备记录。', '确认清理', {
+          type: 'warning'
+        })
+        
+        await adminAPI.batchClearDevices()
+        ElMessage.success('批量清理设备成功')
+        loadSubscriptions()
+      } catch (error) {
+        if (error !== 'cancel') {
+          ElMessage.error('批量清理设备失败')
+          console.error('批量清理设备失败:', error)
+        }
+      }
+    }
+
+    // 导出订阅
     const exportSubscriptions = async () => {
       try {
-        const response = await api.get('/admin/subscriptions/export', { 
-          responseType: 'blob',
-          params: searchForm 
-        })
-        
-        const url = window.URL.createObjectURL(new Blob([response.data]))
-        const link = document.createElement('a')
-        link.href = url
-        link.setAttribute('download', `subscriptions_${new Date().toISOString().split('T')[0]}.xlsx`)
-        document.body.appendChild(link)
-        link.click()
-        document.body.removeChild(link)
-        window.URL.revokeObjectURL(url)
-        
-        ElMessage.success('订阅数据导出成功')
+        const response = await adminAPI.exportSubscriptions()
+        // 处理导出逻辑
+        ElMessage.success('导出成功')
       } catch (error) {
         ElMessage.error('导出失败')
+        console.error('导出失败:', error)
       }
     }
 
-    const clearAllDevices = async (subscription) => {
+    // 显示苹果统计
+    const showAppleStats = () => {
+      ElMessage.info('苹果设备统计功能待实现')
+    }
+
+    // 显示在线统计
+    const showOnlineStats = () => {
+      ElMessage.info('在线设备统计功能待实现')
+    }
+
+    // 移除设备
+    const removeDevice = async (device) => {
       try {
-        await ElMessageBox.confirm(
-          `确定要清空用户 "${subscription.user.username}" 的所有设备吗？此操作不可恢复！`,
-          '确认清空',
-          {
-            confirmButtonText: '确定',
-            cancelButtonText: '取消',
-            type: 'warning',
-          }
-        )
-        
-        clearingDevices.value = true
-        const response = await api.delete(`/admin/subscriptions/${subscription.id}/devices`)
-        
-        if (response.data && response.data.success) {
-          ElMessage.success('所有设备已清空')
-          // 重新加载设备列表和订阅列表
-          if (currentSubscription.value && currentSubscription.value.id === subscription.id) {
-            await loadSubscriptionDevices(subscription.id)
-          }
-          await loadSubscriptions()
-        } else {
-          ElMessage.error('清空设备失败')
+        await adminAPI.removeDevice(device.id)
+        ElMessage.success('设备移除成功')
+        // 重新加载用户详情
+        if (selectedUser.value) {
+          showUserDetails(selectedUser.value)
         }
       } catch (error) {
-        if (error !== 'cancel') {
-          console.error('清空设备失败:', error)
-          ElMessage.error('清空设备失败')
-        }
-      } finally {
-        clearingDevices.value = false
+        ElMessage.error('移除设备失败')
+        console.error('移除设备失败:', error)
       }
     }
 
-    const refreshDevices = async () => {
-      if (currentSubscription.value) {
-        await loadSubscriptionDevices(currentSubscription.value.id)
-      }
-    }
-
-    const updateExpireTime = async (subscriptionId, newExpireTime) => {
-      try {
-        const response = await api.put(`/admin/subscriptions/${subscriptionId}`, {
-          expires_at: newExpireTime
-        })
-        
-        if (response.data && response.data.success) {
-          ElMessage.success('到期时间更新成功')
-          // 重新加载订阅列表
-          await loadSubscriptions()
-        } else {
-          ElMessage.error('到期时间更新失败')
-        }
-      } catch (error) {
-        console.error('更新到期时间失败:', error)
-        ElMessage.error('更新到期时间失败')
-      }
-    }
-
-    const getDeviceTypeColor = (type) => {
-      const typeColors = {
-        'mobile': 'success',
-        'desktop': 'primary',
-        'tablet': 'warning',
-        'unknown': 'info'
-      }
-      return typeColors[type] || 'info'
-    }
-
-    const formatDateTime = (dateTimeStr) => {
-      if (!dateTimeStr) return '未知'
-      try {
-        const date = new Date(dateTimeStr)
-        return date.toLocaleString('zh-CN')
-      } catch (error) {
-        return dateTimeStr
-      }
-    }
-
-    const updateDeviceLimit = async (subscriptionId, newLimit) => {
-      try {
-        const response = await api.put(`/admin/subscriptions/${subscriptionId}`, {
-          device_limit: newLimit
-        })
-        
-        if (response.data && response.data.success) {
-          ElMessage.success('设备限制更新成功')
-          // 重新加载订阅列表
-          await loadSubscriptions()
-        } else {
-          ElMessage.error('设备限制更新失败')
-        }
-      } catch (error) {
-        console.error('更新设备限制失败:', error)
-        ElMessage.error('更新设备限制失败')
-      }
-    }
-
-    const resetUserAllSubscriptions = async (userId) => {
-      try {
-        await ElMessageBox.confirm(
-          '确定要重置该用户的所有订阅吗？这将重新生成V2Ray和Clash的订阅地址。',
-          '确认重置',
-          {
-            confirmButtonText: '确定',
-            cancelButtonText: '取消',
-            type: 'warning',
-          }
-        )
-        
-        const response = await api.post(`/admin/subscriptions/user/${userId}/reset-all`)
-        
-        if (response.data && response.data.success) {
-          ElMessage.success('用户所有订阅重置成功')
-          await loadSubscriptions()
-        } else {
-          ElMessage.error('重置订阅失败')
-        }
-      } catch (error) {
-        if (error !== 'cancel') {
-          console.error('重置用户订阅失败:', error)
-          ElMessage.error('重置订阅失败')
-        }
-      }
-    }
-
-    const deleteUserAllData = async (userId) => {
-      try {
-        await ElMessageBox.confirm(
-          '确定要删除该用户及其所有数据吗？此操作不可恢复！',
-          '确认删除',
-          {
-            confirmButtonText: '确定',
-            cancelButtonText: '取消',
-            type: 'danger',
-          }
-        )
-        
-        const response = await api.delete(`/admin/subscriptions/user/${userId}/delete-all`)
-        
-        if (response.data && response.data.success) {
-          ElMessage.success('用户及其所有数据删除成功')
-          await loadSubscriptions()
-        } else {
-          ElMessage.error('删除用户失败')
-        }
-      } catch (error) {
-        if (error !== 'cancel') {
-          console.error('删除用户失败:', error)
-          ElMessage.error('删除用户失败')
-        }
-      }
-    }
-
-    const executeBulkOperation = async () => {
-      if (bulkForm.selectedIds.length === 0) {
-        ElMessage.warning('请选择要操作的订阅')
-        return
-      }
-
-      bulkLoading.value = true
-      try {
-        const { operation, days } = bulkForm
-        
-        if (operation === 'renew') {
-          await api.post('/admin/subscriptions/bulk-renew', {
-            subscription_ids: bulkForm.selectedIds,
-            days
-          })
-          ElMessage.success('批量续费成功')
-        } else if (operation === 'reset') {
-          await api.post('/admin/subscriptions/bulk-reset', {
-            subscription_ids: bulkForm.selectedIds
-          })
-          ElMessage.success('批量重置成功')
-        } else if (operation === 'delete') {
-          await ElMessageBox.confirm(
-            `确定要删除选中的 ${bulkForm.selectedIds.length} 个订阅吗？`,
-            '确认删除',
-            { type: 'warning' }
-          )
-          await api.post('/admin/subscriptions/bulk-delete', {
-            subscription_ids: bulkForm.selectedIds
-          })
-          ElMessage.success('批量删除成功')
-        }
-        
-        showBulkOperationsDialog.value = false
-        loadSubscriptions()
-        bulkForm.selectedIds = []
-      } catch (error) {
-        if (error !== 'cancel') {
-          ElMessage.error('批量操作失败')
-        }
-      } finally {
-        bulkLoading.value = false
-      }
-    }
-
-    const loadStatistics = async () => {
-      try {
-        const response = await api.get('/admin/subscriptions/statistics')
-        Object.assign(statistics, response.data)
-      } catch (error) {
-        console.error('加载统计数据失败:', error)
-      }
-    }
-
-    const getStatusType = (status) => {
+    // 获取订阅状态类型
+    const getSubscriptionStatusType = (status) => {
       const statusMap = {
         'active': 'success',
+        'inactive': 'info',
         'expired': 'danger',
         'paused': 'warning'
       }
       return statusMap[status] || 'info'
     }
 
-    const getStatusText = (status) => {
+    // 获取订阅状态文本
+    const getSubscriptionStatusText = (status) => {
       const statusMap = {
         'active': '活跃',
-        'expired': '过期',
-        'paused': '暂停'
+        'inactive': '未激活',
+        'expired': '已过期',
+        'paused': '已暂停'
       }
-      return statusMap[status] || status
+      return statusMap[status] || '未知'
     }
 
+    // 格式化日期
+    const formatDate = (date) => {
+      if (!date) return '-'
+      return new Date(date).toLocaleDateString('zh-CN')
+    }
+
+    // 处理选择变化
+    const handleSelectionChange = (selection) => {
+      selectedSubscriptions.value = selection
+    }
+
+    // 处理页面大小变化
+    const handleSizeChange = (val) => {
+      pageSize.value = val
+      loadSubscriptions()
+    }
+
+    // 处理当前页变化
+    const handleCurrentChange = (val) => {
+      currentPage.value = val
+      loadSubscriptions()
+    }
+
+    // 组件挂载时加载数据
     onMounted(() => {
       loadSubscriptions()
-      loadUsers()
-      loadStatistics()
     })
 
     return {
       loading,
       subscriptions,
-      users,
-      devices,
+      selectedSubscriptions,
       currentPage,
       pageSize,
       total,
-      searchForm,
-      showAddSubscriptionDialog,
-      showDevicesDialog,
-      editingSubscription,
-      subscriptionForm,
-      subscriptionFormRef,
-      subscriptionRules,
+      searchQuery,
+      currentSort,
+      currentSortText,
+      showUserDetailDialog,
+      showQRDialog,
+      showColumnSettings,
+      selectedUser,
+      currentQRCode,
+      visibleColumns,
+      loadSubscriptions,
       searchSubscriptions,
-      resetSearch,
-      handleSizeChange,
-      handleCurrentChange,
-      editSubscription,
-      saveSubscription,
-      deleteSubscription,
-      resetSubscription,
-      viewUserDevices,
-      removeDevice,
-      copyUrl,
-      renewSubscription,
-      exportSubscriptions,
-      executeBulkOperation,
-      loadStatistics,
-      getStatusType,
-      getStatusText,
-      // 新增的响应式变量
-      showBulkOperationsDialog,
-      showStatisticsDialog,
-      bulkForm,
-      bulkLoading,
-      statistics,
-      // 新增的方法
-      showUserDetails(user) {
-        ElMessage.info(`用户详情: ${user.username} (${user.email})`);
-        // 这里可以打开用户详情对话框
-      },
-      
-      showUserBackend(user) {
-        ElMessage.info(`访问用户后台: ${user.username}`);
-        // 这里可以跳转到用户后台或打开用户管理对话框
-      },
-      
-      sendUserNotification(user) {
-        ElMessage.info(`发送通知给用户: ${user.username}`);
-        // 这里可以打开发送通知对话框
-      },
-      
-      editUserSubscription(userData) {
-        ElMessage.info(`编辑用户订阅: ${userData.user.username}`);
-        // 这里可以打开编辑订阅对话框
-      },
-      
-      updateUserExpireTime(userId, value) {
-        if (!value) return;
-        ElMessage.info(`更新用户 ${userId} 的到期时间: ${value}`);
-        // 这里需要调用API更新用户的到期时间
-      },
-      
-      extendExpireTime(userId, months) {
-        ElMessage.info(`延长用户 ${userId} 的到期时间 ${months} 个月`);
-        // 这里需要调用API延长用户的到期时间
-      },
-      
-      updateUserMaxDevices(userId, value) {
-        ElMessage.info(`更新用户 ${userId} 的最大设备数: ${value}`);
-        // 这里需要调用API更新用户的最大设备数
-      },
-      
-      increaseMaxDevices(userId, amount) {
-        ElMessage.info(`增加用户 ${userId} 的最大设备数 ${amount} 个`);
-        // 这里需要调用API增加用户的最大设备数
-      },
-      
-      // 批量操作相关方法
-      handleSelectionChange(selection) {
-        bulkForm.selectedIds = selection
-      },
-      
-      // 显示用户详情
-      showUserDetails(user) {
-        selectedUser.value = user
-        userDetailDialogVisible.value = true
-      },
-      
-      // 批量重置订阅
-      bulkResetSubscriptions() {
-        if (bulkForm.selectedIds.length === 0) {
-          ElMessage.warning('请先选择用户');
-          return;
-        }
-        ElMessageBox.confirm('确定要重置选中用户的所有订阅吗？', '确认操作', {
-          confirmButtonText: '确定',
-          cancelButtonText: '取消',
-          type: 'warning'
-        }).then(() => {
-          const userIds = bulkForm.selectedIds.map(sub => sub.user.id);
-          // 这里需要调用API批量重置订阅
-          ElMessage.success(`已重置 ${userIds.length} 个用户的订阅`);
-          loadSubscriptions();
-        });
-      },
-      
-      // 批量删除用户
-      bulkDeleteUsers() {
-        if (bulkForm.selectedIds.length === 0) {
-          ElMessage.warning('请先选择用户');
-          return;
-        }
-        ElMessageBox.confirm('确定要删除选中的用户吗？此操作不可恢复！', '确认操作', {
-          confirmButtonText: '确定',
-          cancelButtonText: '取消',
-          type: 'danger'
-        }).then(() => {
-          const userIds = bulkForm.selectedIds.map(sub => sub.user.id);
-          // 这里需要调用API批量删除用户
-          ElMessage.success(`已删除 ${userIds.length} 个用户`);
-          loadSubscriptions();
-        });
-      },
-      // 新增的响应式变量
-      showBulkOperationsDialog,
-      showStatisticsDialog,
-      bulkForm,
-      bulkLoading,
-      statistics,
-      // 新增的方法
-      clearAllDevices,
-      refreshDevices,
+      handleSortCommand,
+      clearSort,
       updateExpireTime,
-      getDeviceTypeColor,
-      formatDateTime,
-      loadSubscriptionDevices,
+      addTime,
       updateDeviceLimit,
-      resetUserAllSubscriptions,
-      deleteUserAllData,
-      viewUserDevices,
-      loadUserDevices,
-      clearUserAllDevices
+      addDeviceLimit,
+      generateQRCode,
+      showQRCode,
+      downloadQRCode,
+      showUserDetails,
+      copyToClipboard,
+      goToUserBackend,
+      resetSubscription,
+      sendSubscriptionEmail,
+      toggleSubscriptionStatus,
+      deleteUser,
+      clearUserDevices,
+      clearAllDevices,
+      exportSubscriptions,
+      showAppleStats,
+      showOnlineStats,
+      removeDevice,
+      getSubscriptionStatusType,
+      getSubscriptionStatusText,
+      formatDate,
+      handleSelectionChange,
+      handleSizeChange,
+      handleCurrentChange
     }
   }
 }
@@ -1267,13 +857,135 @@ export default {
 .header-actions {
   display: flex;
   gap: 10px;
+  align-items: center;
 }
 
-.search-form {
+.search-section {
   margin-bottom: 20px;
-  padding: 20px;
-  background: #f5f7fa;
-  border-radius: 8px;
+}
+
+.search-input {
+  width: 400px;
+  margin-bottom: 10px;
+}
+
+.sort-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: #666;
+  font-size: 14px;
+}
+
+.current-sort {
+  font-weight: 500;
+}
+
+.qq-info {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.qq-number {
+  font-weight: 500;
+  color: #303133;
+}
+
+.detail-btn {
+  width: 100%;
+}
+
+.expire-time-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.expire-picker {
+  width: 100%;
+}
+
+.quick-buttons {
+  display: flex;
+  gap: 4px;
+  justify-content: center;
+}
+
+.quick-buttons .el-button {
+  padding: 2px 6px;
+  font-size: 11px;
+  min-width: 0;
+}
+
+.qr-code-section {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.qr-code {
+  cursor: pointer;
+  transition: transform 0.2s;
+}
+
+.qr-code:hover {
+  transform: scale(1.1);
+}
+
+.qr-code img {
+  width: 50px;
+  height: 50px;
+  border-radius: 4px;
+}
+
+.subscription-link {
+  word-break: break-all;
+}
+
+.link-text {
+  font-size: 12px;
+}
+
+.device-limit-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.device-limit-input {
+  width: 100%;
+}
+
+.quick-device-buttons {
+  display: flex;
+  gap: 4px;
+  justify-content: center;
+}
+
+.quick-device-buttons .el-button {
+  padding: 2px 6px;
+  font-size: 11px;
+  min-width: 0;
+}
+
+.action-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.button-row {
+  display: flex;
+  gap: 4px;
+  justify-content: center;
+}
+
+.button-row .el-button {
+  padding: 3px 6px;
+  font-size: 11px;
+  flex: 1;
+  min-width: 0;
 }
 
 .pagination {
@@ -1281,317 +993,118 @@ export default {
   text-align: right;
 }
 
-.statistics-content {
-  padding: 20px 0;
+.user-detail-content {
+  max-height: 70vh;
+  overflow-y: auto;
 }
 
-.stat-card {
-  text-align: center;
-  padding: 20px;
-}
-
-.stat-number {
-  font-size: 2rem;
-  font-weight: bold;
-  color: #409eff;
-  margin-bottom: 10px;
-}
-
-.stat-label {
-  color: #606266;
-  font-size: 14px;
-}
-
-.user-info {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.user-id {
-  font-size: 12px;
-  color: #909399;
-  font-weight: 500;
-}
-
-.username {
-  font-weight: bold;
-  color: #303133;
-}
-
-.email {
-  color: #606266;
-  font-size: 13px;
-}
-
-.user-actions {
-  margin-top: 8px;
-}
-
-.user-detail {
-  padding: 20px 0;
-}
-
-.detail-row {
-  display: flex;
-  margin-bottom: 15px;
-  padding: 10px 0;
-  border-bottom: 1px solid #f0f0f0;
-}
-
-.detail-row:last-child {
-  border-bottom: none;
-}
-
-.detail-row .label {
-  font-weight: bold;
-  color: #606266;
-  min-width: 100px;
-  margin-right: 15px;
-}
-
-.detail-row .value {
-  color: #303133;
-  flex: 1;
-}
-
-.username {
-  font-weight: bold;
-  color: #303133;
-}
-
-.email {
-  font-size: 12px;
-  color: #909399;
-}
-
-.subscription-url {
-  width: 100%;
-}
-
-.subscription-url-container {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  background: #f8f9fa;
-  border: 1px solid #e9ecef;
-  border-radius: 6px;
-  padding: 8px 12px;
-  margin-bottom: 8px;
-}
-
-.subscription-url-text {
-  flex: 1;
-  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
-  font-size: 10px;
-  color: #495057;
-  word-break: break-all;
-  line-height: 1.2;
-  padding: 1px 0;
-}
-
-.copy-btn {
-  flex-shrink: 0;
-  font-size: 11px;
-  padding: 2px 6px;
-  height: auto;
-  min-width: 40px;
-}
-
-.subscription-card {
-  border: 1px solid #e4e7ed;
-  border-radius: 8px;
-  padding: 16px;
-  background: #fafafa;
-  margin: 8px 0;
-  transition: all 0.3s ease;
-}
-
-.subscription-card:hover {
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  transform: translateY(-1px);
-}
-
-.subscription-card.v2ray {
-  border-left: 4px solid #409eff;
-  background: linear-gradient(135deg, #f0f8ff 0%, #fafafa 100%);
-}
-
-.subscription-card.clash {
-  border-left: 4px solid #67c23a;
-  background: linear-gradient(135deg, #f0fff0 0%, #fafafa 100%);
-}
-
-.subscription-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 12px;
-}
-
-.subscription-url-section {
-  margin-bottom: 12px;
-}
-
-.subscription-details {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.detail-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.detail-item .label {
-  font-size: 12px;
-  color: #606266;
-  min-width: 60px;
-}
-
-.device-management {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 12px;
-}
-
-.device-summary {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.device-text {
-  font-size: 12px;
-  color: #606266;
-}
-
-.device-actions {
-  display: flex;
-  gap: 8px;
-}
-
-.action-buttons {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-  justify-content: center;
-}
-
-.subscription-url {
-  width: 100%;
-}
-
-.placeholder-url {
-  text-align: center;
-  padding: 8px;
-}
-
-.device-limit-edit {
-  margin: 8px 0;
-}
-
-.search-form {
+.detail-section {
   margin-bottom: 20px;
-  padding: 20px;
-  background: #f5f7fa;
-  border-radius: 8px;
+}
+
+.detail-section h4 {
+  margin: 0;
+  color: #303133;
+}
+
+.subscription-urls {
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
   gap: 16px;
 }
 
-.search-form .el-form-item {
-  margin-bottom: 0;
-  margin-right: 0;
-}
-
-.subscription-addresses {
+.url-item {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-}
-
-.subscription-row {
-  border: 1px solid #e4e7ed;
-  border-radius: 4px;
-  padding: 6px;
-  background: #fafafa;
-  transition: all 0.3s ease;
-}
-
-.subscription-row:hover {
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  transform: translateY(-1px);
-}
-
-.subscription-row.v2ray {
-  border-left: 4px solid #409eff;
-  background: linear-gradient(135deg, #f0f8ff 0%, #fafafa 100%);
-}
-
-.subscription-row.clash {
-  border-left: 4px solid #67c23a;
-  background: linear-gradient(135deg, #f0fff0 0%, #fafafa 100%);
-}
-
-.subscription-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 6px;
-}
-
-.subscription-url-section {
-  margin-bottom: 0;
-}
-
-.expire-time-section {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding: 8px;
-  background: #f8f9fa;
-  border-radius: 6px;
-  border: 1px solid #e9ecef;
-}
-
-.expire-row {
-  display: flex;
-  align-items: center;
   gap: 8px;
 }
 
-.expire-row .label {
-  font-size: 12px;
-  color: #6c757d;
-  min-width: 50px;
+.url-item label {
   font-weight: 500;
+  color: #606266;
 }
 
-.device-limit-section {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding: 8px;
-  background: #f8f9fa;
-  border-radius: 6px;
-  border: 1px solid #e9ecef;
+.qr-dialog-content {
+  text-align: center;
 }
 
-.device-limit-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+.qr-code-large img {
+  width: 200px;
+  height: 200px;
+  border-radius: 8px;
+  margin-bottom: 16px;
 }
 
-.device-limit-row .label {
-  font-size: 12px;
-  color: #6c757d;
-  min-width: 50px;
-  font-weight: 500;
+.qr-info {
+  color: #666;
 }
-</style> 
+
+.qr-info p {
+  margin-bottom: 16px;
+}
+
+/* 响应式设计 */
+@media (max-width: 1400px) {
+  .search-input {
+    width: 300px;
+  }
+  
+  .header-actions {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+}
+
+@media (max-width: 1200px) {
+  .search-input {
+    width: 250px;
+  }
+  
+  .header-actions {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  
+  .quick-buttons,
+  .quick-device-buttons {
+    flex-direction: column;
+    gap: 2px;
+  }
+  
+  .button-row {
+    flex-direction: column;
+    gap: 2px;
+  }
+}
+
+@media (max-width: 768px) {
+  .admin-subscriptions {
+    padding: 10px;
+  }
+  
+  .search-input {
+    width: 100%;
+  }
+  
+  .header-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .quick-buttons,
+  .quick-device-buttons {
+    flex-direction: column;
+    gap: 2px;
+  }
+  
+  .button-row {
+    flex-direction: column;
+    gap: 2px;
+  }
+  
+  .qr-code img {
+    width: 40px;
+    height: 40px;
+  }
+}
+</style>

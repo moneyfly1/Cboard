@@ -161,6 +161,13 @@ export const adminAPI = {
   updateSubscription: (subscriptionId, data) => api.put(`/admin/subscriptions/${subscriptionId}`, data),
   resetSubscription: (subscriptionId) => api.post(`/admin/subscriptions/${subscriptionId}/reset`),
   extendSubscription: (subscriptionId, days) => api.post(`/admin/subscriptions/${subscriptionId}/extend`, { days }),
+  resetUserSubscription: (userId) => api.post(`/admin/subscriptions/user/${userId}/reset-all`),
+  sendSubscriptionEmail: (userId) => api.post(`/admin/subscriptions/user/${userId}/send-email`),
+  batchClearDevices: () => api.post('/admin/subscriptions/batch-clear-devices'),
+  exportSubscriptions: () => api.get('/admin/subscriptions/export'),
+  getAppleStats: () => api.get('/admin/subscriptions/apple-stats'),
+  getOnlineStats: () => api.get('/admin/subscriptions/online-stats'),
+  clearUserDevices: (userId) => api.delete(`/admin/subscriptions/user/${userId}/delete-all`),
   
   // 订阅批量操作
   batchDeleteSubscriptions: (subscriptionIds) => api.post('/admin/subscriptions/batch-delete', { subscription_ids: subscriptionIds }),
