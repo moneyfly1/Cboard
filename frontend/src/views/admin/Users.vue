@@ -1093,8 +1093,8 @@ export default {
         const response = await api.post(`/admin/users/${user.id}/login-as`)
         
         // 保存用户token并跳转
-        localStorage.setItem('user_token', response.data.token)
-        localStorage.setItem('user_info', JSON.stringify(response.data.user))
+        localStorage.setItem('token', response.data.token)
+        localStorage.setItem('user', JSON.stringify(response.data.user))
         
         ElMessage.success('登录成功，正在跳转...')
         
