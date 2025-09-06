@@ -1303,8 +1303,8 @@ def test_email_to_user(
         <p>管理员: {current_admin.username}</p>
         <hr>
         <p><strong>订阅地址信息：</strong></p>
-        <p>通用配置地址: http://localhost:8000/api/v1/configs/ssr/test</p>
-        <p>移动端配置地址: http://localhost:8000/api/v1/configs/mobile/test</p>
+        <p>通用配置地址: http://localhost:8000/api/v1/subscriptions/ssr/test</p>
+        <p>移动端配置地址: http://localhost:8000/api/v1/subscriptions/clash/test</p>
         <p>请使用相应的客户端软件导入订阅地址。</p>
         """
         
@@ -1576,8 +1576,8 @@ def get_subscriptions(
             
             # 生成订阅地址
             base_url = "http://localhost:8000"
-            v2ray_url = f"{base_url}/api/v1/configs/ssr/{subscription.subscription_url}" if subscription.subscription_url else None
-            clash_url = f"{base_url}/api/v1/configs/mobile/{subscription.subscription_url}" if subscription.subscription_url else None
+            v2ray_url = f"{base_url}/api/v1/subscriptions/ssr/{subscription.subscription_url}" if subscription.subscription_url else None
+            clash_url = f"{base_url}/api/v1/subscriptions/clash/{subscription.subscription_url}" if subscription.subscription_url else None
             
             subscription_data = {
                 "id": subscription.id,
@@ -3416,8 +3416,8 @@ def export_subscriptions(
                 "用户名": subscription.user.username if subscription.user else "未知",
                 "邮箱": subscription.user.email if subscription.user else "未知",
                 "订阅地址": subscription.subscription_url,
-                "通用配置地址": f"http://localhost:8000/api/v1/configs/ssr/{subscription.subscription_url}",
-                "移动端配置地址": f"http://localhost:8000/api/v1/configs/mobile/{subscription.subscription_url}",
+                "通用配置地址": f"http://localhost:8000/api/v1/subscriptions/ssr/{subscription.subscription_url}",
+                "移动端配置地址": f"http://localhost:8000/api/v1/subscriptions/clash/{subscription.subscription_url}",
                 "设备限制": subscription.device_limit,
                 "当前设备": subscription.current_devices,
                 "状态": "活跃" if subscription.is_active else "暂停",
