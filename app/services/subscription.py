@@ -640,8 +640,8 @@ class SubscriptionService:
                 "username": user.username,
                 "user_email": user.email,
                 "subscription_url": subscription.subscription_url,
-                "v2ray_url": f"http://localhost:8000/api/v1/subscriptions/ssr/{subscription.subscription_url}",
-                "clash_url": f"http://localhost:8000/api/v1/subscriptions/clash/{subscription.subscription_url}",
+                "v2ray_url": f"http://localhost:8000/api/v1/configs/ssr/{subscription.subscription_url}",
+                "clash_url": f"http://localhost:8000/api/v1/configs/mobile/{subscription.subscription_url}",
                 "device_limit": subscription.device_limit,
                 "expire_time": subscription.expire_time.strftime('%Y-%m-%d %H:%M:%S') if subscription.expire_time else "永久"
             }

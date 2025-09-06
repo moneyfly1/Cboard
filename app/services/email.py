@@ -13,6 +13,7 @@ import json
 from app.models.email import EmailQueue
 from app.schemas.email import EmailQueueCreate, EmailQueueUpdate
 from app.services.email_template import EmailTemplateService
+from app.services.email_template_enhanced import EmailTemplateEnhanced
 from app.core.settings_manager import settings_manager
 
 class EmailService:
@@ -196,18 +197,25 @@ class EmailService:
             return False
         
         try:
-            # 使用模板发送订阅邮件
-            variables = {
-                "site_name": settings_manager.get_site_name(self.db),
-                **subscription_data
-            }
+            # 使用增强版模板发送订阅邮件
+            username = subscription_data.get('username', '用户')
+            html_content = EmailTemplateEnhanced.get_subscription_template(username, subscription_data)
             
-            return self.send_template_email("subscription", user_email, variables, "subscription")
+            # 创建邮件队列
+            email_queue_data = EmailQueueCreate(
+                to_email=user_email,
+                subject="您的服务配置信息 - 网络服务",
+                content=html_content,
+                email_type="subscription",
+                status="pending"
+            )
+            
+            email_queue = self.create_email_queue(email_queue_data)
+            return self.send_email(email_queue)
             
         except Exception as e:
-            # 如果模板不存在，使用默认内容
-            print(f"使用模板发送订阅邮件失败，使用默认内容: {e}")
-            return self._send_default_subscription_email(user_email, subscription_data)
+            print(f"发送订阅邮件失败: {e}")
+            return False
 
     def send_subscription_expiry_reminder(self, user_email: str, username: str, days_left: int, 
                                        package_name: str, expiry_date: str) -> bool:
