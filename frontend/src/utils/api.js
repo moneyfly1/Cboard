@@ -216,11 +216,12 @@ export const adminAPI = {
   clearLogs: () => api.post('/admin/clear-logs'),
   
   // 设备管理
-  getUserDevices: (userId) => api.get(`/admin/devices/users/${userId}/devices`),
+  getUserDevices: (userId) => api.get(`/admin/users/${userId}/devices`),
+  getSubscriptionDevices: (subscriptionId) => api.get(`/admin/subscriptions/${subscriptionId}/devices`),
   getDeviceDetail: (deviceId) => api.get(`/admin/devices/devices/${deviceId}`),
   updateDeviceStatus: (deviceId, data) => api.put(`/admin/devices/devices/${deviceId}`, data),
-  removeDevice: (deviceId) => api.delete(`/admin/devices/devices/${deviceId}`),
-  clearUserDevices: (userId) => api.post(`/admin/devices/user/${userId}/clear`)
+  removeDevice: (deviceId) => api.delete(`/admin/devices/${deviceId}`),
+  clearUserDevices: (userId) => api.post(`/admin/users/${userId}/clear-devices`)
 }
 
 // 通知相关API

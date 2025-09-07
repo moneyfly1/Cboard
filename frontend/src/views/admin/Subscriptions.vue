@@ -400,106 +400,6 @@
           </div>
         </el-card>
 
-        <!-- 在线设备列表 -->
-        <el-card class="detail-section">
-          <template #header>
-            <div class="device-header">
-              <h4>在线设备列表</h4>
-              <div class="device-actions">
-                <el-button size="small" type="primary" @click="refreshDeviceList">
-                  <el-icon><Refresh /></el-icon>
-                  刷新
-                </el-button>
-                <el-button size="small" type="warning" @click="clearAllUserDevices">
-                  <el-icon><Delete /></el-icon>
-                  清理所有设备
-                </el-button>
-              </div>
-            </div>
-          </template>
-          
-          <div v-if="selectedUser.devices && selectedUser.devices.length > 0" class="device-list-container">
-            <div 
-              v-for="device in selectedUser.devices" 
-              :key="device.id" 
-              class="device-card"
-            >
-              <div class="device-main-info">
-                <div class="device-header-info">
-                  <div class="device-software">
-                    <el-tag 
-                      :type="device.is_allowed ? 'success' : 'danger'" 
-                      size="small"
-                      class="software-tag"
-                    >
-                      {{ device.software_name || '未知软件' }}
-                    </el-tag>
-                    <span class="software-version">{{ device.software_version || '' }}</span>
-                  </div>
-                  <div class="device-status">
-                    <el-tag 
-                      :type="device.is_allowed ? 'success' : 'danger'" 
-                      size="small"
-                    >
-                      {{ device.is_allowed ? '已启用' : '已禁用' }}
-                    </el-tag>
-                  </div>
-                </div>
-                
-                <div class="device-details">
-                  <div class="device-info-row">
-                    <span class="info-label">设备型号:</span>
-                    <span class="info-value">{{ device.device_model || '未知设备' }}</span>
-                  </div>
-                  <div class="device-info-row">
-                    <span class="info-label">操作系统:</span>
-                    <span class="info-value">{{ device.os_name || '未知' }} {{ device.os_version || '' }}</span>
-                  </div>
-                  <div class="device-info-row">
-                    <span class="info-label">IP地址:</span>
-                    <span class="info-value">{{ device.ip_address }}</span>
-                  </div>
-                  <div class="device-info-row">
-                    <span class="info-label">最后在线:</span>
-                    <span class="info-value">{{ formatDate(device.last_seen) }}</span>
-                  </div>
-                  <div class="device-info-row">
-                    <span class="info-label">访问次数:</span>
-                    <span class="info-value">{{ device.access_count || 0 }}</span>
-                  </div>
-                </div>
-                
-                <div class="device-ua-section">
-                  <div class="ua-label">User Agent:</div>
-                  <div class="ua-content" :title="device.user_agent">
-                    {{ device.user_agent }}
-                  </div>
-                </div>
-              </div>
-              
-              <div class="device-actions">
-                <el-button 
-                  size="small" 
-                  :type="device.is_allowed ? 'warning' : 'success'"
-                  @click="toggleDeviceStatus(device)"
-                >
-                  {{ device.is_allowed ? '禁用设备' : '启用设备' }}
-                </el-button>
-                <el-button 
-                  size="small" 
-                  type="danger" 
-                  @click="removeDevice(device)"
-                >
-                  移除设备
-                </el-button>
-              </div>
-            </div>
-          </div>
-          
-          <div v-else class="no-devices">
-            <el-empty description="暂无设备记录" />
-          </div>
-        </el-card>
 
         <!-- UA记录 -->
         <el-card class="detail-section">
@@ -793,20 +693,14 @@ export default {
     // 显示用户详情
     const showUserDetails = async (subscription) => {
       try {
-        // 并行加载用户信息和设备列表
-        const [userResponse, devicesResponse] = await Promise.all([
-          adminAPI.getUser(subscription.user.id),
-          adminAPI.getUserDevices(subscription.user.id)
-        ])
-        
-        console.log('用户详情API响应:', userResponse)
-        console.log('设备列表API响应:', devicesResponse)
+        // 只加载用户信息
+        const userResponse = await adminAPI.getUser(subscription.user.id)
         
         selectedUser.value = {
           ...subscription,
-          user: userResponse.data?.data || userResponse.data,
-          devices: devicesResponse.data?.devices || []
+          user: userResponse.data?.data || userResponse.data
         }
+        
         showUserDetailDialog.value = true
       } catch (error) {
         ElMessage.error('加载用户详情失败')
@@ -993,97 +887,35 @@ export default {
     }
 
 
-    // 切换设备状态
-    const toggleDeviceStatus = async (device) => {
-      try {
-        const newStatus = !device.is_allowed
-        await adminAPI.updateDeviceStatus(device.id, { is_allowed: newStatus })
-        device.is_allowed = newStatus
-        ElMessage.success(`设备已${newStatus ? '启用' : '禁用'}`)
-      } catch (error) {
-        ElMessage.error('更新设备状态失败')
-        console.error('更新设备状态失败:', error)
-      }
-    }
 
     // 移除设备
-    const removeDevice = async (device) => {
-      try {
-        await ElMessageBox.confirm('确定要移除该设备吗？', '确认移除', {
-          type: 'warning'
-        })
-        
-        await adminAPI.removeDevice(device.id)
-        ElMessage.success('设备移除成功')
-        
-        // 从设备列表中移除
-        const subscription = subscriptions.value.find(sub => 
-          sub.devices && sub.devices.some(d => d.id === device.id)
-        )
-        if (subscription && subscription.devices) {
-          const index = subscription.devices.findIndex(d => d.id === device.id)
-          if (index > -1) {
-            subscription.devices.splice(index, 1)
-          }
-        }
-        
-        // 重新加载用户详情
-        if (selectedUser.value) {
-          showUserDetails(selectedUser.value)
-        }
-      } catch (error) {
-        if (error !== 'cancel') {
-          ElMessage.error('移除设备失败')
-          console.error('移除设备失败:', error)
-        }
-      }
+
+    const truncateText = (text, maxLength) => {
+      if (!text) return ''
+      return text.length > maxLength ? text.substring(0, maxLength) + '...' : text
+    }
+
+    const truncateUserAgent = (userAgent) => {
+      if (!userAgent) return '未知'
+      return userAgent.length > 50 ? userAgent.substring(0, 50) + '...' : userAgent
+    }
+
+    const formatTime = (time) => {
+      if (!time) return '未知'
+      return new Date(time).toLocaleString('zh-CN', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit'
+      })
     }
 
 
-    // 刷新设备列表
-    const refreshDeviceList = async () => {
-      if (!selectedUser.value) return
-      
-      try {
-        const response = await adminAPI.getUserDevices(selectedUser.value.user.id)
-        selectedUser.value.devices = response.data?.devices || []
-        ElMessage.success('设备列表已刷新')
-      } catch (error) {
-        ElMessage.error('刷新设备列表失败')
-        console.error('刷新设备列表失败:', error)
-      }
-    }
 
-    // 清理用户所有设备
-    const clearAllUserDevices = async () => {
-      if (!selectedUser.value) return
-      
-      try {
-        await ElMessageBox.confirm(
-          '确定要清理该用户的所有设备吗？这将清除所有设备记录和UA记录。',
-          '确认清理',
-          {
-            type: 'warning',
-            confirmButtonText: '确定清理',
-            cancelButtonText: '取消'
-          }
-        )
-        
-        await adminAPI.clearUserDevices(selectedUser.value.user.id)
-        ElMessage.success('所有设备清理成功')
-        
-        // 刷新设备列表
-        await refreshDeviceList()
-        
-        // 重新加载订阅列表
-        loadSubscriptions()
-      } catch (error) {
-        if (error !== 'cancel') {
-          ElMessage.error('清理设备失败')
-          console.error('清理设备失败:', error)
-        }
-      }
-    }
+
+
 
     // 获取订阅状态类型
     const getSubscriptionStatusType = (status) => {
@@ -1223,7 +1055,6 @@ export default {
       exportSubscriptions,
       showAppleStats,
       showOnlineStats,
-      removeDevice,
       getSubscriptionStatusType,
       getSubscriptionStatusText,
       formatDate,
@@ -1237,9 +1068,8 @@ export default {
       sortByOnline,
       sortByCreatedTime,
       handleDeviceLimitSort,
-      toggleDeviceStatus,
-      refreshDeviceList,
-      clearAllUserDevices
+      truncateUserAgent,
+      formatTime
     }
   }
 }
@@ -1517,27 +1347,6 @@ export default {
 }
 
 
-/* 用户详情对话框中的设备列表样式 */
-.device-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.device-header h4 {
-  margin: 0;
-}
-
-.device-actions {
-  display: flex;
-  gap: 8px;
-}
-
-.device-list-container {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
 
 .device-card {
   border: 1px solid #e4e7ed;

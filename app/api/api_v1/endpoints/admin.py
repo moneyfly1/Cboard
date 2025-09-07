@@ -500,6 +500,142 @@ def delete_user(
     except Exception as e:
         return ResponseBase(success=False, message=f"删除用户失败: {str(e)}")
 
+@router.get("/users/{user_id}/devices", response_model=ResponseBase)
+def get_user_devices_admin(
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_admin = Depends(get_current_admin_user)
+) -> Any:
+    """管理员获取用户设备列表"""
+    try:
+        subscription_service = SubscriptionService(db)
+        
+        # 获取用户订阅
+        subscription = subscription_service.get_by_user_id(user_id)
+        if not subscription:
+            return ResponseBase(data={"devices": []})
+        
+        # 获取设备列表 - 查询devices表
+        from sqlalchemy import text
+        device_query = text("""
+            SELECT 
+                d.id,
+                d.device_name,
+                d.device_type,
+                d.ip_address,
+                d.user_agent,
+                d.last_access,
+                d.is_active,
+                d.created_at
+            FROM devices d
+            WHERE d.subscription_id = :subscription_id
+            ORDER BY d.last_access DESC
+        """)
+        device_rows = db.execute(device_query, {"subscription_id": subscription.id}).fetchall()
+        
+        device_list = []
+        for device_row in device_rows:
+            device_data = {
+                "id": device_row.id,
+                "device_name": device_row.device_name or "未知设备",
+                "device_type": device_row.device_type or "unknown",
+                "ip_address": device_row.ip_address,
+                "user_agent": device_row.user_agent,
+                "last_access": device_row.last_access if device_row.last_access else None,
+                "is_active": device_row.is_active,
+                "created_at": device_row.created_at if device_row.created_at else None
+            }
+            device_list.append(device_data)
+        
+        return ResponseBase(data={"devices": device_list})
+    except Exception as e:
+        print(f"获取用户设备列表失败: {e}")
+        return ResponseBase(data={"devices": []})
+
+@router.delete("/devices/{device_id}", response_model=ResponseBase)
+def delete_device_admin(
+    device_id: int,
+    db: Session = Depends(get_db),
+    current_admin = Depends(get_current_admin_user)
+) -> Any:
+    """管理员删除设备"""
+    try:
+        from sqlalchemy import text
+        
+        # 验证设备是否存在
+        device_query = text("""
+            SELECT id, subscription_id FROM devices WHERE id = :device_id
+        """)
+        device = db.execute(device_query, {'device_id': device_id}).fetchone()
+        
+        if not device:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="设备不存在"
+            )
+        
+        # 删除设备
+        result = db.execute(text("""
+            DELETE FROM devices WHERE id = :device_id
+        """), {'device_id': device_id})
+        
+        if result.rowcount > 0:
+            # 更新订阅的设备计数
+            subscription_query = text("""
+                UPDATE subscriptions 
+                SET current_devices = current_devices - 1 
+                WHERE id = :subscription_id AND current_devices > 0
+            """)
+            db.execute(subscription_query, {'subscription_id': device.subscription_id})
+            db.commit()
+            return ResponseBase(message="设备删除成功")
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="设备不存在"
+            )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"删除设备失败: {str(e)}"
+        )
+
+@router.post("/users/{user_id}/clear-devices", response_model=ResponseBase)
+def clear_user_devices_admin(
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_admin = Depends(get_current_admin_user)
+) -> Any:
+    """管理员清理用户所有设备"""
+    try:
+        subscription_service = SubscriptionService(db)
+        
+        # 获取用户订阅
+        subscription = subscription_service.get_by_user_id(user_id)
+        if not subscription:
+            raise HTTPException(status_code=404, detail="用户没有订阅")
+        
+        # 删除所有设备
+        from sqlalchemy import text
+        result = db.execute(text("""
+            DELETE FROM devices WHERE subscription_id = :subscription_id
+        """), {'subscription_id': subscription.id})
+        
+        # 重置设备计数
+        subscription.current_devices = 0
+        db.commit()
+        
+        return ResponseBase(message=f"已清理 {result.rowcount} 个设备")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"清理设备失败: {str(e)}"
+        )
+
 @router.post("/users/{user_id}/reset-subscription", response_model=ResponseBase)
 def reset_user_subscription(
     user_id: int,
