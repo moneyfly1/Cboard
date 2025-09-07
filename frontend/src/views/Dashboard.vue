@@ -445,7 +445,10 @@ const loadAnnouncements = async () => {
 const loadSoftwareConfig = async () => {
   try {
     const response = await softwareConfigAPI.getSoftwareConfig()
-    softwareConfig.value = response.data
+    if (response.data && response.data.success) {
+      // 后端返回的是ResponseBase格式，数据在response.data.data中
+      softwareConfig.value = response.data.data
+    }
   } catch (error) {
     console.error('加载软件配置失败:', error)
   }

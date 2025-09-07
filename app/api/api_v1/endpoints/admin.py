@@ -1791,18 +1791,14 @@ def update_subscription(
             update_fields.append("expire_time = :expire_time")
             update_values["expire_time"] = expire_time
         
-        if "expires_at" in subscription_data:
+        if "expire_time" in subscription_data:
             # 直接设置到期时间
             try:
-                expire_time = datetime.fromisoformat(subscription_data["expires_at"].replace('Z', '+00:00'))
+                expire_time = datetime.fromisoformat(subscription_data["expire_time"].replace('Z', '+00:00'))
                 update_fields.append("expire_time = :expire_time")
                 update_values["expire_time"] = expire_time
             except ValueError as e:
                 return ResponseBase(success=False, message=f"时间格式错误: {str(e)}")
-        
-        if "device_limit" in subscription_data:
-            update_fields.append("device_limit = :device_limit")
-            update_values["device_limit"] = subscription_data["device_limit"]
         
         if update_fields:
             update_fields.append("updated_at = :updated_at")

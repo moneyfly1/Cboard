@@ -15,23 +15,25 @@ def get_announcements(
 ) -> Any:
     """获取公告列表"""
     try:
+        from sqlalchemy import text
+        
         # 查询公告列表 - 包括系统公告和通知
-        announcements = db.execute("""
+        announcements = db.execute(text("""
             SELECT id, title, content, 'announcement' as type, created_at, updated_at
             FROM announcements 
             WHERE is_active = 1 
             ORDER BY created_at DESC 
             LIMIT 10
-        """).fetchall()
+        """)).fetchall()
         
         # 查询系统通知
-        notifications = db.execute("""
+        notifications = db.execute(text("""
             SELECT id, title, content, type, created_at, NULL as updated_at
             FROM notifications 
             WHERE type = 'system' OR type = 'announcement'
             ORDER BY created_at DESC 
             LIMIT 10
-        """).fetchall()
+        """)).fetchall()
         
         # 合并公告和通知
         all_items = []
@@ -192,7 +194,7 @@ def get_admin_announcements(
         """, {'limit': size, 'offset': skip}).fetchall()
         
         # 查询总数
-        total = db.execute("SELECT COUNT(*) FROM announcements").fetchone()[0]
+        total = db.execute(text("SELECT COUNT(*) FROM announcements")).fetchone()[0]
         
         announcement_list = []
         for announcement in announcements:

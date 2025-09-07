@@ -678,6 +678,8 @@ export default {
           expire_time: subscription.expire_time
         })
         ElMessage.success('到期时间更新成功')
+        // 重新加载数据以确保显示最新信息
+        loadSubscriptions()
       } catch (error) {
         ElMessage.error('更新到期时间失败')
         console.error('更新到期时间失败:', error)
@@ -704,6 +706,8 @@ export default {
           device_limit: subscription.device_limit
         })
         ElMessage.success('设备限制更新成功')
+        // 重新加载数据以确保显示最新信息
+        loadSubscriptions()
       } catch (error) {
         ElMessage.error('更新设备限制失败')
         console.error('更新设备限制失败:', error)
