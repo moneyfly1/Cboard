@@ -1805,6 +1805,10 @@ export default {
 .device-header {
   display: flex;
   justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  padding-bottom: 15px;
+  border-bottom: 1px solid #ebeef5;
 }
 
 .device-name {
@@ -1828,11 +1832,6 @@ export default {
   font-size: 12px;
   color: #909399;
   cursor: help;
-}
-  align-items: center;
-  margin-bottom: 20px;
-  padding-bottom: 15px;
-  border-bottom: 1px solid #ebeef5;
 }
 
 .device-header h4 {
