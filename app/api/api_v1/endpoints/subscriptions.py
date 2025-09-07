@@ -233,7 +233,7 @@ def get_user_devices(
             # 如果没有订阅，返回空设备列表
             return ResponseBase(data={"devices": []})
         
-        # 获取设备列表 - 直接查询user_devices表
+        # 获取设备列表 - 直接查询devices表
         from sqlalchemy import text
         device_query = text("""
             SELECT * FROM devices
@@ -244,16 +244,17 @@ def get_user_devices(
         
         device_list = []
         for device_row in device_rows:
-            device_list.append({
+            device_data = {
                 "id": device_row.id,
                 "device_name": device_row.device_name or "未知设备",
                 "device_type": device_row.device_type or "unknown",
                 "ip_address": device_row.ip_address,
                 "user_agent": device_row.user_agent,
-                "last_access": device_row.last_access.isoformat() if device_row.last_access else None,
+                "last_access": device_row.last_access if device_row.last_access else None,
                 "is_active": device_row.is_active,
-                "created_at": device_row.created_at.isoformat() if device_row.created_at else None
-            })
+                "created_at": device_row.created_at if device_row.created_at else None
+            }
+            device_list.append(device_data)
         
         return ResponseBase(data={"devices": device_list})
     except Exception as e:

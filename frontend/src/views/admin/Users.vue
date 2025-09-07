@@ -503,59 +503,43 @@
         
         <el-table :data="userDevices" size="small" v-loading="false">
           <el-table-column prop="id" label="ID" width="60" />
-          <el-table-column prop="software_name" label="软件名称" width="120">
+          <el-table-column prop="device_name" label="设备名称" min-width="150">
             <template #default="scope">
-              <el-tag v-if="scope.row.software_name" type="primary" size="small">
-                {{ scope.row.software_name }}
-              </el-tag>
-              <el-text v-else type="info" size="small">未知</el-text>
+              <div class="device-name">
+                <i :class="getDeviceIcon(scope.row.device_type)"></i>
+                <span>{{ scope.row.device_name || '未知设备' }}</span>
+              </div>
             </template>
           </el-table-column>
-          <el-table-column prop="software_category" label="软件类型" width="100">
+          <el-table-column prop="device_type" label="设备类型" width="120">
             <template #default="scope">
-              <el-tag v-if="scope.row.software_category" type="success" size="small">
-                {{ scope.row.software_category }}
-              </el-tag>
-              <el-text v-else type="info" size="small">-</el-text>
-            </template>
-          </el-table-column>
-          <el-table-column prop="os_name" label="操作系统" width="100">
-            <template #default="scope">
-              <el-tag v-if="scope.row.os_name" type="warning" size="small">
-                {{ scope.row.os_name }}
-              </el-tag>
-              <el-text v-else type="info" size="small">-</el-text>
-            </template>
-          </el-table-column>
-          <el-table-column prop="device_brand" label="设备品牌" width="100">
-            <template #default="scope">
-              <span v-if="scope.row.device_brand">{{ scope.row.device_brand }}</span>
-              <el-text v-else type="info" size="small">-</el-text>
-            </template>
-          </el-table-column>
-          <el-table-column prop="device_model" label="设备型号" width="120">
-            <template #default="scope">
-              <span v-if="scope.row.device_model">{{ scope.row.device_model }}</span>
-              <el-text v-else type="info" size="small">-</el-text>
-            </template>
-          </el-table-column>
-          <el-table-column prop="ip_address" label="IP地址" width="120" />
-          <el-table-column prop="access_count" label="访问次数" width="80" />
-          <el-table-column prop="is_allowed" label="状态" width="80">
-            <template #default="scope">
-              <el-tag :type="scope.row.is_allowed ? 'success' : 'danger'" size="small">
-                {{ scope.row.is_allowed ? '允许' : '拒绝' }}
+              <el-tag :type="getDeviceTypeColor(scope.row.device_type)">
+                {{ getDeviceTypeName(scope.row.device_type) }}
               </el-tag>
             </template>
           </el-table-column>
-          <el-table-column prop="first_seen" label="首次访问" width="150">
+          <el-table-column prop="ip_address" label="IP地址" width="140">
             <template #default="scope">
-              {{ formatDate(scope.row.first_seen) }}
+              <span class="ip-address">{{ scope.row.ip_address }}</span>
             </template>
           </el-table-column>
-          <el-table-column prop="last_seen" label="最后访问" width="150">
+          <el-table-column prop="last_access" label="最后访问" width="180">
             <template #default="scope">
-              {{ formatDate(scope.row.last_seen) }}
+              <span>{{ formatTime(scope.row.last_access) }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column prop="user_agent" label="User Agent" min-width="200">
+            <template #default="scope">
+              <el-tooltip :content="scope.row.user_agent" placement="top">
+                <span class="user-agent">{{ truncateUserAgent(scope.row.user_agent) }}</span>
+              </el-tooltip>
+            </template>
+          </el-table-column>
+          <el-table-column prop="is_active" label="状态" width="80">
+            <template #default="scope">
+              <el-tag :type="scope.row.is_active ? 'success' : 'danger'" size="small">
+                {{ scope.row.is_active ? '活跃' : '离线' }}
+              </el-tag>
             </template>
           </el-table-column>
           <el-table-column label="操作" width="100" fixed="right">
@@ -1238,6 +1222,59 @@ export default {
       }
     }
 
+    // 设备相关辅助函数
+    const getDeviceIcon = (deviceType) => {
+      const iconMap = {
+        mobile: 'el-icon-mobile-phone',
+        desktop: 'el-icon-monitor',
+        tablet: 'el-icon-ipad',
+        unknown: 'el-icon-question'
+      }
+      return iconMap[deviceType] || iconMap.unknown
+    }
+
+    const getDeviceTypeColor = (deviceType) => {
+      const colorMap = {
+        mobile: 'success',
+        desktop: 'primary',
+        tablet: 'warning',
+        unknown: 'info'
+      }
+      return colorMap[deviceType] || colorMap.unknown
+    }
+
+    const getDeviceTypeName = (deviceType) => {
+      const nameMap = {
+        mobile: '移动设备',
+        desktop: '桌面设备',
+        tablet: '平板设备',
+        unknown: '未知设备'
+      }
+      return nameMap[deviceType] || nameMap.unknown
+    }
+
+    const formatTime = (timeStr) => {
+      if (!timeStr) return '-'
+      try {
+        const date = new Date(timeStr)
+        return date.toLocaleString('zh-CN', {
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit'
+        })
+      } catch (error) {
+        return timeStr
+      }
+    }
+
+    const truncateUserAgent = (userAgent) => {
+      if (!userAgent) return '-'
+      return userAgent.length > 50 ? userAgent.substring(0, 50) + '...' : userAgent
+    }
+
     const loginAsUser = async (user) => {
       try {
         await ElMessageBox.confirm(
@@ -1433,6 +1470,11 @@ export default {
       manageUserDevices,
       deleteDevice,
       clearAllDevices,
+      getDeviceIcon,
+      getDeviceTypeColor,
+      getDeviceTypeName,
+      formatTime,
+      truncateUserAgent,
       loginAsUser,
       // 新增的响应式变量
       showBulkImportDialog,
@@ -1763,6 +1805,30 @@ export default {
 .device-header {
   display: flex;
   justify-content: space-between;
+}
+
+.device-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.device-name i {
+  font-size: 16px;
+  color: #409eff;
+}
+
+.ip-address {
+  font-family: 'Courier New', monospace;
+  font-size: 12px;
+  color: #606266;
+}
+
+.user-agent {
+  font-size: 12px;
+  color: #909399;
+  cursor: help;
+}
   align-items: center;
   margin-bottom: 20px;
   padding-bottom: 15px;
