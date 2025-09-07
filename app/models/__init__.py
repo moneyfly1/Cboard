@@ -21,6 +21,7 @@ User.notifications = relationship("Notification", back_populates="user")
 User.activities = relationship("UserActivity", back_populates="user")
 User.subscription_resets = relationship("SubscriptionReset", back_populates="user")
 User.login_history = relationship("LoginHistory", back_populates="user")
+User.devices = relationship("Device", back_populates="user")
 
 # Subscription关系
 Subscription.user = relationship("User", back_populates="subscriptions")

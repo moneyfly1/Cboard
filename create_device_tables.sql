@@ -1,7 +1,7 @@
 -- 设备管理相关表结构
 
 -- 1. 设备记录表
-CREATE TABLE IF NOT EXISTS user_devices (
+CREATE TABLE IF NOT EXISTS devices (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER NOT NULL,
     subscription_id INTEGER NOT NULL,
@@ -52,14 +52,14 @@ CREATE TABLE IF NOT EXISTS subscription_access_logs (
     response_message TEXT,  -- 响应消息
     access_time DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (subscription_id) REFERENCES subscriptions (id) ON DELETE CASCADE,
-    FOREIGN KEY (device_id) REFERENCES user_devices (id) ON DELETE SET NULL
+    FOREIGN KEY (device_id) REFERENCES devices (id) ON DELETE SET NULL
 );
 
 -- 创建索引
-CREATE INDEX IF NOT EXISTS idx_user_devices_user_id ON user_devices(user_id);
-CREATE INDEX IF NOT EXISTS idx_user_devices_subscription_id ON user_devices(subscription_id);
-CREATE INDEX IF NOT EXISTS idx_user_devices_device_hash ON user_devices(device_hash);
-CREATE INDEX IF NOT EXISTS idx_user_devices_is_allowed ON user_devices(is_allowed);
+CREATE INDEX IF NOT EXISTS idx_devices_user_id ON devices(user_id);
+CREATE INDEX IF NOT EXISTS idx_devices_subscription_id ON devices(subscription_id);
+CREATE INDEX IF NOT EXISTS idx_devices_device_hash ON devices(device_hash);
+CREATE INDEX IF NOT EXISTS idx_devices_is_allowed ON devices(is_allowed);
 CREATE INDEX IF NOT EXISTS idx_software_rules_pattern ON software_rules(user_agent_pattern);
 CREATE INDEX IF NOT EXISTS idx_access_logs_subscription_id ON subscription_access_logs(subscription_id);
 CREATE INDEX IF NOT EXISTS idx_access_logs_access_time ON subscription_access_logs(access_time);

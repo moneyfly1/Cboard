@@ -84,10 +84,10 @@
       </div>
     </el-card>
 
-    <!-- 微信支付二维码弹窗 -->
+    <!-- 支付二维码弹窗 -->
     <el-dialog
       v-model="wechatQRVisible"
-      title="微信支付"
+      :title="selectedPaymentMethod === 'alipay' ? '支付宝支付' : '微信支付'"
       width="400px"
       :close-on-click-modal="false"
       :close-on-press-escape="false"
@@ -104,7 +104,7 @@
         </div>
         
         <div class="qr-tips">
-          <p>请使用微信扫描二维码完成支付</p>
+          <p>请使用{{ selectedPaymentMethod === 'alipay' ? '支付宝' : '微信' }}扫描二维码完成支付</p>
           <p>支付完成后请勿关闭此窗口</p>
         </div>
         
@@ -245,19 +245,19 @@ export default {
         
         const response = await api.post('/payment/create', paymentData)
         
-        if (response.data.payment_url) {
-          if (selectedPaymentMethod.value === 'alipay') {
-            // 支付宝支付 - 跳转支付页面
-            window.open(response.data.payment_url, '_blank')
-            ElMessage.success('正在跳转到支付宝...')
-          } else if (selectedPaymentMethod.value === 'wechat') {
-            // 微信支付 - 显示二维码
-            wechatQRCode.value = response.data.payment_url
+        if (response.data && response.data.success) {
+          const paymentResult = response.data.data
+          
+          if (paymentResult.payment_url) {
+            // 统一显示二维码，不区分支付方式
+            wechatQRCode.value = paymentResult.payment_url
             wechatQRVisible.value = true
             startStatusCheck()
+          } else {
+            throw new Error('获取支付链接失败')
           }
         } else {
-          throw new Error('获取支付链接失败')
+          throw new Error(response.data?.message || '创建支付订单失败')
         }
         
       } catch (error) {
@@ -283,8 +283,11 @@ export default {
         const response = await api.get(`/payment/transactions?order_no=${props.orderInfo.orderNo}`)
         const payments = response.data
         
+        console.log('支付状态检查响应:', payments)
+        
         if (payments.length > 0) {
           const latestPayment = payments[0]
+          console.log('最新支付记录:', latestPayment)
           
           if (latestPayment.status === 'success') {
             // 支付成功
@@ -309,12 +312,21 @@ export default {
             
             resultVisible.value = true
             emit('error', new Error('支付失败'))
+          } else if (latestPayment.status === 'pending') {
+            // 支付待处理，继续等待
+            console.log('支付状态: pending，继续等待...')
+          } else {
+            // 未知状态
+            console.log('未知支付状态:', latestPayment.status)
           }
+        } else {
+          console.log('未找到支付记录')
         }
         
       } catch (error) {
         console.error('检查支付状态失败:', error)
-        ElMessage.error('检查支付状态失败')
+        // 不要显示错误消息，避免干扰用户体验
+        // ElMessage.error('检查支付状态失败')
       } finally {
         isCheckingStatus.value = false
       }

@@ -26,6 +26,7 @@ class OrderService:
         self,
         user_id: int,
         package_id: int,
+        payment_method: str = "alipay",
         payment_config_id: Optional[int] = None,
         amount: float = None
     ) -> Order:
@@ -41,12 +42,8 @@ class OrderService:
         if amount is None:
             amount = float(package.price)
 
-        # 获取支付配置信息
-        payment_method_name = None
-        if payment_config_id:
-            payment_config = self.db.query(PaymentConfig).filter(PaymentConfig.id == payment_config_id).first()
-            if payment_config:
-                payment_method_name = f"{payment_config.pay_type}({payment_config.app_id or '未配置'})"
+        # 设置支付方式名称
+        payment_method_name = payment_method
 
         order = Order(
             order_no=order_no,
@@ -72,7 +69,7 @@ class OrderService:
         """获取用户订单列表"""
         query = self.db.query(Order).filter(Order.user_id == user_id)
         total = query.count()
-        orders = query.offset(skip).limit(limit).order_by(Order.created_at.desc()).all()
+        orders = query.order_by(Order.created_at.desc()).offset(skip).limit(limit).all()
         return orders, total
 
     def get_orders_with_pagination(
@@ -201,12 +198,12 @@ class OrderService:
         """生成支付URL"""
         # 这里应该根据支付方式生成不同的支付URL
         # 示例：支付宝支付
-        if order.payment_method == "alipay":
+        if order.payment_method_name == "alipay":
             return f"https://openapi.alipay.com/gateway.do?order_no={order.order_no}&amount={order.amount}"
-        elif order.payment_method == "wechat":
+        elif order.payment_method_name == "wechat":
             return f"weixin://wxpay/bizpayurl?order_no={order.order_no}&amount={order.amount}"
         else:
-            return ""
+            return f"https://example.com/payment?order_no={order.order_no}&amount={order.amount}"
 
     def count(self) -> int:
         """统计订单数量"""

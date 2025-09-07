@@ -263,7 +263,7 @@ class DeviceManager:
             # 检查设备是否已存在
             existing_device = self.db.execute(text("""
                 SELECT id, is_allowed, access_count, first_seen, last_seen
-                FROM user_devices
+                FROM devices
                 WHERE device_hash = :device_hash AND subscription_id = :subscription_id
             """), {
                 'device_hash': device_hash,
@@ -273,7 +273,7 @@ class DeviceManager:
             if existing_device:
                 # 设备已存在，更新访问信息
                 self.db.execute(text("""
-                    UPDATE user_devices 
+                    UPDATE devices 
                     SET last_seen = CURRENT_TIMESTAMP, access_count = access_count + 1
                     WHERE id = :device_id
                 """), {'device_id': existing_device.id})
@@ -293,7 +293,7 @@ class DeviceManager:
             
             # 新设备，检查设备数量限制
             allowed_devices_count = self.db.execute(text("""
-                SELECT COUNT(*) FROM user_devices 
+                SELECT COUNT(*) FROM devices 
                 WHERE subscription_id = :subscription_id AND is_allowed = 1
             """), {'subscription_id': subscription.id}).scalar()
             
@@ -335,20 +335,25 @@ class DeviceManager:
                             is_allowed: bool) -> int:
         """创建设备记录"""
         result = self.db.execute(text("""
-            INSERT INTO user_devices (
-                user_id, subscription_id, device_ua, device_hash, ip_address, user_agent,
+            INSERT INTO devices (
+                user_id, subscription_id, device_ua, device_hash, device_fingerprint, 
+                device_name, device_type, ip_address, user_agent,
                 software_name, software_version, os_name, os_version, device_model, 
-                device_brand, is_allowed, first_seen, last_seen, access_count
+                device_brand, is_allowed, is_active, first_seen, last_seen, last_access, access_count
             ) VALUES (
-                :user_id, :subscription_id, :device_ua, :device_hash, :ip_address, :user_agent,
+                :user_id, :subscription_id, :device_ua, :device_hash, :device_fingerprint,
+                :device_name, :device_type, :ip_address, :user_agent,
                 :software_name, :software_version, :os_name, :os_version, :device_model,
-                :device_brand, :is_allowed, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 1
+                :device_brand, :is_allowed, :is_active, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 1
             )
         """), {
             'user_id': user_id,
             'subscription_id': subscription_id,
             'device_ua': f"{user_agent}|{ip_address}",
             'device_hash': device_hash,
+            'device_fingerprint': device_hash,  # 使用device_hash作为fingerprint
+            'device_name': device_info.get('device_name', 'Unknown Device'),
+            'device_type': device_info.get('device_type', 'unknown'),
             'ip_address': ip_address,
             'user_agent': user_agent,
             'software_name': device_info.get('software_name', 'Unknown'),
@@ -357,7 +362,8 @@ class DeviceManager:
             'os_version': device_info.get('os_version', ''),
             'device_model': device_info.get('device_model', ''),
             'device_brand': device_info.get('device_brand', ''),
-            'is_allowed': is_allowed
+            'is_allowed': is_allowed,
+            'is_active': True
         })
         
         return result.lastrowid
@@ -391,7 +397,7 @@ class DeviceManager:
         try:
             query = """
                 SELECT d.*, s.subscription_url, u.username, u.email
-                FROM user_devices d
+                FROM devices d
                 JOIN subscriptions s ON d.subscription_id = s.id
                 JOIN users u ON d.user_id = u.id
                 WHERE d.user_id = :user_id
@@ -442,7 +448,7 @@ class DeviceManager:
         try:
             # 验证设备存在
             device = self.db.execute(text("""
-                SELECT id FROM user_devices WHERE id = :device_id
+                SELECT id FROM devices WHERE id = :device_id
             """), {'device_id': device_id}).fetchone()
             
             if not device:
@@ -461,7 +467,7 @@ class DeviceManager:
             
             # 执行更新
             update_sql = f"""
-                UPDATE user_devices 
+                UPDATE devices 
                 SET {', '.join(update_fields)}, updated_at = CURRENT_TIMESTAMP
                 WHERE id = :device_id
             """
@@ -480,7 +486,7 @@ class DeviceManager:
         try:
             # 验证设备所有权
             device = self.db.execute(text("""
-                SELECT id FROM user_devices 
+                SELECT id FROM devices 
                 WHERE id = :device_id AND user_id = :user_id
             """), {'device_id': device_id, 'user_id': user_id}).fetchone()
             
@@ -489,7 +495,7 @@ class DeviceManager:
             
             # 删除设备
             self.db.execute(text("""
-                DELETE FROM user_devices WHERE id = :device_id
+                DELETE FROM devices WHERE id = :device_id
             """), {'device_id': device_id})
             
             self.db.commit()
@@ -505,14 +511,14 @@ class DeviceManager:
         try:
             # 获取要删除的设备数量
             count_result = self.db.execute(text("""
-                SELECT COUNT(*) FROM user_devices WHERE subscription_id = :subscription_id
+                SELECT COUNT(*) FROM devices WHERE subscription_id = :subscription_id
             """), {'subscription_id': subscription_id}).fetchone()
             
             device_count = count_result[0] if count_result else 0
             
             # 删除所有设备
             self.db.execute(text("""
-                DELETE FROM user_devices WHERE subscription_id = :subscription_id
+                DELETE FROM devices WHERE subscription_id = :subscription_id
             """), {'subscription_id': subscription_id})
             
             self.db.commit()
@@ -531,7 +537,7 @@ class DeviceManager:
                     COUNT(*) as total_devices,
                     SUM(CASE WHEN is_allowed = 1 THEN 1 ELSE 0 END) as allowed_devices,
                     SUM(CASE WHEN is_allowed = 0 THEN 1 ELSE 0 END) as blocked_devices
-                FROM user_devices 
+                FROM devices 
                 WHERE subscription_id = :subscription_id
             """), {'subscription_id': subscription_id}).fetchone()
             

@@ -5,14 +5,6 @@
       <p>选择适合您的订阅套餐</p>
     </div>
 
-    <!-- 调试信息 -->
-    <div class="debug-info" style="background: #f5f5f5; padding: 10px; margin: 10px 0; border-radius: 4px; font-family: monospace; font-size: 12px;">
-      <div><strong>调试信息:</strong></div>
-      <div>套餐数量: {{ packages.length }}</div>
-      <div>加载状态: {{ isLoading ? '加载中...' : '加载完成' }}</div>
-      <div>错误信息: {{ errorMessage || '无' }}</div>
-      <div>API响应: {{ apiResponse ? '已收到' : '未收到' }}</div>
-    </div>
 
     <!-- 加载状态 -->
     <div v-if="isLoading" class="loading-container">
@@ -62,6 +54,10 @@
           </ul>
         </div>
         
+        <div class="package-description">
+          <p>{{ pkg.description }}</p>
+        </div>
+        
         <div class="package-actions">
           <el-button 
             type="primary" 
@@ -95,6 +91,9 @@
             <el-descriptions-item label="套餐名称">{{ selectedPackage?.name }}</el-descriptions-item>
             <el-descriptions-item label="有效期">{{ selectedPackage?.duration_days }}天</el-descriptions-item>
             <el-descriptions-item label="设备限制">{{ selectedPackage?.device_limit }}个</el-descriptions-item>
+            <el-descriptions-item label="流量限制">
+              {{ selectedPackage?.bandwidth_limit ? selectedPackage.bandwidth_limit + 'GB' : '无限制' }}
+            </el-descriptions-item>
             <el-descriptions-item label="支付金额">
               <span class="amount">¥{{ selectedPackage?.price }}</span>
             </el-descriptions-item>
@@ -103,7 +102,9 @@
         
         <div class="purchase-actions">
           <el-button @click="purchaseDialogVisible = false">取消</el-button>
-          <el-button type="primary" @click="confirmPurchase">确认购买</el-button>
+          <el-button type="primary" @click="confirmPurchase" :loading="isProcessing">
+            确认购买
+          </el-button>
         </div>
       </div>
     </el-dialog>
@@ -183,9 +184,7 @@ export default {
         isLoading.value = true
         errorMessage.value = ''
         
-        console.log('开始加载套餐列表...')
         const response = await api.get('/packages/')
-        console.log('API响应:', response)
         
         if (response.data && response.data.data && response.data.data.packages) {
           packages.value = response.data.data.packages.map(pkg => ({
@@ -196,28 +195,22 @@ export default {
               pkg.bandwidth_limit ? `流量限制 ${pkg.bandwidth_limit}GB` : '无流量限制',
               '7×24小时技术支持',
               '高速稳定节点'
-          ],
+            ],
             is_popular: pkg.sort_order === 2,
             is_recommended: pkg.sort_order === 3
           }))
-          console.log('套餐数据已处理:', packages.value)
+          console.log('套餐数据加载成功:', packages.value)
         } else {
-          console.error('API响应格式不正确:', response)
-          errorMessage.value = 'API响应格式不正确'
+          console.error('套餐数据格式错误:', response.data)
+          errorMessage.value = '套餐数据格式错误'
         }
       } catch (error) {
-        console.error('加载套餐失败:', error)
-        console.error('错误详情:', error.response?.data)
-        console.error('错误状态:', error.response?.status)
-        
         if (error.response?.status === 404) {
-          errorMessage.value = '套餐接口不存在 (404)'
+          errorMessage.value = '套餐服务暂时不可用'
         } else if (error.response?.status === 500) {
-          errorMessage.value = '服务器内部错误 (500)'
+          errorMessage.value = '服务器内部错误'
         } else if (error.code === 'ECONNREFUSED') {
-          errorMessage.value = '无法连接到服务器，请检查后端服务是否启动'
-        } else if (error.message) {
-          errorMessage.value = `加载失败: ${error.message}`
+          errorMessage.value = '无法连接到服务器'
         } else {
           errorMessage.value = '加载套餐列表失败，请重试'
         }
@@ -228,8 +221,13 @@ export default {
     
     // 选择套餐
     const selectPackage = (pkg) => {
+      console.log('选择套餐:', pkg)
+      console.log('套餐名称:', pkg?.name)
+      console.log('套餐价格:', pkg?.price)
       selectedPackage.value = pkg
+      console.log('selectedPackage设置后:', selectedPackage.value)
       purchaseDialogVisible.value = true
+      console.log('对话框状态:', purchaseDialogVisible.value)
     }
     
     // 确认购买
@@ -237,29 +235,38 @@ export default {
       try {
         isProcessing.value = true
         
+        console.log('开始创建订单，selectedPackage:', selectedPackage.value)
+        
         // 创建订单
         const orderData = {
           package_id: selectedPackage.value.id,
+          payment_method: 'alipay', // 默认支付方式，用户可以在支付页面选择
           amount: selectedPackage.value.price,
           currency: 'CNY'
         }
         
+        console.log('订单数据:', orderData)
         const response = await api.post('/orders/create', orderData)
-        const order = response.data
+        console.log('订单创建响应:', response)
         
-        // 设置订单信息
-        orderInfo.orderNo = order.order_no
-        orderInfo.packageName = selectedPackage.value.name
-        orderInfo.amount = selectedPackage.value.price
-        orderInfo.duration = selectedPackage.value.duration_days
-        
-        // 关闭购买确认对话框，显示支付对话框
-        purchaseDialogVisible.value = false
-        paymentDialogVisible.value = true
+        if (response.data && response.data.success) {
+          const order = response.data.data
+          
+          // 设置订单信息
+          orderInfo.orderNo = order.order_no
+          orderInfo.packageName = selectedPackage.value.name
+          orderInfo.amount = order.amount
+          orderInfo.duration = selectedPackage.value.duration_days
+          
+          // 关闭购买确认对话框，显示支付对话框
+          purchaseDialogVisible.value = false
+          paymentDialogVisible.value = true
+        } else {
+          throw new Error(response.data?.message || '创建订单失败')
+        }
         
       } catch (error) {
-        ElMessage.error('创建订单失败，请重试')
-        console.error('创建订单失败:', error)
+        ElMessage.error(error.response?.data?.detail || '创建订单失败，请重试')
       } finally {
         isProcessing.value = false
       }
@@ -301,12 +308,15 @@ export default {
     
     return {
       packages,
+      isLoading,
+      errorMessage,
       isProcessing,
       purchaseDialogVisible,
       paymentDialogVisible,
       successDialogVisible,
       selectedPackage,
       orderInfo,
+      loadPackages,
       selectPackage,
       confirmPurchase,
       onPaymentSuccess,
@@ -502,6 +512,22 @@ export default {
 
 .success-actions .el-button {
   margin: 0 10px;
+}
+
+/* 套餐描述样式 */
+.package-description {
+  margin: 15px 0;
+  padding: 10px;
+  background: #f8f9fa;
+  border-radius: 6px;
+  border-left: 3px solid #409EFF;
+}
+
+.package-description p {
+  margin: 0;
+  color: #606266;
+  font-size: 14px;
+  line-height: 1.5;
 }
 
 /* 响应式设计 */

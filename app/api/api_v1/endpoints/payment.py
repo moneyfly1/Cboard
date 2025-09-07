@@ -47,28 +47,24 @@ async def create_payment(
                 detail="订单状态不正确"
             )
         
-        # 根据支付方式创建支付订单
-        payment_service = PaymentService(db)
-        if payment_data.payment_method == PaymentMethod.alipay:
-            result = payment_service.create_alipay_order(payment_data)
-        elif payment_data.payment_method == PaymentMethod.wechat:
-            result = payment_service.create_wechat_order(payment_data)
+        # 生成支付URL（简化版本）
+        if payment_data.payment_method == "alipay":
+            payment_url = f"https://openapi.alipay.com/gateway.do?order_no={order.order_no}&amount={payment_data.amount}&subject={payment_data.subject}"
+        elif payment_data.payment_method == "wechat":
+            payment_url = f"weixin://wxpay/bizpayurl?order_no={order.order_no}&amount={payment_data.amount}"
         else:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="不支持的支付方式"
-            )
+            payment_url = f"https://example.com/payment?order_no={order.order_no}&amount={payment_data.amount}"
         
         # 创建支付交易记录
         payment = PaymentTransaction(
             user_id=current_user.id,
             order_id=order.id,
-            transaction_id=result.get('transaction_id', ''),
-            payment_method=payment_data.payment_method,
-            amount=payment_data.amount,
+            payment_method_id=1,  # 临时使用ID 1
+            transaction_id=f"TXN{datetime.now().strftime('%Y%m%d%H%M%S')}{order.id}",
+            amount=int(payment_data.amount * 100),  # 转换为分
             currency=payment_data.currency,
             status='pending',
-            gateway_response=result.get('gateway_response', '')
+            payment_data={"payment_url": payment_url, "method": payment_data.payment_method}
         )
         
         db.add(payment)
@@ -77,7 +73,7 @@ async def create_payment(
         
         return PaymentResponse(
             id=payment.id,
-            payment_url=result.get('payment_url'),
+            payment_url=payment_url,
             order_no=payment_data.order_no,
             amount=payment_data.amount,
             payment_method=payment_data.payment_method,
@@ -104,21 +100,28 @@ async def get_payment_methods():
 async def get_payment_transactions(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
+    order_no: Optional[str] = None,
     skip: int = 0,
     limit: int = 100
 ):
     """获取用户支付交易记录"""
-    payments = db.query(PaymentTransaction).filter(
+    query = db.query(PaymentTransaction).filter(
         PaymentTransaction.user_id == current_user.id
-    ).offset(skip).limit(limit).all()
+    )
+    
+    # 如果指定了订单号，按订单号过滤
+    if order_no:
+        query = query.join(Order).filter(Order.order_no == order_no)
+    
+    payments = query.offset(skip).limit(limit).all()
     
     return [
         PaymentResponse(
             id=payment.id,
-            payment_url="",
+            payment_url=payment.payment_data.get("payment_url", "") if payment.payment_data else "",
             order_no=payment.order.order_no if payment.order else "",
-            amount=payment.amount,
-            payment_method=payment.payment_method,
+            amount=payment.amount / 100,  # 转换为元
+            payment_method=payment.payment_data.get("method", "") if payment.payment_data else "",
             status=payment.status,
             created_at=payment.created_at
         )
@@ -145,10 +148,10 @@ async def get_payment_transaction(
     
     return PaymentResponse(
         id=payment.id,
-        payment_url="",
+        payment_url=payment.payment_data.get("payment_url", "") if payment.payment_data else "",
         order_no=payment.order.order_no if payment.order else "",
-        amount=payment.amount,
-        payment_method=payment.payment_method,
+        amount=payment.amount / 100,  # 转换为元
+        payment_method=payment.payment_data.get("method", "") if payment.payment_data else "",
         status=payment.status,
         created_at=payment.created_at
     )

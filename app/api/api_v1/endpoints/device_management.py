@@ -53,7 +53,7 @@ def get_all_devices(
         # 获取总数
         count_sql = f"""
             SELECT COUNT(*) 
-            FROM user_devices d
+            FROM devices d
             JOIN subscriptions s ON d.subscription_id = s.id
             JOIN users u ON d.user_id = u.id
             WHERE {where_clause}
@@ -64,7 +64,7 @@ def get_all_devices(
         offset = (page - 1) * size
         data_sql = f"""
             SELECT d.*, s.subscription_url, u.username, u.email
-            FROM user_devices d
+            FROM devices d
             JOIN subscriptions s ON d.subscription_id = s.id
             JOIN users u ON d.user_id = u.id
             WHERE {where_clause}
@@ -131,7 +131,7 @@ def get_device_detail(
         # 获取设备详情
         result = db.execute("""
             SELECT d.*, s.subscription_url, u.username, u.email
-            FROM user_devices d
+            FROM devices d
             JOIN subscriptions s ON d.subscription_id = s.id
             JOIN users u ON d.user_id = u.id
             WHERE d.id = :device_id
@@ -191,7 +191,7 @@ def update_device(
         
         # 获取设备信息
         device = db.execute("""
-            SELECT id, user_id, subscription_id FROM user_devices WHERE id = :device_id
+            SELECT id, user_id, subscription_id FROM devices WHERE id = :device_id
         """, {'device_id': device_id}).fetchone()
         
         if not device:
@@ -231,7 +231,7 @@ def delete_device(
         
         # 获取设备信息
         device = db.execute("""
-            SELECT id, user_id, subscription_id FROM user_devices WHERE id = :device_id
+            SELECT id, user_id, subscription_id FROM devices WHERE id = :device_id
         """, {'device_id': device_id}).fetchone()
         
         if not device:

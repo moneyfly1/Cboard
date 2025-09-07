@@ -4,12 +4,11 @@ from datetime import datetime
 from decimal import Decimal
 
 class OrderBase(BaseModel):
-    user_id: int
     package_id: int
     amount: Decimal
 
 class OrderCreate(OrderBase):
-    pass
+    payment_method: str = "alipay"
 
 class OrderUpdate(BaseModel):
     status: Optional[str] = None

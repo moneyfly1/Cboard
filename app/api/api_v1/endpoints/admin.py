@@ -385,10 +385,10 @@ def get_user_detail(
             "devices": [
                 {
                     "id": device.id,
-                    "name": device.name,
-                    "type": device.type,
-                    "ip": device.ip,
-                    "last_access": device.last_access.isoformat() if device.last_access else None
+                    "name": device.device_name,
+                    "type": device.device_type,
+                    "ip": device.ip_address,
+                    "last_access": device.last_seen.isoformat() if device.last_seen else None
                 } for device in devices
             ]
         }
@@ -2702,7 +2702,7 @@ def update_payment_configs(
                     "updated_at": current_time,
                     "key": key
                 })
-        else:
+            else:
                 # 插入新配置
                 insert_query = text("""
                     INSERT INTO system_configs ("key", value, type, category, display_name, description, is_public, sort_order, created_at, updated_at)

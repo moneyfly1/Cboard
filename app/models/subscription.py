@@ -27,17 +27,32 @@ class Device(Base):
     __tablename__ = "devices"
 
     id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)  # 直接关联用户
     subscription_id = Column(Integer, ForeignKey("subscriptions.id"), nullable=False)
     device_fingerprint = Column(String(255), nullable=False)
+    device_hash = Column(String(255), nullable=True)  # 设备哈希
+    device_ua = Column(String(255), nullable=True)  # 设备UA组合
     device_name = Column(String(100), nullable=True)
     device_type = Column(String(50), nullable=True)  # mobile, desktop, tablet
     ip_address = Column(String(45), nullable=True)
     user_agent = Column(Text, nullable=True)
-    last_access = Column(DateTime(timezone=True), server_default=func.now())
+    software_name = Column(String(100), nullable=True)  # 软件名称
+    software_version = Column(String(50), nullable=True)  # 软件版本
+    os_name = Column(String(50), nullable=True)  # 操作系统名称
+    os_version = Column(String(50), nullable=True)  # 操作系统版本
+    device_model = Column(String(100), nullable=True)  # 设备型号
+    device_brand = Column(String(50), nullable=True)  # 设备品牌
     is_active = Column(Boolean, default=True)
+    is_allowed = Column(Boolean, default=True)  # 是否允许访问
+    first_seen = Column(DateTime(timezone=True), nullable=True)  # 首次出现
+    last_access = Column(DateTime(timezone=True), server_default=func.now())
+    last_seen = Column(DateTime(timezone=True), nullable=True)  # 最后出现
+    access_count = Column(Integer, default=0)  # 访问次数
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     
     # 关系
+    user = relationship("User", back_populates="devices")
     subscription = relationship("Subscription", back_populates="devices")
     
     def __repr__(self):

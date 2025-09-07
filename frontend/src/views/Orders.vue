@@ -227,6 +227,69 @@
       </div>
     </el-dialog>
 
+    <!-- 支付二维码对话框 -->
+    <el-dialog
+      v-model="paymentQRVisible"
+      title="扫码支付"
+      width="500px"
+      :close-on-click-modal="false"
+      :close-on-press-escape="false"
+    >
+      <div class="payment-qr-container">
+        <div class="order-info">
+          <h3>订单信息</h3>
+          <el-descriptions :column="2" border>
+            <el-descriptions-item label="订单号">{{ selectedOrder?.order_no }}</el-descriptions-item>
+            <el-descriptions-item label="套餐名称">{{ selectedOrder?.package_name }}</el-descriptions-item>
+            <el-descriptions-item label="支付金额">
+              <span class="amount">¥{{ selectedOrder?.amount }}</span>
+            </el-descriptions-item>
+            <el-descriptions-item label="支付方式">
+              <el-tag type="primary">{{ selectedOrder?.payment_method === 'alipay' ? '支付宝' : '微信支付' }}</el-tag>
+            </el-descriptions-item>
+          </el-descriptions>
+        </div>
+        
+        <div class="qr-code-wrapper">
+          <div v-if="paymentQRCode" class="qr-code">
+            <img :src="paymentQRCode" alt="支付二维码" />
+          </div>
+          <div v-else class="qr-loading">
+            <el-icon class="is-loading"><Loading /></el-icon>
+            <p>正在生成二维码...</p>
+          </div>
+        </div>
+        
+        <div class="payment-tips">
+          <el-alert
+            title="支付提示"
+            type="info"
+            :closable="false"
+            show-icon
+          >
+            <template #default>
+              <p>1. 请使用{{ selectedOrder?.payment_method === 'alipay' ? '支付宝' : '微信' }}扫描上方二维码</p>
+              <p>2. 确认订单信息无误后完成支付</p>
+              <p>3. 支付完成后请勿关闭此窗口，系统将自动检测支付状态</p>
+            </template>
+          </el-alert>
+        </div>
+        
+        <div class="payment-actions">
+          <el-button 
+            @click="checkPaymentStatus" 
+            :loading="isCheckingPayment"
+            type="primary"
+          >
+            检查支付状态
+          </el-button>
+          <el-button @click="paymentQRVisible = false">
+            关闭
+          </el-button>
+        </div>
+      </div>
+    </el-dialog>
+
     <!-- 退款申请对话框 -->
     <el-dialog
       v-model="refundDialogVisible"
@@ -280,11 +343,15 @@
 <script>
 import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { Loading } from '@element-plus/icons-vue'
 import { useApi } from '@/utils/api'
 import { formatDateTime } from '@/utils/date'
 
 export default {
   name: 'Orders',
+  components: {
+    Loading
+  },
   setup() {
     const api = useApi()
     
@@ -315,7 +382,10 @@ export default {
     // 对话框状态
     const detailDialogVisible = ref(false)
     const refundDialogVisible = ref(false)
+    const paymentQRVisible = ref(false)
     const selectedOrder = ref(null)
+    const paymentQRCode = ref('')
+    const isCheckingPayment = ref(false)
     
     // 退款表单
     const refundForm = reactive({
@@ -365,8 +435,8 @@ export default {
         }
         
         const response = await api.get('/orders/', { params })
-        orders.value = response.data.items || []
-        pagination.total = response.data.total || 0
+        orders.value = response.data.data?.orders || response.data.items || []
+        pagination.total = response.data.data?.total || response.data.total || 0
         
         // 更新统计信息
         await loadOrderStats()
@@ -416,12 +486,85 @@ export default {
       loadOrders()
     }
     
-    const payOrder = (order) => {
-      // 跳转到支付页面
-      this.$router.push({
-        path: '/packages',
-        query: { order_id: order.id }
-      })
+    const payOrder = async (order) => {
+      try {
+        // 创建支付订单
+        const paymentData = {
+          order_no: order.order_no,
+          amount: order.amount,
+          currency: 'CNY',
+          payment_method: order.payment_method || 'alipay',
+          subject: `订阅套餐 - ${order.package_name}`,
+          body: `购买${order.package_duration}天订阅套餐`,
+          return_url: window.location.origin + '/payment/return',
+          notify_url: window.location.origin + '/api/v1/payment/notify'
+        }
+        
+        const response = await api.post('/payment/create', paymentData)
+        
+        if (response.data && response.data.payment_url) {
+          // 显示支付二维码
+          showPaymentQR(order, response.data.payment_url)
+        } else {
+          ElMessage.error('创建支付订单失败')
+        }
+        
+      } catch (error) {
+        ElMessage.error('创建支付订单失败，请重试')
+        console.error('支付失败:', error)
+      }
+    }
+    
+    const showPaymentQR = (order, paymentUrl) => {
+      selectedOrder.value = order
+      paymentQRCode.value = paymentUrl
+      paymentQRVisible.value = true
+      
+      // 开始检查支付状态
+      startPaymentStatusCheck()
+    }
+    
+    const startPaymentStatusCheck = () => {
+      // 每3秒检查一次支付状态
+      const checkInterval = setInterval(async () => {
+        await checkPaymentStatus()
+      }, 3000)
+      
+      // 30分钟后停止检查
+      setTimeout(() => {
+        clearInterval(checkInterval)
+      }, 30 * 60 * 1000)
+    }
+    
+    const checkPaymentStatus = async () => {
+      if (!selectedOrder.value) return
+      
+      try {
+        isCheckingPayment.value = true
+        
+        const response = await api.get(`/payment/transactions?order_no=${selectedOrder.value.order_no}`)
+        const payments = response.data
+        
+        if (payments.length > 0) {
+          const latestPayment = payments[0]
+          
+          if (latestPayment.status === 'success') {
+            // 支付成功
+            paymentQRVisible.value = false
+            ElMessage.success('支付成功！')
+            loadOrders() // 刷新订单列表
+          } else if (latestPayment.status === 'failed') {
+            // 支付失败
+            paymentQRVisible.value = false
+            ElMessage.error('支付失败，请重试')
+          }
+        }
+        
+      } catch (error) {
+        console.error('检查支付状态失败:', error)
+      } finally {
+        isCheckingPayment.value = false
+      }
     }
     
     const cancelOrder = async (order) => {
@@ -665,5 +808,65 @@ export default {
   .page-header h1 {
     font-size: 24px;
   }
+}
+
+/* 支付二维码样式 */
+.payment-qr-container {
+  text-align: center;
+}
+
+.payment-qr-container .order-info {
+  margin-bottom: 20px;
+}
+
+.payment-qr-container .order-info h3 {
+  margin-bottom: 15px;
+  color: #303133;
+  font-size: 16px;
+}
+
+.payment-qr-container .amount {
+  color: #f56c6c;
+  font-size: 18px;
+  font-weight: bold;
+}
+
+.qr-code-wrapper {
+  margin: 20px 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 200px;
+}
+
+.qr-code img {
+  max-width: 200px;
+  max-height: 200px;
+  border: 1px solid #dcdfe6;
+  border-radius: 8px;
+}
+
+.qr-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  color: #909399;
+}
+
+.qr-loading .el-icon {
+  font-size: 24px;
+  margin-bottom: 10px;
+}
+
+.payment-tips {
+  margin: 20px 0;
+}
+
+.payment-actions {
+  margin-top: 20px;
+}
+
+.payment-actions .el-button {
+  margin: 0 10px;
 }
 </style> 
