@@ -18,6 +18,23 @@ from app.services.email import EmailService
 from app.utils.device import generate_device_fingerprint, detect_device_type, extract_device_name
 from app.models.subscription import Subscription
 
+def get_device_type_from_os(os_name: str) -> str:
+    """根据操作系统名称判断设备类型"""
+    if not os_name:
+        return "unknown"
+    
+    os_name_lower = os_name.lower()
+    if "ios" in os_name_lower or "iphone" in os_name_lower or "ipad" in os_name_lower:
+        return "mobile"
+    elif "android" in os_name_lower:
+        return "mobile"
+    elif "windows" in os_name_lower or "macos" in os_name_lower or "linux" in os_name_lower:
+        return "desktop"
+    elif "tv" in os_name_lower or "smart" in os_name_lower:
+        return "tv"
+    else:
+        return "unknown"
+
 router = APIRouter()
 
 @router.get("/user-subscription", response_model=ResponseBase)
@@ -216,17 +233,33 @@ def get_user_devices(
             # 如果没有订阅，返回空设备列表
             return ResponseBase(data={"devices": []})
         
-        # 获取设备列表
-        devices = subscription_service.get_devices_by_subscription_id(subscription.id)
+        # 获取设备列表 - 直接查询user_devices表
+        from sqlalchemy import text
+        device_query = text("""
+            SELECT * FROM user_devices 
+            WHERE subscription_id = :subscription_id 
+            ORDER BY last_seen DESC
+        """)
+        device_rows = db.execute(device_query, {"subscription_id": subscription.id}).fetchall()
         
         device_list = []
-        for device in devices:
+        for device_row in device_rows:
             device_list.append({
-                "id": device.id,
-                "name": device.name,
-                "type": device.type,
-                "ip": device.ip,
-                "last_access": device.last_access.strftime('%Y-%m-%d %H:%M:%S') if device.last_access else None
+                "id": device_row.id,
+                "device_name": f"{device_row.software_name} ({device_row.os_name})" if device_row.software_name and device_row.os_name else "未知设备",
+                "device_type": get_device_type_from_os(device_row.os_name),
+                "ip_address": device_row.ip_address,
+                "user_agent": device_row.user_agent,
+                "software_name": device_row.software_name,
+                "software_version": device_row.software_version,
+                "os_name": device_row.os_name,
+                "os_version": device_row.os_version,
+                "device_model": device_row.device_model,
+                "device_brand": device_row.device_brand,
+                "last_access": device_row.last_seen if device_row.last_seen else None,
+                "first_seen": device_row.first_seen if device_row.first_seen else None,
+                "access_count": device_row.access_count,
+                "is_allowed": device_row.is_allowed
             })
         
         return ResponseBase(data={"devices": device_list})
