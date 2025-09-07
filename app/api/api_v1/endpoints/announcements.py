@@ -1,6 +1,7 @@
 from typing import Any, List
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
+from sqlalchemy import text
 
 from app.core.database import get_db
 from app.schemas.common import ResponseBase
@@ -15,11 +16,9 @@ def get_announcements(
 ) -> Any:
     """获取公告列表"""
     try:
-        from sqlalchemy import text
-        
         # 查询公告列表 - 包括系统公告和通知
         announcements = db.execute(text("""
-            SELECT id, title, content, 'announcement' as type, created_at, updated_at
+            SELECT id, title, content, type, created_at, updated_at
             FROM announcements 
             WHERE is_active = 1 
             ORDER BY created_at DESC 
@@ -45,8 +44,8 @@ def get_announcements(
                 "title": announcement.title,
                 "content": announcement.content,
                 "type": announcement.type,
-                "created_at": announcement.created_at.isoformat() if announcement.created_at else None,
-                "updated_at": announcement.updated_at.isoformat() if announcement.updated_at else None
+                "created_at": announcement.created_at if announcement.created_at else None,
+                "updated_at": announcement.updated_at if announcement.updated_at else None
             })
         
         # 添加通知
@@ -56,8 +55,8 @@ def get_announcements(
                 "title": notification.title,
                 "content": notification.content,
                 "type": notification.type,
-                "created_at": notification.created_at.isoformat() if notification.created_at else None,
-                "updated_at": notification.updated_at.isoformat() if notification.updated_at else None
+                "created_at": notification.created_at if notification.created_at else None,
+                "updated_at": notification.updated_at if notification.updated_at else None
             })
         
         # 按创建时间排序
@@ -83,11 +82,11 @@ def get_announcement_detail(
     """获取公告详情"""
     try:
         # 查询公告详情
-        announcement = db.execute("""
+        announcement = db.execute(text("""
             SELECT id, title, content, created_at, updated_at
             FROM announcements 
             WHERE id = :announcement_id AND is_active = 1
-        """, {'announcement_id': announcement_id}).fetchone()
+        """), {'announcement_id': announcement_id}).fetchone()
         
         if not announcement:
             raise HTTPException(
@@ -136,27 +135,26 @@ def publish_announcement(
             )
         
         # 插入到notifications表（系统通知）
-        db.execute("""
+        db.execute(text("""
             INSERT INTO notifications (user_id, title, content, type, is_read, created_at)
             VALUES (NULL, :title, :content, :type, 0, datetime('now'))
-        """, {
+        """), {
             'title': title,
             'content': content,
             'type': announcement_type
         })
         
-        # 如果状态是发布，也插入到announcements表
-        if status == 'published':
-            db.execute("""
-                INSERT INTO announcements (title, content, type, is_active, is_pinned, 
-                                         target_users, created_by, created_at, updated_at)
-                VALUES (:title, :content, :type, 1, 0, 'all', :created_by, datetime('now'), datetime('now'))
-            """, {
-                'title': title,
-                'content': content,
-                'type': announcement_type,
-                'created_by': current_admin.id
-            })
+        # 所有发布的通知都插入到announcements表（不再支持草稿）
+        db.execute(text("""
+            INSERT INTO announcements (title, content, type, is_active, is_pinned, 
+                                     target_users, created_by, created_at, updated_at)
+            VALUES (:title, :content, :type, 1, 0, 'all', :created_by, datetime('now'), datetime('now'))
+        """), {
+            'title': title,
+            'content': content,
+            'type': announcement_type,
+            'created_by': current_admin.id
+        })
         
         db.commit()
         
@@ -186,12 +184,12 @@ def get_admin_announcements(
         skip = (page - 1) * size
         
         # 查询公告列表
-        announcements = db.execute("""
+        announcements = db.execute(text("""
             SELECT id, title, content, type, is_active, created_at, updated_at
             FROM announcements 
             ORDER BY created_at DESC 
             LIMIT :limit OFFSET :offset
-        """, {'limit': size, 'offset': skip}).fetchall()
+        """), {'limit': size, 'offset': skip}).fetchall()
         
         # 查询总数
         total = db.execute(text("SELECT COUNT(*) FROM announcements")).fetchone()[0]
@@ -204,8 +202,8 @@ def get_admin_announcements(
                 "content": announcement.content,
                 "type": announcement.type,
                 "is_active": announcement.is_active,
-                "created_at": announcement.created_at.isoformat() if announcement.created_at else None,
-                "updated_at": announcement.updated_at.isoformat() if announcement.updated_at else None
+                "created_at": announcement.created_at if announcement.created_at else None,
+                "updated_at": announcement.updated_at if announcement.updated_at else None
             })
         
         return ResponseBase(data={
@@ -221,4 +219,94 @@ def get_admin_announcements(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"获取公告列表失败: {str(e)}"
+        )
+
+@router.put("/admin/{announcement_id}", response_model=ResponseBase)
+def update_announcement(
+    announcement_id: int,
+    announcement_data: dict,
+    current_admin = Depends(get_current_admin_user),
+    db: Session = Depends(get_db)
+) -> Any:
+    """更新公告（管理员）"""
+    try:
+        title = announcement_data.get('title', '')
+        content = announcement_data.get('content', '')
+        announcement_type = announcement_data.get('type', 'system')
+        status = announcement_data.get('status', 'published')
+        
+        if not title or not content:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="标题和内容不能为空"
+            )
+        
+        # 更新announcements表
+        db.execute(text("""
+            UPDATE announcements 
+            SET title = :title, content = :content, type = :type, 
+                is_active = :is_active, updated_at = datetime('now')
+            WHERE id = :announcement_id
+        """), {
+            'title': title,
+            'content': content,
+            'type': announcement_type,
+            'is_active': 1 if status == 'published' else 0,
+            'announcement_id': announcement_id
+        })
+        
+        # 同时更新notifications表
+        db.execute(text("""
+            UPDATE notifications 
+            SET title = :title, content = :content, type = :type
+            WHERE id = :announcement_id
+        """), {
+            'title': title,
+            'content': content,
+            'type': announcement_type,
+            'announcement_id': announcement_id
+        })
+        
+        db.commit()
+        
+        return ResponseBase(message="公告更新成功")
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        print(f"更新公告失败: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"更新公告失败: {str(e)}"
+        )
+
+@router.delete("/admin/{announcement_id}", response_model=ResponseBase)
+def delete_announcement(
+    announcement_id: int,
+    current_admin = Depends(get_current_admin_user),
+    db: Session = Depends(get_db)
+) -> Any:
+    """删除公告（管理员）"""
+    try:
+        # 删除announcements表中的记录
+        db.execute(text("""
+            DELETE FROM announcements WHERE id = :announcement_id
+        """), {'announcement_id': announcement_id})
+        
+        # 删除notifications表中的记录
+        db.execute(text("""
+            DELETE FROM notifications WHERE id = :announcement_id
+        """), {'announcement_id': announcement_id})
+        
+        db.commit()
+        
+        return ResponseBase(message="公告删除成功")
+        
+    except Exception as e:
+        db.rollback()
+        print(f"删除公告失败: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"删除公告失败: {str(e)}"
         )

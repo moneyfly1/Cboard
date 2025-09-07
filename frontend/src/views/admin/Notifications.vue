@@ -26,10 +26,10 @@
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="status" label="状态">
+        <el-table-column prop="is_active" label="状态">
           <template #default="{ row }">
-            <el-tag :type="row.status === 'published' ? 'success' : 'info'">
-              {{ row.status === 'published' ? '已发布' : '草稿' }}
+            <el-tag :type="row.is_active ? 'success' : 'info'">
+              {{ row.is_active ? '已发布' : '草稿' }}
             </el-tag>
           </template>
         </el-table-column>
@@ -103,9 +103,8 @@
         </el-form-item>
         
         <el-form-item label="发布状态" prop="status">
-          <el-select v-model="form.status" placeholder="选择发布状态">
+          <el-select v-model="form.status" placeholder="选择发布状态" disabled>
             <el-option label="发布" value="published" />
-            <el-option label="草稿" value="draft" />
           </el-select>
         </el-form-item>
         
@@ -155,7 +154,7 @@ export default {
       title: '',
       type: 'announcement',
       content: '',
-      status: 'draft',
+      status: 'published',
       send_email: false
     })
 
@@ -207,8 +206,13 @@ export default {
         const response = await notificationAPI.getNotifications(params)
         console.log('通知API响应:', response)
         console.log('通知响应数据结构:', response.data)
-        notifications.value = response.data.data?.notifications || response.data.items || []
-        pagination.total = response.data.data?.total || response.data.total || 0
+        if (response.data && response.data.success) {
+          notifications.value = response.data.data?.announcements || []
+          pagination.total = response.data.data?.total || 0
+        } else {
+          notifications.value = []
+          pagination.total = 0
+        }
       } catch (error) {
         ElMessage.error('获取通知列表失败')
         console.error('获取通知列表失败:', error)
@@ -249,7 +253,7 @@ export default {
         title: '',
         type: 'announcement',
         content: '',
-        status: 'draft',
+        status: 'published',
         send_email: false
       })
       if (formRef.value) {

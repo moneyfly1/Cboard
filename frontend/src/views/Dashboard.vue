@@ -67,7 +67,6 @@
               <i class="fas fa-bullhorn"></i>
               最新公告
             </h3>
-            <el-button type="text" @click="showAllAnnouncements">查看全部</el-button>
           </div>
           <div class="card-body">
             <div v-if="announcements.length > 0" class="announcement-list">
@@ -159,73 +158,186 @@
               <i class="fas fa-link"></i>
               订阅地址
             </h3>
-            <el-button type="primary" size="small" @click="dailyCheckin" :loading="checkinLoading">
-              <i class="fas fa-calendar-check"></i>
-              每日签到
-            </el-button>
           </div>
           <div class="card-body">
-            <div class="subscription-buttons">
-              <!-- Clash 订阅 -->
-              <div class="subscription-group">
-                <el-dropdown @command="handleClashCommand" trigger="click">
-                  <el-button type="primary" class="clash-btn">
-                    <i class="fas fa-bolt"></i>
-                    Clash 订阅
-                    <i class="fas fa-chevron-down"></i>
+            <!-- Clash系列软件 -->
+            <div class="software-category">
+              <h4 class="category-title">
+                <i class="fas fa-bolt"></i>
+                Clash系列软件
+              </h4>
+              <div class="subscription-buttons">
+                <div class="subscription-group">
+                  <el-dropdown @command="handleClashCommand" trigger="click">
+                    <el-button type="primary" class="clash-btn">
+                      <i class="fas fa-bolt"></i>
+                      Clash
+                      <i class="fas fa-chevron-down"></i>
+                    </el-button>
+                    <template #dropdown>
+                      <el-dropdown-menu>
+                        <el-dropdown-item command="copy-clash">复制订阅</el-dropdown-item>
+                        <el-dropdown-item command="import-clash">一键导入</el-dropdown-item>
+                      </el-dropdown-menu>
+                    </template>
+                  </el-dropdown>
+                </div>
+
+                <div class="subscription-group">
+                  <el-dropdown @command="handleFlashCommand" trigger="click">
+                    <el-button type="primary" class="flash-btn">
+                      <i class="fas fa-flash"></i>
+                      Flash
+                      <i class="fas fa-chevron-down"></i>
+                    </el-button>
+                    <template #dropdown>
+                      <el-dropdown-menu>
+                        <el-dropdown-item command="copy-flash">复制订阅</el-dropdown-item>
+                        <el-dropdown-item command="import-flash">一键导入</el-dropdown-item>
+                      </el-dropdown-menu>
+                    </template>
+                  </el-dropdown>
+                </div>
+
+                <div class="subscription-group">
+                  <el-dropdown @command="handleMohomoCommand" trigger="click">
+                    <el-button type="primary" class="mohomo-btn">
+                      <i class="fas fa-cube"></i>
+                      Mohomo Part
+                      <i class="fas fa-chevron-down"></i>
+                    </el-button>
+                    <template #dropdown>
+                      <el-dropdown-menu>
+                        <el-dropdown-item command="copy-mohomo">复制订阅</el-dropdown-item>
+                        <el-dropdown-item command="import-mohomo">一键导入</el-dropdown-item>
+                      </el-dropdown-menu>
+                    </template>
+                  </el-dropdown>
+                </div>
+
+                <div class="subscription-group">
+                  <el-dropdown @command="handleSparkleCommand" trigger="click">
+                    <el-button type="primary" class="sparkle-btn">
+                      <i class="fas fa-sparkles"></i>
+                      Sparkle
+                      <i class="fas fa-chevron-down"></i>
+                    </el-button>
+                    <template #dropdown>
+                      <el-dropdown-menu>
+                        <el-dropdown-item command="copy-sparkle">复制订阅</el-dropdown-item>
+                        <el-dropdown-item command="import-sparkle">一键导入</el-dropdown-item>
+                      </el-dropdown-menu>
+                    </template>
+                  </el-dropdown>
+                </div>
+              </div>
+            </div>
+
+            <!-- V2Ray系列软件 -->
+            <div class="software-category">
+              <h4 class="category-title">
+                <i class="fas fa-shield-alt"></i>
+                V2Ray系列软件
+              </h4>
+              <div class="subscription-buttons">
+                <div class="subscription-group">
+                  <el-button type="info" class="v2ray-btn" @click="copyV2raySubscription">
+                    <i class="fas fa-shield-alt"></i>
+                    复制 V2Ray 订阅
                   </el-button>
-                  <template #dropdown>
-                    <el-dropdown-menu>
-                      <el-dropdown-item command="copy-clash">复制 Clash 订阅</el-dropdown-item>
-                      <el-dropdown-item command="import-clash">一键导入 Clash</el-dropdown-item>
-                    </el-dropdown-menu>
-                  </template>
-                </el-dropdown>
-              </div>
+                </div>
 
-              <!-- Shadowrocket 订阅 -->
-              <div class="subscription-group">
-                <el-dropdown @command="handleShadowrocketCommand" trigger="click">
-                  <el-button type="success" class="shadowrocket-btn">
-                    <i class="fas fa-rocket"></i>
-                    Shadowrocket 订阅
-                    <i class="fas fa-chevron-down"></i>
+                <div class="subscription-group">
+                  <el-button type="info" class="hiddify-btn" @click="copyHiddifySubscription">
+                    <i class="fas fa-eye"></i>
+                    复制 Hiddify Next 订阅
                   </el-button>
-                  <template #dropdown>
-                    <el-dropdown-menu>
-                      <el-dropdown-item command="copy-shadowrocket">复制 Shadowrocket 订阅</el-dropdown-item>
-                      <el-dropdown-item command="import-shadowrocket">一键导入 Shadowrocket</el-dropdown-item>
-                    </el-dropdown-menu>
-                  </template>
-                </el-dropdown>
+                </div>
               </div>
+            </div>
 
-              <!-- V2Ray 订阅 -->
-              <div class="subscription-group">
-                <el-button type="info" class="v2ray-btn" @click="copyV2raySubscription">
-                  <i class="fas fa-shield-alt"></i>
-                  复制 V2Ray 订阅
-                </el-button>
+            <!-- Shadowrocket -->
+            <div class="software-category">
+              <h4 class="category-title">
+                <i class="fas fa-rocket"></i>
+                iOS软件
+              </h4>
+              <div class="subscription-buttons">
+                <div class="subscription-group">
+                  <el-dropdown @command="handleShadowrocketCommand" trigger="click">
+                    <el-button type="success" class="shadowrocket-btn">
+                      <i class="fas fa-rocket"></i>
+                      Shadowrocket
+                      <i class="fas fa-chevron-down"></i>
+                    </el-button>
+                    <template #dropdown>
+                      <el-dropdown-menu>
+                        <el-dropdown-item command="copy-shadowrocket">复制订阅</el-dropdown-item>
+                        <el-dropdown-item command="import-shadowrocket">一键导入</el-dropdown-item>
+                      </el-dropdown-menu>
+                    </template>
+                  </el-dropdown>
+                </div>
               </div>
+            </div>
 
-              <!-- 通用订阅 -->
-              <div class="subscription-group">
-                <el-button type="warning" class="universal-btn" @click="copyUniversalSubscription">
-                  <i class="fas fa-globe"></i>
-                  复制通用订阅
-                </el-button>
+            <!-- 订阅地址显示区域 -->
+            <div class="subscription-urls-section">
+              <h4 class="section-title">
+                <i class="fas fa-link"></i>
+                订阅地址
+              </h4>
+              <div class="url-display">
+                <div class="url-item">
+                  <label>Clash订阅地址：</label>
+                  <div class="url-input-group">
+                    <el-input 
+                      :value="userInfo.clashUrl" 
+                      readonly 
+                      size="small"
+                      class="url-input"
+                    >
+                      <template #append>
+                        <el-button @click="copyClashSubscription" size="small">
+                          <i class="fas fa-copy"></i>
+                        </el-button>
+                      </template>
+                    </el-input>
+                  </div>
+                </div>
+                <div class="url-item">
+                  <label>通用订阅地址：</label>
+                  <div class="url-input-group">
+                    <el-input 
+                      :value="userInfo.mobileUrl" 
+                      readonly 
+                      size="small"
+                      class="url-input"
+                    >
+                      <template #append>
+                        <el-button @click="copyUniversalSubscription" size="small">
+                          <i class="fas fa-copy"></i>
+                        </el-button>
+                      </template>
+                    </el-input>
+                  </div>
+                </div>
               </div>
             </div>
 
             <!-- 二维码区域 -->
             <div class="qr-code-section">
-              <el-button type="text" @click="showQRCode = !showQRCode">
+              <h4 class="section-title">
                 <i class="fas fa-qrcode"></i>
-                {{ showQRCode ? '隐藏' : '显示' }}二维码
-              </el-button>
-              <div v-if="showQRCode" class="qr-code-container">
+                二维码
+              </h4>
+              <div class="qr-code-container">
                 <div class="qr-code">
-                  <img :src="qrCodeUrl" alt="订阅二维码">
+                  <img :src="qrCodeUrl" alt="订阅二维码" v-if="qrCodeUrl">
+                  <div v-else class="qr-placeholder">
+                    <i class="fas fa-qrcode"></i>
+                    <p>二维码生成中...</p>
+                  </div>
                 </div>
                 <p class="qr-tip">扫描二维码即可在Shadowrocket中添加订阅</p>
               </div>
@@ -282,6 +394,8 @@ const userInfo = ref({
 })
 
 const announcements = ref([])
+const announcementDialogVisible = ref(false)
+const selectedAnnouncement = ref(null)
 const softwareConfig = ref({
   clash_windows_url: '',
   clash_android_url: '',
@@ -294,9 +408,6 @@ const softwareConfig = ref({
 })
 const activePlatform = ref('Windows')
 const showQRCode = ref(false)
-const checkinLoading = ref(false)
-const announcementDialogVisible = ref(false)
-const selectedAnnouncement = ref(null)
 
 // 平台配置
 const platforms = ref([
@@ -391,9 +502,12 @@ const loadUserInfo = async () => {
   try {
     // 获取用户仪表盘信息（现在包含订阅地址）
     const dashboardResponse = await userAPI.getUserInfo()
-    userInfo.value = dashboardResponse.data
-    
-    console.log('用户信息加载成功:', userInfo.value)
+    if (dashboardResponse.data && dashboardResponse.data.success) {
+      userInfo.value = dashboardResponse.data.data
+      console.log('用户信息加载成功:', userInfo.value)
+    } else {
+      throw new Error('用户信息加载失败')
+    }
   } catch (error) {
     console.error('加载用户信息失败:', error)
     
@@ -401,7 +515,8 @@ const loadUserInfo = async () => {
     try {
       console.log('尝试从订阅API获取订阅地址...')
       const subscriptionResponse = await subscriptionAPI.getUserSubscription()
-      if (subscriptionResponse.data) {
+      if (subscriptionResponse.data && subscriptionResponse.data.success) {
+        const subscriptionData = subscriptionResponse.data.data
         // 设置基本的用户信息
         userInfo.value = {
           username: '用户',
@@ -413,13 +528,13 @@ const loadUserInfo = async () => {
           online_devices: 0,
           total_devices: 0,
           balance: '0.00',
-          subscription_url: subscriptionResponse.data.subscription_url || '',
+          subscription_url: subscriptionData.subscription_url || '',
           subscription_status: 'inactive',
           // 使用订阅API的地址
-          clashUrl: subscriptionResponse.data.clashUrl || '',
-          v2rayUrl: subscriptionResponse.data.v2rayUrl || '',
-          mobileUrl: subscriptionResponse.data.mobileUrl || '',
-          qrcodeUrl: subscriptionResponse.data.qrcodeUrl || ''
+          clashUrl: subscriptionData.clashUrl || '',
+          v2rayUrl: subscriptionData.v2rayUrl || '',
+          mobileUrl: subscriptionData.mobileUrl || '',
+          qrcodeUrl: subscriptionData.qrcodeUrl || ''
         }
         console.log('降级方案成功，获取到订阅地址:', userInfo.value)
         ElMessage.warning('部分信息加载失败，但订阅地址可用')
@@ -436,11 +551,52 @@ const loadUserInfo = async () => {
 const loadAnnouncements = async () => {
   try {
     const response = await userAPI.getAnnouncements()
-    announcements.value = response.data
+    if (response.data && response.data.success) {
+      announcements.value = response.data.data
+      console.log('公告加载成功:', announcements.value)
+      
+      // 检查是否需要弹窗显示重要公告
+      checkForImportantAnnouncements()
+    } else {
+      console.warn('公告API返回失败:', response.data)
+    }
   } catch (error) {
     console.error('加载公告失败:', error)
   }
 }
+
+// 检查重要公告并弹窗显示
+const checkForImportantAnnouncements = () => {
+  if (announcements.value.length === 0) return
+  
+  // 获取最新的公告
+  const latestAnnouncement = announcements.value[0]
+  
+  // 检查是否是需要弹窗显示的类型（活动通知、更新通知、维护通知）
+  const importantTypes = ['activity', 'update', 'maintenance']
+  if (!importantTypes.includes(latestAnnouncement.type)) return
+  
+  // 检查用户是否已经看过这个公告（使用localStorage）
+  const lastSeenAnnouncementId = localStorage.getItem('lastSeenAnnouncementId')
+  if (lastSeenAnnouncementId === latestAnnouncement.id.toString()) return
+  
+  // 延迟显示弹窗，让页面先加载完成
+  setTimeout(() => {
+    showAnnouncementPopup(latestAnnouncement)
+  }, 1000)
+}
+
+// 显示公告弹窗
+const showAnnouncementPopup = (announcement) => {
+  selectedAnnouncement.value = announcement
+  announcementDialogVisible.value = true
+  
+  // 记录用户已经看过这个公告
+  localStorage.setItem('lastSeenAnnouncementId', announcement.id.toString())
+}
+
+
+
 
 const loadSoftwareConfig = async () => {
   try {
@@ -463,24 +619,36 @@ const loadDevices = async () => {
   }
 }
 
-const dailyCheckin = async () => {
-  try {
-    checkinLoading.value = true
-    const response = await userAPI.dailyCheckin()
-    ElMessage.success(response.message || '签到成功！')
-    await loadUserInfo() // 重新加载用户信息
-  } catch (error) {
-    ElMessage.error(error.response?.data?.message || '签到失败')
-  } finally {
-    checkinLoading.value = false
-  }
-}
 
 const handleClashCommand = (command) => {
   if (command === 'copy-clash') {
     copyClashSubscription()
   } else if (command === 'import-clash') {
     importClashSubscription()
+  }
+}
+
+const handleFlashCommand = (command) => {
+  if (command === 'copy-flash') {
+    copyFlashSubscription()
+  } else if (command === 'import-flash') {
+    importFlashSubscription()
+  }
+}
+
+const handleMohomoCommand = (command) => {
+  if (command === 'copy-mohomo') {
+    copyMohomoSubscription()
+  } else if (command === 'import-mohomo') {
+    importMohomoSubscription()
+  }
+}
+
+const handleSparkleCommand = (command) => {
+  if (command === 'copy-sparkle') {
+    copySparkleSubscription()
+  } else if (command === 'import-sparkle') {
+    importSparkleSubscription()
   }
 }
 
@@ -576,6 +744,170 @@ const copyUniversalSubscription = () => {
   }
   
   copyToClipboard(url, '通用订阅地址已复制到剪贴板')
+}
+
+// Flash相关方法
+const copyFlashSubscription = () => {
+  if (!userInfo.value.clashUrl) {
+    ElMessage.error('Flash 订阅地址不可用，请刷新页面重试')
+    return
+  }
+  
+  try {
+    let url = userInfo.value.clashUrl
+    if (userInfo.value.expiryDate && userInfo.value.expiryDate !== '未设置') {
+      const urlObj = new URL(url)
+      const expiryDate = new Date(userInfo.value.expiryDate)
+      const expiryDateStr = expiryDate.toISOString().split('T')[0]
+      urlObj.searchParams.set('expiry', expiryDateStr)
+      url = urlObj.toString()
+    }
+    
+    copyToClipboard(url, 'Flash 订阅地址已复制到剪贴板')
+  } catch (error) {
+    console.error('复制Flash订阅地址失败:', error)
+    ElMessage.error('复制失败，请手动复制订阅地址')
+  }
+}
+
+const importFlashSubscription = () => {
+  if (!userInfo.value.clashUrl) {
+    ElMessage.error('Flash 订阅地址不可用，请刷新页面重试')
+    return
+  }
+  
+  try {
+    let url = userInfo.value.clashUrl
+    if (userInfo.value.expiryDate && userInfo.value.expiryDate !== '未设置') {
+      const urlObj = new URL(url)
+      const expiryDate = new Date(userInfo.value.expiryDate)
+      const expiryDateStr = expiryDate.toISOString().split('T')[0]
+      urlObj.searchParams.set('expiry', expiryDateStr)
+      url = urlObj.toString()
+    }
+    
+    oneclickImport('flash', url)
+    ElMessage.success('正在打开 Flash 客户端...')
+  } catch (error) {
+    console.error('一键导入Flash失败:', error)
+    ElMessage.error('一键导入失败，请手动复制订阅地址')
+  }
+}
+
+// Mohomo Part相关方法
+const copyMohomoSubscription = () => {
+  if (!userInfo.value.clashUrl) {
+    ElMessage.error('Mohomo Part 订阅地址不可用，请刷新页面重试')
+    return
+  }
+  
+  try {
+    let url = userInfo.value.clashUrl
+    if (userInfo.value.expiryDate && userInfo.value.expiryDate !== '未设置') {
+      const urlObj = new URL(url)
+      const expiryDate = new Date(userInfo.value.expiryDate)
+      const expiryDateStr = expiryDate.toISOString().split('T')[0]
+      urlObj.searchParams.set('expiry', expiryDateStr)
+      url = urlObj.toString()
+    }
+    
+    copyToClipboard(url, 'Mohomo Part 订阅地址已复制到剪贴板')
+  } catch (error) {
+    console.error('复制Mohomo Part订阅地址失败:', error)
+    ElMessage.error('复制失败，请手动复制订阅地址')
+  }
+}
+
+const importMohomoSubscription = () => {
+  if (!userInfo.value.clashUrl) {
+    ElMessage.error('Mohomo Part 订阅地址不可用，请刷新页面重试')
+    return
+  }
+  
+  try {
+    let url = userInfo.value.clashUrl
+    if (userInfo.value.expiryDate && userInfo.value.expiryDate !== '未设置') {
+      const urlObj = new URL(url)
+      const expiryDate = new Date(userInfo.value.expiryDate)
+      const expiryDateStr = expiryDate.toISOString().split('T')[0]
+      urlObj.searchParams.set('expiry', expiryDateStr)
+      url = urlObj.toString()
+    }
+    
+    oneclickImport('mohomo', url)
+    ElMessage.success('正在打开 Mohomo Part 客户端...')
+  } catch (error) {
+    console.error('一键导入Mohomo Part失败:', error)
+    ElMessage.error('一键导入失败，请手动复制订阅地址')
+  }
+}
+
+// Sparkle相关方法
+const copySparkleSubscription = () => {
+  if (!userInfo.value.clashUrl) {
+    ElMessage.error('Sparkle 订阅地址不可用，请刷新页面重试')
+    return
+  }
+  
+  try {
+    let url = userInfo.value.clashUrl
+    if (userInfo.value.expiryDate && userInfo.value.expiryDate !== '未设置') {
+      const urlObj = new URL(url)
+      const expiryDate = new Date(userInfo.value.expiryDate)
+      const expiryDateStr = expiryDate.toISOString().split('T')[0]
+      urlObj.searchParams.set('expiry', expiryDateStr)
+      url = urlObj.toString()
+    }
+    
+    copyToClipboard(url, 'Sparkle 订阅地址已复制到剪贴板')
+  } catch (error) {
+    console.error('复制Sparkle订阅地址失败:', error)
+    ElMessage.error('复制失败，请手动复制订阅地址')
+  }
+}
+
+const importSparkleSubscription = () => {
+  if (!userInfo.value.clashUrl) {
+    ElMessage.error('Sparkle 订阅地址不可用，请刷新页面重试')
+    return
+  }
+  
+  try {
+    let url = userInfo.value.clashUrl
+    if (userInfo.value.expiryDate && userInfo.value.expiryDate !== '未设置') {
+      const urlObj = new URL(url)
+      const expiryDate = new Date(userInfo.value.expiryDate)
+      const expiryDateStr = expiryDate.toISOString().split('T')[0]
+      urlObj.searchParams.set('expiry', expiryDateStr)
+      url = urlObj.toString()
+    }
+    
+    oneclickImport('sparkle', url)
+    ElMessage.success('正在打开 Sparkle 客户端...')
+  } catch (error) {
+    console.error('一键导入Sparkle失败:', error)
+    ElMessage.error('一键导入失败，请手动复制订阅地址')
+  }
+}
+
+// Hiddify Next相关方法
+const copyHiddifySubscription = () => {
+  if (!userInfo.value.mobileUrl) {
+    ElMessage.error('Hiddify Next 订阅地址不可用')
+    return
+  }
+  
+  // 添加到期时间参数
+  let url = userInfo.value.mobileUrl
+  if (userInfo.value.expiryDate && userInfo.value.expiryDate !== '未设置') {
+    const urlObj = new URL(url)
+    const expiryDate = new Date(userInfo.value.expiryDate)
+    const expiryDateStr = expiryDate.toISOString().split('T')[0] // YYYY-MM-DD格式
+    urlObj.searchParams.set('expiry', expiryDateStr)
+    url = urlObj.toString()
+  }
+  
+  copyToClipboard(url, 'Hiddify Next 订阅地址已复制到剪贴板')
 }
 
 const copyToClipboard = async (text, message) => {
@@ -690,9 +1022,6 @@ const openTutorial = (url) => {
   window.open(url, '_blank')
 }
 
-const showAllAnnouncements = () => {
-  router.push('/announcements')
-}
 
 const showAnnouncementDetail = (announcement) => {
   selectedAnnouncement.value = announcement
@@ -725,11 +1054,20 @@ const oneclickImport = (client, url) => {
   try {
     switch (client) {
       case 'clashx':
-        // Clash for Windows/macOS
+      case 'clash':
+        // Clash for Windows/macOS/Android
         window.open(`clash://install-config?url=${encodeURIComponent(url)}`, '_blank')
         break
-      case 'clash':
-        // Clash for Android
+      case 'flash':
+        // Flash (Clash系列)
+        window.open(`clash://install-config?url=${encodeURIComponent(url)}`, '_blank')
+        break
+      case 'mohomo':
+        // Mohomo Part (Clash系列)
+        window.open(`clash://install-config?url=${encodeURIComponent(url)}`, '_blank')
+        break
+      case 'sparkle':
+        // Sparkle (Clash系列)
         window.open(`clash://install-config?url=${encodeURIComponent(url)}`, '_blank')
         break
       case 'shadowrocket':
@@ -752,6 +1090,10 @@ const oneclickImport = (client, url) => {
       case 'v2rayng':
         // V2rayNG
         window.open(`v2rayng://install-config?url=${encodeURIComponent(url)}`, '_blank')
+        break
+      case 'hiddify':
+        // Hiddify Next (Android)
+        window.open(`hiddify://install-config?url=${encodeURIComponent(url)}`, '_blank')
         break
       default:
         console.warn(`未知的客户端类型: ${client}`)
@@ -1097,6 +1439,154 @@ onMounted(() => {
 
 .qr-code-container {
   margin-top: 16px;
+}
+
+/* 软件分类标题 */
+.software-category {
+  margin-bottom: 24px;
+}
+
+.category-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 16px;
+  font-weight: 600;
+  color: #2c3e50;
+  margin-bottom: 16px;
+  padding-bottom: 8px;
+  border-bottom: 2px solid #f0f0f0;
+}
+
+.category-title i {
+  color: #667eea;
+}
+
+/* 订阅地址显示区域 */
+.subscription-urls-section {
+  margin-bottom: 24px;
+}
+
+.section-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 16px;
+  font-weight: 600;
+  color: #2c3e50;
+  margin-bottom: 16px;
+  padding-bottom: 8px;
+  border-bottom: 2px solid #f0f0f0;
+}
+
+.section-title i {
+  color: #667eea;
+}
+
+.url-display {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.url-item {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.url-item label {
+  font-weight: 500;
+  color: #555;
+  font-size: 14px;
+}
+
+.url-input-group {
+  display: flex;
+  gap: 8px;
+}
+
+.url-input {
+  flex: 1;
+}
+
+/* 二维码区域 */
+.qr-code-section {
+  margin-bottom: 24px;
+}
+
+.qr-code-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  padding: 20px;
+  background: #f8f9fa;
+  border-radius: 12px;
+  border: 2px dashed #e0e0e0;
+}
+
+.qr-code {
+  width: 200px;
+  height: 200px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.qr-code img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  border-radius: 8px;
+}
+
+.qr-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  color: #999;
+}
+
+.qr-placeholder i {
+  font-size: 48px;
+}
+
+.qr-tip {
+  font-size: 14px;
+  color: #666;
+  text-align: center;
+  margin: 0;
+}
+
+/* 新按钮样式 */
+.flash-btn {
+  background: linear-gradient(135deg, #ff6b6b, #ee5a24);
+  border: none;
+  width: 100%;
+}
+
+.mohomo-btn {
+  background: linear-gradient(135deg, #4834d4, #686de0);
+  border: none;
+  width: 100%;
+}
+
+.sparkle-btn {
+  background: linear-gradient(135deg, #feca57, #ff9ff3);
+  border: none;
+  width: 100%;
+}
+
+.hiddify-btn {
+  background: linear-gradient(135deg, #a8edea, #fed6e3);
+  border: none;
+  width: 100%;
+  color: #333;
 }
 
 .qr-code img {

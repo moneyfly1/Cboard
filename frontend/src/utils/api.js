@@ -79,8 +79,7 @@ export const userAPI = {
   getSubscriptionResets: () => api.get('/users/subscription-resets'),
   getUserInfo: () => api.get('/users/dashboard-info'),
   getAnnouncements: () => api.get('/announcements/'),
-  getUserDevices: () => api.get('/users/devices'),
-  dailyCheckin: () => api.post('/users/daily-checkin')
+  getUserDevices: () => api.get('/users/devices')
 }
 
 // 订阅相关API
@@ -231,11 +230,11 @@ export const notificationAPI = {
   markAllAsRead: () => api.post('/notifications/mark-all-read'),
   
   // 管理端通知
-  getNotifications: (params) => api.get('/admin/notifications', { params }),
-  createNotification: (data) => api.post('/admin/notifications', data),
-  updateNotification: (notificationId, data) => api.put(`/admin/notifications/${notificationId}`, data),
-  deleteNotification: (notificationId) => api.delete(`/admin/notifications/${notificationId}`),
-  broadcastNotification: (data) => api.post('/admin/notifications/broadcast', data),
+  getNotifications: (params) => api.get('/announcements/admin/list', { params }),
+  createNotification: (data) => api.post('/announcements/admin/publish', data),
+  updateNotification: (notificationId, data) => api.put(`/announcements/admin/${notificationId}`, data),
+  deleteNotification: (notificationId) => api.delete(`/announcements/admin/${notificationId}`),
+  broadcastNotification: (data) => api.post('/announcements/admin/broadcast', data),
   
   // 邮件模板
   getEmailTemplates: () => api.get('/admin/email-templates'),
