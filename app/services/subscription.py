@@ -97,6 +97,25 @@ class SubscriptionService:
     def get_device(self, device_id: int) -> Optional[Device]:
         """根据ID获取设备"""
         return self.db.query(Device).filter(Device.id == device_id).first()
+    
+    def delete_device(self, device_id: int) -> bool:
+        """删除设备"""
+        try:
+            from sqlalchemy import text
+            # 直接操作user_devices表
+            result = self.db.execute(text("""
+                DELETE FROM user_devices WHERE id = :device_id
+            """), {'device_id': device_id})
+            
+            self.db.commit()
+            print(f"删除设备 {device_id}，影响行数: {result.rowcount}")
+            return result.rowcount > 0
+        except Exception as e:
+            print(f"删除设备失败: {e}")
+            import traceback
+            traceback.print_exc()
+            self.db.rollback()
+            return False
 
     def record_device_access(self, subscription_id: int, device_info: dict) -> Device:
         """记录设备访问"""

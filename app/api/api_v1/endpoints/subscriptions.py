@@ -274,28 +274,57 @@ def remove_device(
     db: Session = Depends(get_db)
 ) -> Any:
     """移除设备"""
-    subscription_service = SubscriptionService(db)
-    
-    # 获取设备
-    device = subscription_service.get_device(device_id)
-    if not device:
+    try:
+        subscription_service = SubscriptionService(db)
+        
+        # 获取用户订阅
+        subscription = subscription_service.get_by_user_id(current_user.id)
+        if not subscription:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="用户没有订阅"
+            )
+        
+        # 验证设备是否属于当前用户
+        from sqlalchemy import text
+        device_query = text("""
+            SELECT id FROM user_devices 
+            WHERE id = :device_id AND user_id = :user_id AND subscription_id = :subscription_id
+        """)
+        device = db.execute(device_query, {
+            'device_id': device_id,
+            'user_id': current_user.id,
+            'subscription_id': subscription.id
+        }).fetchone()
+        
+        if not device:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="设备不存在或无权限操作"
+            )
+        
+        # 删除设备
+        result = db.execute(text("""
+            DELETE FROM user_devices WHERE id = :device_id
+        """), {'device_id': device_id})
+        
+        if result.rowcount > 0:
+            # 更新订阅的设备计数
+            subscription.current_devices = max(0, subscription.current_devices - 1)
+            db.commit()
+            return ResponseBase(message="设备移除成功")
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="设备不存在"
+            )
+    except HTTPException:
+        raise
+    except Exception as e:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="设备不存在"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"移除设备失败: {str(e)}"
         )
-    
-    # 检查设备是否属于当前用户
-    subscription = subscription_service.get(device.subscription_id)
-    if not subscription or subscription.user_id != current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="无权操作此设备"
-        )
-    
-    # 删除设备
-    subscription_service.delete_device(device_id)
-    
-    return ResponseBase(message="设备移除成功")
 
 # 订阅内容端点（用于客户端访问）
 @router.get("/{subscription_id}/ssr")
@@ -510,33 +539,6 @@ def reset_user_subscription_url(
     except Exception as e:
         return ResponseBase(success=False, message=f"重置订阅地址失败: {str(e)}")
 
-@router.delete("/devices/{device_id}", response_model=ResponseBase)
-def remove_user_device(
-    device_id: int,
-    current_user = Depends(get_current_user),
-    db: Session = Depends(get_db)
-) -> Any:
-    """移除用户设备"""
-    try:
-        subscription_service = SubscriptionService(db)
-        
-        subscription = subscription_service.get_by_user_id(current_user.id)
-        if not subscription:
-            raise HTTPException(status_code=404, detail="用户没有订阅")
-        
-        device = subscription_service.get_device(device_id)
-        if not device or device.subscription_id != subscription.id:
-            raise HTTPException(status_code=400, detail="设备不存在")
-        
-        subscription_service.db.delete(device)
-        subscription.current_devices = max(0, subscription.current_devices - 1)
-        subscription_service.db.commit()
-        
-        return ResponseBase(message="设备移除成功")
-    except HTTPException:
-        raise
-    except Exception as e:
-        return ResponseBase(success=False, message=f"移除设备失败: {str(e)}")
 
 @router.post("/devices/clear", response_model=ResponseBase)
 def clear_user_devices(

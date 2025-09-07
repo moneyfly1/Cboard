@@ -1173,7 +1173,13 @@ export default {
     const manageUserDevices = async (user) => {
       try {
         const response = await api.get(`/admin/devices/user/${user.id}`)
-        userDevices.value = response.data
+        console.log('管理员获取设备列表响应:', response)
+        
+        if (response.data && response.data.devices) {
+          userDevices.value = response.data.devices
+        } else {
+          userDevices.value = []
+        }
         currentUser.value = user
         showDeviceDialog.value = true
       } catch (error) {
@@ -1194,7 +1200,7 @@ export default {
           }
         )
         
-        await api.delete(`/admin/devices/${device.id}`)
+        await api.delete(`/admin/devices/devices/${device.id}`)
         ElMessage.success('设备删除成功')
         
         // 重新加载设备列表

@@ -160,7 +160,7 @@ export default {
     const deviceTypeStats = computed(() => {
       const stats = {}
       devices.value.forEach(device => {
-        const type = device.type || 'unknown'
+        const type = device.device_type || 'unknown'
         stats[type] = (stats[type] || 0) + 1
       })
       return stats
@@ -171,11 +171,21 @@ export default {
       loading.value = true
       try {
         const response = await subscriptionAPI.getUserDevices()
-        devices.value = response.data.devices || []
+        console.log('设备API响应:', response)
+        
+        // 检查响应结构
+        if (response.data && response.data.success && response.data.data && response.data.data.devices) {
+          devices.value = response.data.data.devices
+          console.log('设备列表:', devices.value)
+        } else {
+          devices.value = []
+          console.log('设备列表为空或响应格式不正确')
+        }
         
         // 计算统计数据
         updateDeviceStats()
       } catch (error) {
+        console.error('获取设备列表失败:', error)
         ElMessage.error('获取设备列表失败')
       } finally {
         loading.value = false
