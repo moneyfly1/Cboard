@@ -4,7 +4,7 @@
       <template #header>
         <div class="card-header">
           <h2>订阅管理</h2>
-          <p>管理您的订阅信息和设备连接</p>
+          <p>管理您的订阅信息和订阅地址</p>
         </div>
       </template>
 
@@ -13,50 +13,51 @@
         <el-row :gutter="20">
           <el-col :span="6">
             <div class="status-item">
-              <div class="status-label">订阅状态</div>
+              <div class="status-label">账号状态</div>
               <div class="status-value">
-                <el-tag :type="subscription.status === 'active' ? 'success' : 'danger'">
-                  {{ subscription.status === 'active' ? '活跃' : '已过期' }}
+                <el-tag :type="getStatusType(subscription)">
+                  {{ getStatusText(subscription) }}
                 </el-tag>
               </div>
             </div>
           </el-col>
           <el-col :span="6">
             <div class="status-item">
-              <div class="status-label">剩余时长</div>
-              <div class="status-value">{{ subscription.remainingDays }} 天</div>
+              <div class="status-label">到期时间</div>
+              <div class="status-value">{{ formatDate(subscription.expire_time) }}</div>
             </div>
           </el-col>
           <el-col :span="6">
             <div class="status-item">
-              <div class="status-label">到期时间</div>
-              <div class="status-value">{{ subscription.expiryDate }}</div>
+              <div class="status-label">到期天数</div>
+              <div class="status-value">{{ getRemainingDays(subscription) }} 天</div>
             </div>
           </el-col>
           <el-col :span="6">
             <div class="status-item">
               <div class="status-label">设备使用</div>
-              <div class="status-value">{{ subscription.currentDevices }}/{{ subscription.maxDevices }}</div>
+              <div class="status-value">{{ subscription.currentDevices || 0 }}/{{ subscription.maxDevices || 0 }}</div>
             </div>
           </el-col>
         </el-row>
       </div>
 
       <!-- 订阅地址 -->
-      <div class="subscription-urls" v-if="subscription && subscription.subscription_id">
+      <div class="subscription-urls" v-if="subscription && (subscription.subscription_id || subscription.clash_url)">
         <h3>订阅地址</h3>
         <div class="url-list">
           <div class="url-item">
-            <div class="url-label">移动端地址：</div>
+            <div class="url-label">Clash订阅地址：</div>
             <div class="url-content">
               <el-input
-                v-model="subscription.mobileUrl"
+                v-model="subscription.clash_url"
                 readonly
                 size="large"
               >
                 <template #append>
-                  <el-button @click="copyUrl(subscription.mobileUrl)">
+                  <el-button @click="copyUrl(subscription.clash_url)">
                     <i class="el-icon-document-copy"></i>
+                    复制
                   </el-button>
                 </template>
               </el-input>
@@ -64,16 +65,17 @@
           </div>
           
           <div class="url-item">
-            <div class="url-label">Clash地址：</div>
+            <div class="url-label">通用订阅地址：</div>
             <div class="url-content">
               <el-input
-                v-model="subscription.clashUrl"
+                v-model="subscription.universal_url"
                 readonly
                 size="large"
               >
                 <template #append>
-                  <el-button @click="copyUrl(subscription.clashUrl)">
+                  <el-button @click="copyUrl(subscription.universal_url)">
                     <i class="el-icon-document-copy"></i>
+                    复制
                   </el-button>
                 </template>
               </el-input>
@@ -85,12 +87,12 @@
           <h4>二维码</h4>
           <div class="qr-codes">
             <div class="qr-item">
-              <canvas id="mobile-qrcode"></canvas>
-              <p>移动端</p>
+              <canvas id="clash-qrcode"></canvas>
+              <p>Clash订阅</p>
             </div>
             <div class="qr-item">
-              <canvas id="clash-qrcode"></canvas>
-              <p>Clash</p>
+              <canvas id="universal-qrcode"></canvas>
+              <p>通用订阅</p>
             </div>
           </div>
         </div>
@@ -105,44 +107,8 @@
         </el-empty>
       </div>
 
-      <!-- 订阅设置对话框 -->
-      <el-dialog v-model="showSettingsDialog" title="订阅设置" width="500px">
-        <el-form :model="subscriptionForm" label-width="120px">
-          <el-form-item label="设备数量限制">
-            <el-input-number 
-              v-model="subscriptionForm.device_limit" 
-              :min="1" 
-              :max="20"
-              :disabled="subscriptionForm.device_limit < subscription.currentDevices"
-            />
-            <div class="form-tip">
-              当前已使用 {{ subscription.currentDevices }} 个设备
-            </div>
-          </el-form-item>
-          
-          <el-form-item label="到期时间">
-            <el-date-picker
-              v-model="subscriptionForm.expire_time"
-              type="datetime"
-              placeholder="选择到期时间"
-              format="YYYY-MM-DD HH:mm:ss"
-              value-format="YYYY-MM-DD HH:mm:ss"
-            />
-          </el-form-item>
-        </el-form>
-        
-        <template #footer>
-          <span class="dialog-footer">
-            <el-button @click="showSettingsDialog = false">取消</el-button>
-            <el-button type="primary" @click="saveSubscriptionSettings" :loading="savingSettings">
-              保存设置
-            </el-button>
-          </span>
-        </template>
-      </el-dialog>
-
       <!-- 操作按钮 -->
-      <div class="subscription-actions" v-if="subscription && subscription.subscription_id">
+      <div class="subscription-actions" v-if="subscription && (subscription.subscription_id || subscription.clash_url)">
         <el-button
           type="primary"
           size="large"
@@ -153,54 +119,42 @@
         </el-button>
         
         <el-button
-          type="warning"
+          type="success"
           size="large"
-          @click="showSettingsDialog = true"
+          @click="sendSubscriptionToEmail"
+          :loading="sendEmailLoading"
         >
-          订阅设置
+          发送到邮箱
         </el-button>
         
         <el-button
-          type="success"
+          type="warning"
           size="large"
           @click="$router.push('/packages')"
+          v-if="!isSubscriptionActive(subscription)"
         >
           续费订阅
         </el-button>
       </div>
-    </el-card>
 
-    <!-- 设备管理 -->
-    <el-card class="devices-card">
-      <template #header>
-        <div class="card-header">
-          <h3>设备管理</h3>
-          <p>管理已连接的设备</p>
-        </div>
-      </template>
-
-      <el-table
-        :data="devices"
-        v-loading="devicesLoading"
-        style="width: 100%"
-      >
-        <el-table-column prop="name" label="设备名称" />
-        <el-table-column prop="type" label="设备类型" />
-        <el-table-column prop="ip" label="IP地址" />
-        <el-table-column prop="lastSeen" label="最后访问" />
-        <el-table-column label="操作" width="120">
-          <template #default="{ row }">
-            <el-button
-              type="danger"
-              size="small"
-              @click="removeDevice(row.id)"
-              :loading="row.removing"
-            >
-              移除
-            </el-button>
+      <!-- 续费提示 -->
+      <div class="renewal-prompt" v-if="subscription && !isSubscriptionActive(subscription)">
+        <el-alert
+          title="订阅已过期"
+          type="warning"
+          :description="`您的订阅已于 ${formatDate(subscription.expire_time)} 过期，请及时续费以继续使用服务。`"
+          show-icon
+          :closable="false"
+        >
+          <template #default>
+            <div class="renewal-actions">
+              <el-button type="primary" @click="$router.push('/packages')">
+                立即续费
+              </el-button>
+            </div>
           </template>
-        </el-table-column>
-      </el-table>
+        </el-alert>
+      </div>
     </el-card>
   </div>
 </template>
@@ -209,52 +163,100 @@
 import { ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import QRCode from 'qrcode'
-import { subscriptionAPI } from '@/utils/api'
+import { subscriptionAPI, userAPI } from '@/utils/api'
 
 export default {
   name: 'Subscription',
   setup() {
     const subscription = ref(null)
-    const devices = ref([])
     const resetLoading = ref(false)
-    const devicesLoading = ref(false)
-    const showSettingsDialog = ref(false)
-    const savingSettings = ref(false)
-    const subscriptionForm = ref({
-      device_limit: 3,
-      expire_time: ''
-    })
+    const sendEmailLoading = ref(false)
 
     // 获取订阅信息
     const fetchSubscription = async () => {
       try {
-        const response = await subscriptionAPI.getCurrentSubscription()
-        subscription.value = response.data
+        console.log('开始获取订阅信息...')
         
-        // 初始化订阅表单
-        if (subscription.value && subscription.value.subscription_id) {
-          subscriptionForm.value.device_limit = subscription.value.maxDevices || 3
-          subscriptionForm.value.expire_time = subscription.value.expiryDate || ''
+        // 优先使用订阅API获取设备信息
+        let subscriptionResponse
+        try {
+          subscriptionResponse = await subscriptionAPI.getUserSubscription()
+          console.log('订阅API响应:', subscriptionResponse)
+        } catch (subscriptionError) {
+          console.log('订阅API失败:', subscriptionError)
+          subscriptionResponse = null
         }
         
-        generateQRCodes()
+        // 获取用户仪表盘信息（用于订阅地址）
+        let userResponse
+        try {
+          userResponse = await userAPI.getUserInfo()
+          console.log('用户信息API响应:', userResponse)
+        } catch (userError) {
+          console.log('用户信息API失败:', userError)
+          userResponse = null
+        }
+        
+        // 优先使用订阅API的数据，用户API作为补充
+        if (subscriptionResponse && subscriptionResponse.data && subscriptionResponse.data.success) {
+          const subscriptionData = subscriptionResponse.data.data
+          console.log('订阅API数据:', subscriptionData)
+          
+          // 使用订阅API的数据作为主要数据源
+          subscription.value = {
+            subscription_id: subscriptionData.subscription_id,
+            expire_time: subscriptionData.expire_time || subscriptionData.expiryDate,
+            status: subscriptionData.status,
+            currentDevices: subscriptionData.currentDevices || 0,
+            maxDevices: subscriptionData.maxDevices || 0,
+            clash_url: subscriptionData.clashUrl || '',
+            universal_url: subscriptionData.mobileUrl || '',
+            qrcode_url: subscriptionData.qrcodeUrl || ''
+          }
+          
+          // 如果用户API有订阅地址信息，优先使用用户API的地址
+          if (userResponse && userResponse.data && userResponse.data.success) {
+            const userData = userResponse.data.data
+            if (userData.clashUrl) {
+              subscription.value.clash_url = userData.clashUrl
+            }
+            if (userData.mobileUrl) {
+              subscription.value.universal_url = userData.mobileUrl
+            }
+            if (userData.qrcodeUrl) {
+              subscription.value.qrcode_url = userData.qrcodeUrl
+            }
+          }
+        } else if (userResponse && userResponse.data && userResponse.data.success) {
+          // 降级方案：使用用户API的数据
+          const userData = userResponse.data.data
+          console.log('使用用户API数据作为降级方案:', userData)
+          
+          subscription.value = {
+            subscription_id: userData.subscription_url,
+            expire_time: userData.expire_time,
+            status: userData.subscription_status,
+            currentDevices: userData.online_devices || 0,
+            maxDevices: userData.total_devices || 0,
+            clash_url: userData.clashUrl || '',
+            universal_url: userData.mobileUrl || userData.v2rayUrl || '',
+            qrcode_url: userData.qrcodeUrl || ''
+          }
+        } else {
+          console.log('所有API都失败')
+          ElMessage.error('获取订阅信息失败：无法连接到服务器')
+          return
+        }
+        
+        console.log('最终订阅数据:', subscription.value)
+        // 延迟生成二维码，确保DOM元素已渲染
+        setTimeout(() => {
+          generateQRCodes()
+        }, 100)
+        
       } catch (error) {
-        ElMessage.error('获取订阅信息失败')
         console.error('获取订阅信息失败:', error)
-      }
-    }
-
-    // 获取设备列表
-    const fetchDevices = async () => {
-      devicesLoading.value = true
-      try {
-        const response = await subscriptionAPI.getDevices()
-        devices.value = response.data
-      } catch (error) {
-        ElMessage.error('获取设备列表失败')
-        console.error('获取设备列表失败:', error)
-      } finally {
-        devicesLoading.value = false
+        ElMessage.error(`获取订阅信息失败: ${error.message || '未知错误'}`)
       }
     }
 
@@ -263,19 +265,19 @@ export default {
       if (!subscription.value) return
 
       try {
-        // 生成移动端二维码
-        const mobileElement = document.getElementById('mobile-qrcode')
-        if (mobileElement) {
-          await QRCode.toCanvas(mobileElement, subscription.value.mobileUrl, {
+        // 生成Clash二维码
+        const clashElement = document.getElementById('clash-qrcode')
+        if (clashElement && subscription.value.clash_url) {
+          await QRCode.toCanvas(clashElement, subscription.value.clash_url, {
             width: 150,
             margin: 2
           })
         }
 
-        // 生成Clash二维码
-        const clashElement = document.getElementById('clash-qrcode')
-        if (clashElement) {
-          await QRCode.toCanvas(clashElement, subscription.value.clashUrl, {
+        // 生成通用订阅二维码
+        const universalElement = document.getElementById('universal-qrcode')
+        if (universalElement && subscription.value.universal_url) {
+          await QRCode.toCanvas(universalElement, subscription.value.universal_url, {
             width: 150,
             margin: 2
           })
@@ -292,26 +294,6 @@ export default {
         ElMessage.success('链接已复制到剪贴板')
       } catch (error) {
         ElMessage.error('复制失败')
-      }
-    }
-
-    // 保存订阅设置
-    const saveSubscriptionSettings = async () => {
-      try {
-        savingSettings.value = true
-        
-        await api.put('/subscriptions/user-subscription', subscriptionForm.value)
-        
-        ElMessage.success('订阅设置保存成功')
-        showSettingsDialog.value = false
-        
-        // 重新获取订阅信息
-        await fetchSubscription()
-      } catch (error) {
-        ElMessage.error('保存设置失败')
-        console.error('保存订阅设置失败:', error)
-      } finally {
-        savingSettings.value = false
       }
     }
 
@@ -333,7 +315,6 @@ export default {
         
         ElMessage.success('订阅地址已重置')
         await fetchSubscription()
-        await fetchDevices()
       } catch (error) {
         if (error !== 'cancel') {
           ElMessage.error('重置失败')
@@ -344,54 +325,139 @@ export default {
       }
     }
 
-    // 移除设备
-    const removeDevice = async (deviceId) => {
+    // 发送订阅地址到邮箱
+    const sendSubscriptionToEmail = async () => {
       try {
-        await ElMessageBox.confirm(
-          '确定要移除这个设备吗？',
-          '确认移除',
-          {
-            confirmButtonText: '确定',
-            cancelButtonText: '取消',
-            type: 'warning'
-          }
-        )
-
-        const device = devices.value.find(d => d.id === deviceId)
-        if (device) {
-          device.removing = true
-        }
-
-        await subscriptionAPI.removeDevice(deviceId)
-        
-        ElMessage.success('设备已移除')
-        await fetchDevices()
+        sendEmailLoading.value = true
+        await subscriptionAPI.sendSubscriptionToEmail()
+        ElMessage.success('订阅地址已发送到您的邮箱')
       } catch (error) {
-        if (error !== 'cancel') {
-          ElMessage.error('移除失败')
-          console.error('移除设备失败:', error)
-        }
+        ElMessage.error('发送失败，请稍后重试')
+        console.error('发送订阅地址到邮箱失败:', error)
       } finally {
-        const device = devices.value.find(d => d.id === deviceId)
-        if (device) {
-          device.removing = false
+        sendEmailLoading.value = false
+      }
+    }
+
+    // 格式化日期
+    const formatDate = (dateString) => {
+      if (!dateString) return '未设置'
+      const date = new Date(dateString)
+      return date.toLocaleString('zh-CN', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit'
+      })
+    }
+
+    // 获取剩余天数
+    const getRemainingDays = (subscription) => {
+      if (!subscription || !subscription.expire_time) return 0
+      const now = new Date()
+      const expireDate = new Date(subscription.expire_time)
+      const diffTime = expireDate - now
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+      return diffDays > 0 ? diffDays : 0
+    }
+
+    // 获取状态类型
+    const getStatusType = (subscription) => {
+      if (!subscription) return 'info'
+      
+      // 优先根据到期时间判断，确保有效期内用户显示为正常
+      if (subscription.expire_time) {
+        const now = new Date()
+        const expireDate = new Date(subscription.expire_time)
+        if (expireDate > now) {
+          return 'success'  // 有效期内显示为正常
+        } else {
+          return 'danger'   // 已过期显示为危险
         }
       }
+      
+      // 如果后端直接返回了状态，作为备用判断
+      if (subscription.status) {
+        switch (subscription.status) {
+          case 'active':
+            return 'success'
+          case 'expired':
+            return 'danger'
+          case 'inactive':
+            return 'info'
+          default:
+            return 'info'
+        }
+      }
+      
+      return 'info'
+    }
+
+    // 获取状态文本
+    const getStatusText = (subscription) => {
+      if (!subscription) return '未激活'
+      
+      // 优先根据到期时间判断，确保有效期内用户显示为正常
+      if (subscription.expire_time) {
+        const now = new Date()
+        const expireDate = new Date(subscription.expire_time)
+        if (expireDate > now) {
+          return '正常'  // 有效期内显示为正常
+        } else {
+          return '已过期'  // 已过期显示为已过期
+        }
+      }
+      
+      // 如果后端直接返回了状态，作为备用判断
+      if (subscription.status) {
+        switch (subscription.status) {
+          case 'active':
+            return '正常'
+          case 'expired':
+            return '已过期'
+          case 'inactive':
+            return '未激活'
+          default:
+            return '未激活'
+        }
+      }
+      
+      return '未激活'
+    }
+
+    // 检查订阅是否激活
+    const isSubscriptionActive = (subscription) => {
+      if (!subscription) return false
+      
+      // 如果后端直接返回了状态，优先使用
+      if (subscription.status) {
+        return subscription.status === 'active'
+      }
+      
+      // 否则根据到期时间判断
+      if (!subscription.expire_time) return false
+      const now = new Date()
+      const expireDate = new Date(subscription.expire_time)
+      return expireDate > now
     }
 
     onMounted(() => {
       fetchSubscription()
-      fetchDevices()
     })
 
     return {
       subscription,
-      devices,
       resetLoading,
-      devicesLoading,
+      sendEmailLoading,
       copyUrl,
       resetSubscription,
-      removeDevice
+      sendSubscriptionToEmail,
+      formatDate,
+      getRemainingDays,
+      getStatusType,
+      getStatusText,
+      isSubscriptionActive
     }
   }
 }
@@ -471,7 +537,7 @@ export default {
 }
 
 .url-label {
-  min-width: 100px;
+  min-width: 120px;
   color: #666;
   font-weight: 500;
 }
@@ -510,22 +576,21 @@ export default {
   display: flex;
   gap: 15px;
   justify-content: center;
+  margin-bottom: 20px;
 }
 
-.devices-card {
+.renewal-prompt {
   margin-top: 20px;
 }
 
-.devices-card .card-header h3 {
-  margin: 0;
-  color: #333;
-  font-size: 1.3rem;
+.renewal-actions {
+  margin-top: 15px;
+  text-align: center;
 }
 
-.devices-card .card-header p {
-  margin: 0;
-  color: #666;
-  font-size: 0.9rem;
+.no-subscription {
+  text-align: center;
+  padding: 40px 20px;
 }
 
 @media (max-width: 768px) {

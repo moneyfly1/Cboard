@@ -302,11 +302,23 @@ def refresh_token(
     )
 
 @router.post("/verify-email", response_model=ResponseBase)
-def verify_email(
+def verify_email_post(
     token: str,
     db: Session = Depends(get_db)
 ) -> Any:
-    """验证QQ邮箱"""
+    """验证QQ邮箱 - POST请求"""
+    return verify_email_logic(token, db)
+
+@router.get("/verify-email", response_model=ResponseBase)
+def verify_email_get(
+    token: str,
+    db: Session = Depends(get_db)
+) -> Any:
+    """验证QQ邮箱 - GET请求"""
+    return verify_email_logic(token, db)
+
+def verify_email_logic(token: str, db: Session) -> Any:
+    """验证QQ邮箱逻辑"""
     from app.utils.security import verify_token
     
     # 验证令牌

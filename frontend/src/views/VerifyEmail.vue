@@ -102,8 +102,31 @@ export default {
       router.push('/login')
     }
 
-    onMounted(() => {
+    onMounted(async () => {
       email.value = route.query.email || ''
+      
+      // 检查是否有验证token
+      const token = route.query.token
+      if (token) {
+        // 自动验证邮箱
+        try {
+          await authAPI.verifyEmail(token)
+          ElMessage.success('邮箱验证成功！')
+          // 验证成功后跳转到登录页面
+          setTimeout(() => {
+            router.push('/login')
+          }, 2000)
+          return
+        } catch (error) {
+          console.error('邮箱验证失败:', error)
+          if (error.response?.data?.detail) {
+            ElMessage.error(error.response.data.detail)
+          } else {
+            ElMessage.error('邮箱验证失败，请重试')
+          }
+        }
+      }
+      
       if (!email.value) {
         ElMessage.error('邮箱参数缺失')
         router.push('/login')

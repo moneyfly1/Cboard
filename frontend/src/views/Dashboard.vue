@@ -30,8 +30,8 @@
           <i class="fas fa-mobile-alt"></i>
         </div>
         <div class="stat-content">
-          <h3 class="stat-title">{{ userInfo.online_devices || 0 }}</h3>
-          <p class="stat-subtitle">在线设备</p>
+          <h3 class="stat-title">{{ subscriptionInfo.currentDevices || 0 }}/{{ subscriptionInfo.maxDevices || 0 }}</h3>
+          <p class="stat-subtitle">设备使用</p>
         </div>
       </div>
 
@@ -393,6 +393,14 @@ const userInfo = ref({
   qrcodeUrl: ''
 })
 
+const subscriptionInfo = ref({
+  currentDevices: 0,
+  maxDevices: 0,
+  remainingDays: 0,
+  expiryDate: '未设置',
+  status: 'inactive'
+})
+
 const announcements = ref([])
 const announcementDialogVisible = ref(false)
 const selectedAnnouncement = ref(null)
@@ -605,6 +613,40 @@ const loadUserInfo = async () => {
     } catch (fallbackError) {
       console.error('降级方案也失败:', fallbackError)
       ElMessage.error('加载用户信息失败，请刷新页面重试')
+    }
+  }
+}
+
+// 获取订阅信息
+const loadSubscriptionInfo = async () => {
+  try {
+    console.log('开始获取订阅信息...')
+    const response = await subscriptionAPI.getUserSubscription()
+    console.log('订阅信息API响应:', response)
+    
+    if (response.data && response.data.success) {
+      subscriptionInfo.value = response.data.data
+      console.log('订阅信息:', subscriptionInfo.value)
+    } else {
+      console.log('订阅信息API响应格式不正确:', response)
+      // 用户可能没有订阅，设置默认值
+      subscriptionInfo.value = {
+        currentDevices: 0,
+        maxDevices: 0,
+        remainingDays: 0,
+        expiryDate: '未设置',
+        status: 'inactive'
+      }
+    }
+  } catch (error) {
+    console.log('获取订阅信息失败（用户可能没有订阅）:', error)
+    // 用户可能没有订阅，设置默认值
+    subscriptionInfo.value = {
+      currentDevices: 0,
+      maxDevices: 0,
+      remainingDays: 0,
+      expiryDate: '未设置',
+      status: 'inactive'
     }
   }
 }
@@ -1171,6 +1213,7 @@ const oneclickImport = (client, url) => {
 // 生命周期
 onMounted(() => {
   loadUserInfo()
+  loadSubscriptionInfo()
   loadAnnouncements()
   loadSoftwareConfig()
 })

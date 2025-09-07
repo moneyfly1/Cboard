@@ -71,8 +71,8 @@
           </el-form-item>
 
           <el-form-item label="账户状态">
-            <el-tag :type="userInfo.is_active ? 'success' : 'danger'">
-              {{ userInfo.is_active ? '正常' : '已禁用' }}
+            <el-tag :type="getAccountStatusType(userInfo)">
+              {{ getAccountStatusText(userInfo) }}
             </el-tag>
             <el-tag 
               :type="userInfo.is_verified ? 'success' : 'warning'"
@@ -258,6 +258,7 @@
 <script>
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
+import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/store/auth'
 import { userAPI, subscriptionAPI } from '@/utils/api'
 import dayjs from 'dayjs'
@@ -265,6 +266,7 @@ import dayjs from 'dayjs'
 export default {
   name: 'Profile',
   setup() {
+    const router = useRouter()
     const authStore = useAuthStore()
     const passwordLoading = ref(false)
     const emailLoading = ref(false)
@@ -320,23 +322,55 @@ export default {
     // 获取用户信息
     const fetchUserInfo = async () => {
       try {
-        const response = await userAPI.getProfile()
-        userInfo.value = response.data
+        console.log('开始获取用户信息...')
+        const response = await userAPI.getUserInfo()
+        console.log('用户信息API响应:', response)
         
-        // 更新表单数据
-        profileForm.username = userInfo.value.username
-        profileForm.email = userInfo.value.email
+        if (response.data && response.data.success) {
+          const data = response.data.data
+          console.log('用户数据:', data)
+          
+          // 更新用户信息 - 尝试多种可能的字段名
+          userInfo.value = {
+            username: data.username || data.user_name || '',
+            email: data.email || data.user_email || '',
+            is_verified: data.is_verified || data.email_verified || data.verified || false,
+            last_login: data.last_login || data.last_login_time || data.login_time || null,
+            created_at: data.created_at || data.created_time || data.register_time || null,
+            status: data.status || data.user_status || data.account_status || 'active'
+          }
+          
+          // 更新表单数据
+          profileForm.username = userInfo.value.username
+          profileForm.email = userInfo.value.email
+          
+          console.log('更新后的用户信息:', userInfo.value)
+        } else {
+          console.log('API响应格式不正确:', response)
+          ElMessage.error('获取用户信息失败：响应格式错误')
+        }
       } catch (error) {
-        ElMessage.error('获取用户信息失败')
+        console.error('获取用户信息失败:', error)
+        ElMessage.error(`获取用户信息失败: ${error.message || '未知错误'}`)
       }
     }
 
     // 获取订阅信息
     const fetchSubscriptionInfo = async () => {
       try {
+        console.log('开始获取订阅信息...')
         const response = await subscriptionAPI.getUserSubscription()
-        subscriptionInfo.value = response.data
+        console.log('订阅信息API响应:', response)
+        
+        if (response.data && response.data.success) {
+          subscriptionInfo.value = response.data.data
+          console.log('订阅信息:', subscriptionInfo.value)
+        } else {
+          console.log('订阅信息API响应格式不正确:', response)
+          // 用户可能没有订阅，忽略错误
+        }
       } catch (error) {
+        console.log('获取订阅信息失败（用户可能没有订阅）:', error)
         // 用户可能没有订阅，忽略错误
       }
     }
@@ -345,20 +379,27 @@ export default {
     const changePassword = async () => {
       passwordLoading.value = true
       try {
-        await userAPI.changePassword({
+        console.log('开始修改密码...')
+        const response = await userAPI.changePassword({
           old_password: passwordForm.oldPassword,
           new_password: passwordForm.newPassword
         })
+        console.log('修改密码API响应:', response)
         
-        ElMessage.success('密码修改成功')
-        
-        // 清空表单
-        passwordForm.oldPassword = ''
-        passwordForm.newPassword = ''
-        passwordForm.confirmPassword = ''
+        if (response.data && response.data.success) {
+          ElMessage.success('密码修改成功')
+          
+          // 清空表单
+          passwordForm.oldPassword = ''
+          passwordForm.newPassword = ''
+          passwordForm.confirmPassword = ''
+        } else {
+          ElMessage.error('密码修改失败：响应格式错误')
+        }
         
       } catch (error) {
-        ElMessage.error('密码修改失败')
+        console.error('修改密码失败:', error)
+        ElMessage.error(`密码修改失败: ${error.message || '未知错误'}`)
       } finally {
         passwordLoading.value = false
       }
@@ -368,10 +409,18 @@ export default {
     const resendVerificationEmail = async () => {
       emailLoading.value = true
       try {
-        await authStore.sendVerificationEmail()
-        ElMessage.success('验证邮件已发送，请查收邮箱')
+        console.log('开始发送验证邮件...')
+        const response = await userAPI.sendVerificationEmail()
+        console.log('发送验证邮件API响应:', response)
+        
+        if (response.data && response.data.success) {
+          ElMessage.success('验证邮件已发送，请查收邮箱')
+        } else {
+          ElMessage.error('发送验证邮件失败：响应格式错误')
+        }
       } catch (error) {
-        ElMessage.error('发送验证邮件失败')
+        console.error('发送验证邮件失败:', error)
+        ElMessage.error(`发送验证邮件失败: ${error.message || '未知错误'}`)
       } finally {
         emailLoading.value = false
       }
@@ -379,13 +428,48 @@ export default {
 
     // 查看登录历史
     const viewLoginHistory = () => {
-      ElMessage.info('登录历史功能开发中')
+      // 跳转到登录历史页面
+      router.push('/login-history')
     }
 
     // 格式化时间
     const formatTime = (time) => {
       if (!time) return '未知'
       return dayjs(time).format('YYYY-MM-DD HH:mm:ss')
+    }
+
+    // 获取账户状态类型
+    const getAccountStatusType = (userInfo) => {
+      if (!userInfo || !userInfo.status) return 'info'
+      
+      switch (userInfo.status) {
+        case 'active':
+          return 'success'
+        case 'inactive':
+        case 'disabled':
+          return 'danger'
+        case 'pending':
+          return 'warning'
+        default:
+          return 'info'
+      }
+    }
+
+    // 获取账户状态文本
+    const getAccountStatusText = (userInfo) => {
+      if (!userInfo || !userInfo.status) return '未知'
+      
+      switch (userInfo.status) {
+        case 'active':
+          return '正常'
+        case 'inactive':
+        case 'disabled':
+          return '已禁用'
+        case 'pending':
+          return '待激活'
+        default:
+          return '未知'
+      }
     }
 
     onMounted(() => {
@@ -405,7 +489,9 @@ export default {
       changePassword,
       resendVerificationEmail,
       viewLoginHistory,
-      formatTime
+      formatTime,
+      getAccountStatusType,
+      getAccountStatusText
     }
   }
 }

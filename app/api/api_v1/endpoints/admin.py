@@ -3067,7 +3067,7 @@ def change_admin_password(
             return ResponseBase(success=False, message="请提供当前密码和新密码")
         
         # 验证当前密码
-        from app.core.auth import verify_password
+        from app.utils.security import verify_password
         if not verify_password(current_password, current_admin.hashed_password):
             return ResponseBase(success=False, message="当前密码错误")
         
@@ -3076,7 +3076,7 @@ def change_admin_password(
             return ResponseBase(success=False, message="新密码长度至少8位")
         
         # 更新密码
-        from app.core.auth import get_password_hash
+        from app.utils.security import get_password_hash
         current_admin.hashed_password = get_password_hash(new_password)
         db.commit()
         

@@ -79,7 +79,8 @@ export const userAPI = {
   getSubscriptionResets: () => api.get('/users/subscription-resets'),
   getUserInfo: () => api.get('/users/dashboard-info'),
   getAnnouncements: () => api.get('/announcements/'),
-  getUserDevices: () => api.get('/users/devices')
+  getUserDevices: () => api.get('/users/devices'),
+  sendVerificationEmail: () => api.post('/users/send-verification-email')
 }
 
 // 订阅相关API
@@ -88,6 +89,7 @@ export const subscriptionAPI = {
   getUserSubscription: () => api.get('/subscriptions/user-subscription'),
   resetSubscription: () => api.post('/subscriptions/reset-subscription'),
   sendSubscriptionEmail: () => api.post('/subscriptions/send-subscription-email'),
+  sendSubscriptionToEmail: () => api.post('/subscriptions/send-subscription-email'),
   getDevices: () => api.get('/subscriptions/devices'),
   getUserDevices: () => api.get('/subscriptions/devices'),
   removeDevice: (deviceId) => api.delete(`/subscriptions/devices/${deviceId}`),

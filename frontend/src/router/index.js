@@ -141,6 +141,19 @@ const routes = [
         }
       },
       {
+        path: 'login-history',
+        name: 'LoginHistory',
+        component: () => import('@/views/LoginHistory.vue'),
+        meta: { 
+          title: '登录历史',
+          breadcrumb: [
+            { title: '首页', path: '/dashboard' },
+            { title: '个人资料', path: '/profile' },
+            { title: '登录历史', path: '/login-history' }
+          ]
+        }
+      },
+      {
         path: 'settings',
         name: 'UserSettings',
         component: () => import('@/views/UserSettings.vue'),
