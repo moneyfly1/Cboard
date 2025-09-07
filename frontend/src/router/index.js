@@ -151,6 +151,18 @@ const routes = [
             { title: '用户设置', path: '/settings' }
           ]
         }
+      },
+      {
+        path: 'tutorials',
+        name: 'SoftwareTutorials',
+        component: () => import('@/views/SoftwareTutorials.vue'),
+        meta: { 
+          title: '软件教程',
+          breadcrumb: [
+            { title: '首页', path: '/dashboard' },
+            { title: '软件教程', path: '/tutorials' }
+          ]
+        }
       }
     ]
   },

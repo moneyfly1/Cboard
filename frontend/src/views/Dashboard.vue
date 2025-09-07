@@ -397,14 +397,26 @@ const announcements = ref([])
 const announcementDialogVisible = ref(false)
 const selectedAnnouncement = ref(null)
 const softwareConfig = ref({
+  // Windows软件
   clash_windows_url: '',
+  v2rayn_url: '',
+  mihomo_windows_url: '',
+  sparkle_windows_url: '',
+  hiddify_windows_url: '',
+  flash_windows_url: '',
+  
+  // Android软件
   clash_android_url: '',
-  clash_macos_url: '',
-  shadowrocket_url: '',
   v2rayng_url: '',
-  quantumult_url: '',
-  quantumult_x_url: '',
-  surfboard_url: ''
+  hiddify_android_url: '',
+  
+  // macOS软件
+  flash_macos_url: '',
+  mihomo_macos_url: '',
+  sparkle_macos_url: '',
+  
+  // iOS软件
+  shadowrocket_url: ''
 })
 const activePlatform = ref('Windows')
 const showQRCode = ref(false)
@@ -419,15 +431,43 @@ const platforms = ref([
         name: 'Clash for Windows',
         version: 'Latest',
         icon: '/images/clash-windows.png',
-        downloadKey: 'clash-windows',
+        downloadKey: 'clash_windows_url',
         tutorialUrl: 'https://doc.example.com/clash-windows'
       },
       {
         name: 'V2rayN',
         version: 'Latest',
         icon: '/images/v2rayn.png',
-        downloadKey: 'v2rayng',
+        downloadKey: 'v2rayn_url',
         tutorialUrl: 'https://doc.example.com/v2rayn'
+      },
+      {
+        name: 'Mihomo Part',
+        version: 'Latest',
+        icon: '/images/mihomo.png',
+        downloadKey: 'mihomo_windows_url',
+        tutorialUrl: 'https://doc.example.com/mihomo-windows'
+      },
+      {
+        name: 'Sparkle',
+        version: 'Latest',
+        icon: '/images/sparkle.png',
+        downloadKey: 'sparkle_windows_url',
+        tutorialUrl: 'https://doc.example.com/sparkle-windows'
+      },
+      {
+        name: 'Hiddify',
+        version: 'Latest',
+        icon: '/images/hiddify.png',
+        downloadKey: 'hiddify_windows_url',
+        tutorialUrl: 'https://doc.example.com/hiddify-windows'
+      },
+      {
+        name: 'Flash',
+        version: 'Latest',
+        icon: '/images/flash.png',
+        downloadKey: 'flash_windows_url',
+        tutorialUrl: 'https://doc.example.com/flash-windows'
       }
     ]
   },
@@ -436,18 +476,52 @@ const platforms = ref([
     icon: 'fab fa-android',
     apps: [
       {
-        name: 'Clash for Android',
+        name: 'Clash Meta',
         version: 'Latest',
-        icon: '/images/clash-android.png',
-        downloadKey: 'clash-android',
-        tutorialUrl: 'https://doc.example.com/clash-android'
+        icon: '/images/clash-meta.png',
+        downloadKey: 'clash_android_url',
+        tutorialUrl: 'https://doc.example.com/clash-meta'
       },
       {
         name: 'V2rayNG',
         version: 'Latest',
         icon: '/images/v2rayng.png',
-        downloadKey: 'v2rayng',
+        downloadKey: 'v2rayng_url',
         tutorialUrl: 'https://doc.example.com/v2rayng'
+      },
+      {
+        name: 'Hiddify',
+        version: 'Latest',
+        icon: '/images/hiddify.png',
+        downloadKey: 'hiddify_android_url',
+        tutorialUrl: 'https://doc.example.com/hiddify-android'
+      }
+    ]
+  },
+  {
+    name: 'macOS',
+    icon: 'fab fa-apple',
+    apps: [
+      {
+        name: 'Flash',
+        version: 'Latest',
+        icon: '/images/flash.png',
+        downloadKey: 'flash_macos_url',
+        tutorialUrl: 'https://doc.example.com/flash-macos'
+      },
+      {
+        name: 'Mihomo Part',
+        version: 'Latest',
+        icon: '/images/mihomo.png',
+        downloadKey: 'mihomo_macos_url',
+        tutorialUrl: 'https://doc.example.com/mihomo-macos'
+      },
+      {
+        name: 'Sparkle',
+        version: 'Latest',
+        icon: '/images/sparkle.png',
+        downloadKey: 'sparkle_macos_url',
+        tutorialUrl: 'https://doc.example.com/sparkle-macos'
       }
     ]
   },
@@ -459,21 +533,8 @@ const platforms = ref([
         name: 'Shadowrocket',
         version: 'Latest',
         icon: '/images/shadowrocket.png',
-        downloadKey: 'shadowrocket',
+        downloadKey: 'shadowrocket_url',
         tutorialUrl: 'https://doc.example.com/shadowrocket'
-      }
-    ]
-  },
-  {
-    name: 'macOS',
-    icon: 'fab fa-apple',
-    apps: [
-      {
-        name: 'ClashX',
-        version: 'Latest',
-        icon: '/images/clashx.png',
-        downloadKey: 'clash-macos',
-        tutorialUrl: 'https://doc.example.com/clashx'
       }
     ]
   }
@@ -1019,7 +1080,8 @@ const downloadApp = (appName) => {
 }
 
 const openTutorial = (url) => {
-  window.open(url, '_blank')
+  // 跳转到软件教程页面
+  router.push('/tutorials')
 }
 
 

@@ -71,6 +71,8 @@
               :model="softwareForm"
               label-width="150px"
             >
+              <!-- Windows软件 -->
+              <el-divider content-position="left">Windows 软件</el-divider>
               <el-row :gutter="20">
                 <el-col :span="12">
                   <el-form-item label="Clash for Windows">
@@ -78,48 +80,100 @@
                   </el-form-item>
                 </el-col>
                 <el-col :span="12">
-                  <el-form-item label="Clash for Android">
+                  <el-form-item label="V2rayN">
+                    <el-input v-model="softwareForm.v2rayn_url" placeholder="请输入下载链接" />
+                  </el-form-item>
+                </el-col>
+              </el-row>
+              
+              <el-row :gutter="20">
+                <el-col :span="12">
+                  <el-form-item label="Mihomo Part">
+                    <el-input v-model="softwareForm.mihomo_windows_url" placeholder="请输入下载链接" />
+                  </el-form-item>
+                </el-col>
+                <el-col :span="12">
+                  <el-form-item label="Sparkle">
+                    <el-input v-model="softwareForm.sparkle_windows_url" placeholder="请输入下载链接" />
+                  </el-form-item>
+                </el-col>
+              </el-row>
+              
+              <el-row :gutter="20">
+                <el-col :span="12">
+                  <el-form-item label="Hiddify">
+                    <el-input v-model="softwareForm.hiddify_windows_url" placeholder="请输入下载链接" />
+                  </el-form-item>
+                </el-col>
+                <el-col :span="12">
+                  <el-form-item label="Flash">
+                    <el-input v-model="softwareForm.flash_windows_url" placeholder="请输入下载链接" />
+                  </el-form-item>
+                </el-col>
+              </el-row>
+              
+              <!-- Android软件 -->
+              <el-divider content-position="left">Android 软件</el-divider>
+              <el-row :gutter="20">
+                <el-col :span="12">
+                  <el-form-item label="Clash Meta">
                     <el-input v-model="softwareForm.clash_android_url" placeholder="请输入下载链接" />
                   </el-form-item>
                 </el-col>
-              </el-row>
-              
-              <el-row :gutter="20">
-                <el-col :span="12">
-                  <el-form-item label="Clash for macOS">
-                    <el-input v-model="softwareForm.clash_macos_url" placeholder="请输入下载链接" />
-                  </el-form-item>
-                </el-col>
-                <el-col :span="12">
-                  <el-form-item label="Shadowrocket">
-                    <el-input v-model="softwareForm.shadowrocket_url" placeholder="请输入下载链接" />
-                  </el-form-item>
-                </el-col>
-              </el-row>
-              
-              <el-row :gutter="20">
                 <el-col :span="12">
                   <el-form-item label="V2rayNG">
                     <el-input v-model="softwareForm.v2rayng_url" placeholder="请输入下载链接" />
                   </el-form-item>
                 </el-col>
+              </el-row>
+              
+              <el-row :gutter="20">
                 <el-col :span="12">
-                  <el-form-item label="Quantumult">
-                    <el-input v-model="softwareForm.quantumult_url" placeholder="请输入下载链接" />
+                  <el-form-item label="Hiddify">
+                    <el-input v-model="softwareForm.hiddify_android_url" placeholder="请输入下载链接" />
+                  </el-form-item>
+                </el-col>
+                <el-col :span="12">
+                  <!-- 占位，保持布局 -->
+                </el-col>
+              </el-row>
+              
+              <!-- macOS软件 -->
+              <el-divider content-position="left">macOS 软件</el-divider>
+              <el-row :gutter="20">
+                <el-col :span="12">
+                  <el-form-item label="Flash">
+                    <el-input v-model="softwareForm.flash_macos_url" placeholder="请输入下载链接" />
+                  </el-form-item>
+                </el-col>
+                <el-col :span="12">
+                  <el-form-item label="Mihomo Part">
+                    <el-input v-model="softwareForm.mihomo_macos_url" placeholder="请输入下载链接" />
                   </el-form-item>
                 </el-col>
               </el-row>
               
               <el-row :gutter="20">
                 <el-col :span="12">
-                  <el-form-item label="Quantumult X">
-                    <el-input v-model="softwareForm.quantumult_x_url" placeholder="请输入下载链接" />
+                  <el-form-item label="Sparkle">
+                    <el-input v-model="softwareForm.sparkle_macos_url" placeholder="请输入下载链接" />
                   </el-form-item>
                 </el-col>
                 <el-col :span="12">
-                  <el-form-item label="Surfboard">
-                    <el-input v-model="softwareForm.surfboard_url" placeholder="请输入下载链接" />
+                  <!-- 占位，保持布局 -->
+                </el-col>
+              </el-row>
+              
+              <!-- iOS软件 -->
+              <el-divider content-position="left">iOS 软件</el-divider>
+              <el-row :gutter="20">
+                <el-col :span="12">
+                  <el-form-item label="Shadowrocket">
+                    <el-input v-model="softwareForm.shadowrocket_url" placeholder="请输入下载链接" />
                   </el-form-item>
+                </el-col>
+                <el-col :span="12">
+                  <!-- 占位，保持布局 -->
                 </el-col>
               </el-row>
               
@@ -708,14 +762,26 @@ export default {
     })
 
     const softwareForm = reactive({
+      // Windows软件
       clash_windows_url: '',
+      v2rayn_url: '',
+      mihomo_windows_url: '',
+      sparkle_windows_url: '',
+      hiddify_windows_url: '',
+      flash_windows_url: '',
+      
+      // Android软件
       clash_android_url: '',
-      clash_macos_url: '',
-      shadowrocket_url: '',
       v2rayng_url: '',
-      quantumult_url: '',
-      quantumult_x_url: '',
-      surfboard_url: ''
+      hiddify_android_url: '',
+      
+      // macOS软件
+      flash_macos_url: '',
+      mihomo_macos_url: '',
+      sparkle_macos_url: '',
+      
+      // iOS软件
+      shadowrocket_url: ''
     })
 
     const emailQueueStats = reactive({

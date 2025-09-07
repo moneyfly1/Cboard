@@ -10,14 +10,26 @@ from app.utils.security import get_current_admin_user, get_current_user
 router = APIRouter()
 
 class SoftwareConfigUpdate(BaseModel):
+    # Windows软件
     clash_windows_url: str = ""
+    v2rayn_url: str = ""
+    mihomo_windows_url: str = ""
+    sparkle_windows_url: str = ""
+    hiddify_windows_url: str = ""
+    flash_windows_url: str = ""
+    
+    # Android软件
     clash_android_url: str = ""
-    clash_macos_url: str = ""
-    shadowrocket_url: str = ""
     v2rayng_url: str = ""
-    quantumult_url: str = ""
-    quantumult_x_url: str = ""
-    surfboard_url: str = ""
+    hiddify_android_url: str = ""
+    
+    # macOS软件
+    flash_macos_url: str = ""
+    mihomo_macos_url: str = ""
+    sparkle_macos_url: str = ""
+    
+    # iOS软件
+    shadowrocket_url: str = ""
 
 @router.get("/", response_model=ResponseBase)
 def get_software_config(
@@ -41,14 +53,26 @@ def get_software_config(
         
         # 设置默认值
         default_config = {
+            # Windows软件
             "clash_windows_url": software_config.get("software_clash_windows_url", ""),
+            "v2rayn_url": software_config.get("software_v2rayn_url", ""),
+            "mihomo_windows_url": software_config.get("software_mihomo_windows_url", ""),
+            "sparkle_windows_url": software_config.get("software_sparkle_windows_url", ""),
+            "hiddify_windows_url": software_config.get("software_hiddify_windows_url", ""),
+            "flash_windows_url": software_config.get("software_flash_windows_url", ""),
+            
+            # Android软件
             "clash_android_url": software_config.get("software_clash_android_url", ""),
-            "clash_macos_url": software_config.get("software_clash_macos_url", ""),
-            "shadowrocket_url": software_config.get("software_shadowrocket_url", ""),
             "v2rayng_url": software_config.get("software_v2rayng_url", ""),
-            "quantumult_url": software_config.get("software_quantumult_url", ""),
-            "quantumult_x_url": software_config.get("software_quantumult_x_url", ""),
-            "surfboard_url": software_config.get("software_surfboard_url", "")
+            "hiddify_android_url": software_config.get("software_hiddify_android_url", ""),
+            
+            # macOS软件
+            "flash_macos_url": software_config.get("software_flash_macos_url", ""),
+            "mihomo_macos_url": software_config.get("software_mihomo_macos_url", ""),
+            "sparkle_macos_url": software_config.get("software_sparkle_macos_url", ""),
+            
+            # iOS软件
+            "shadowrocket_url": software_config.get("software_shadowrocket_url", "")
         }
         
         return ResponseBase(data=default_config)
@@ -72,14 +96,26 @@ def update_software_config(
         
         # 更新软件配置
         config_updates = {
+            # Windows软件
             "software_clash_windows_url": config_data.clash_windows_url,
+            "software_v2rayn_url": config_data.v2rayn_url,
+            "software_mihomo_windows_url": config_data.mihomo_windows_url,
+            "software_sparkle_windows_url": config_data.sparkle_windows_url,
+            "software_hiddify_windows_url": config_data.hiddify_windows_url,
+            "software_flash_windows_url": config_data.flash_windows_url,
+            
+            # Android软件
             "software_clash_android_url": config_data.clash_android_url,
-            "software_clash_macos_url": config_data.clash_macos_url,
-            "software_shadowrocket_url": config_data.shadowrocket_url,
             "software_v2rayng_url": config_data.v2rayng_url,
-            "software_quantumult_url": config_data.quantumult_url,
-            "software_quantumult_x_url": config_data.quantumult_x_url,
-            "software_surfboard_url": config_data.surfboard_url
+            "software_hiddify_android_url": config_data.hiddify_android_url,
+            
+            # macOS软件
+            "software_flash_macos_url": config_data.flash_macos_url,
+            "software_mihomo_macos_url": config_data.mihomo_macos_url,
+            "software_sparkle_macos_url": config_data.sparkle_macos_url,
+            
+            # iOS软件
+            "software_shadowrocket_url": config_data.shadowrocket_url
         }
         
         # 保存配置到数据库
