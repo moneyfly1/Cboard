@@ -73,12 +73,26 @@ def get_users(
             online_devices = 0
             if subscription:
                 try:
-                    from app.services.device import DeviceService
-                    device_service = DeviceService(db)
-                    devices = device_service.get_devices_by_user_id(user.id)
-                    device_count = len(devices)
-                    online_devices = len([d for d in devices if d.is_online])
-                except:
+                    from sqlalchemy import text
+                    # 直接从devices表获取设备信息
+                    device_query = text("""
+                        SELECT COUNT(*) as total_count,
+                               COUNT(CASE WHEN last_access > datetime('now', '-5 minutes') THEN 1 END) as online_count
+                        FROM devices 
+                        WHERE subscription_id = :subscription_id
+                    """)
+                    result = db.execute(device_query, {
+                        'subscription_id': subscription.id
+                    }).fetchone()
+                    
+                    if result:
+                        device_count = result.total_count or 0
+                        online_devices = result.online_count or 0
+                    else:
+                        device_count = subscription.current_devices if subscription else 0
+                        online_devices = 0
+                except Exception as e:
+                    print(f"获取用户设备信息失败: {e}")
                     device_count = subscription.current_devices if subscription else 0
                     online_devices = 0
             
@@ -1537,21 +1551,32 @@ def get_subscriptions(
             v2ray_count = 0
             
             try:
-                from app.services.device import DeviceService
-                device_service = DeviceService(db)
-                devices = device_service.get_devices_by_user_id(subscription.user_id)
-                device_count = len(devices)
-                online_devices = len([d for d in devices if d.is_online])
+                from sqlalchemy import text
+                # 直接从devices表获取设备信息
+                device_query = text("""
+                    SELECT COUNT(*) as total_count,
+                           COUNT(CASE WHEN last_access > datetime('now', '-5 minutes') THEN 1 END) as online_count,
+                           COUNT(CASE WHEN device_type = 'mobile' AND (user_agent LIKE '%iOS%' OR user_agent LIKE '%macOS%' OR user_agent LIKE '%Apple%') THEN 1 END) as apple_count,
+                           COUNT(CASE WHEN user_agent LIKE '%Clash%' THEN 1 END) as clash_count,
+                           COUNT(CASE WHEN user_agent LIKE '%V2Ray%' OR user_agent LIKE '%Shadowrocket%' THEN 1 END) as v2ray_count
+                    FROM devices 
+                    WHERE subscription_id = :subscription_id
+                """)
+                result = db.execute(device_query, {
+                    'subscription_id': subscription.id
+                }).fetchone()
                 
-                # 统计设备类型
-                for device in devices:
-                    if 'apple' in device.device_type.lower() or 'ios' in device.device_type.lower():
-                        apple_count += 1
-                    if 'clash' in device.user_agent.lower():
-                        clash_count += 1
-                    if 'v2ray' in device.user_agent.lower() or 'shadowrocket' in device.user_agent.lower():
-                        v2ray_count += 1
-            except:
+                if result:
+                    device_count = result.total_count or 0
+                    online_devices = result.online_count or 0
+                    apple_count = result.apple_count or 0
+                    clash_count = result.clash_count or 0
+                    v2ray_count = result.v2ray_count or 0
+                else:
+                    device_count = subscription.current_devices if subscription else 0
+                    online_devices = 0
+            except Exception as e:
+                print(f"获取订阅设备信息失败: {e}")
                 device_count = subscription.current_devices if subscription else 0
                 online_devices = 0
             
@@ -1603,6 +1628,7 @@ def get_subscriptions(
                 "created_at": subscription.created_at.isoformat() if subscription.created_at else None,
                 "device_limit": subscription.device_limit,
                 "current_devices": device_count,
+                "device_count": device_count,
                 "online_devices": online_devices,
                 "apple_count": apple_count,
                 "clash_count": clash_count,
@@ -3432,7 +3458,7 @@ def export_subscriptions(
     except Exception as e:
         return ResponseBase(success=False, message=f"导出订阅数据失败: {str(e)}")
 
-@router.get("/subscriptions/apple-stats", response_model=ResponseBase)
+@router.get("/subscriptions/stats/apple", response_model=ResponseBase)
 def get_apple_stats(
     db: Session = Depends(get_db),
     current_admin = Depends(get_current_admin_user)
@@ -3442,16 +3468,16 @@ def get_apple_stats(
         subscription_service = SubscriptionService(db)
         
         # 统计苹果设备
-        apple_count = 0
-        total_devices = 0
+        from sqlalchemy import text
+        apple_query = text("""
+            SELECT COUNT(*) as total_count,
+                   COUNT(CASE WHEN device_type = 'mobile' AND (user_agent LIKE '%iOS%' OR user_agent LIKE '%macOS%' OR user_agent LIKE '%Apple%') THEN 1 END) as apple_count
+            FROM devices
+        """)
+        result = db.execute(apple_query).fetchone()
         
-        all_subscriptions = subscription_service.get_all()
-        for subscription in all_subscriptions:
-            devices = subscription_service.get_devices(subscription.id)
-            total_devices += len(devices)
-            for device in devices:
-                if 'apple' in device.device_type.lower() or 'ios' in device.device_type.lower():
-                    apple_count += 1
+        total_devices = result.total_count or 0
+        apple_count = result.apple_count or 0
         
         return ResponseBase(data={
             "apple_devices": apple_count,
@@ -3461,7 +3487,7 @@ def get_apple_stats(
     except Exception as e:
         return ResponseBase(success=False, message=f"获取苹果设备统计失败: {str(e)}")
 
-@router.get("/subscriptions/online-stats", response_model=ResponseBase)
+@router.get("/subscriptions/stats/online", response_model=ResponseBase)
 def get_online_stats(
     db: Session = Depends(get_db),
     current_admin = Depends(get_current_admin_user)
@@ -3470,16 +3496,17 @@ def get_online_stats(
     try:
         subscription_service = SubscriptionService(db)
         
-        online_count = 0
-        total_devices = 0
+        # 统计在线设备
+        from sqlalchemy import text
+        online_query = text("""
+            SELECT COUNT(*) as total_count,
+                   COUNT(CASE WHEN last_access > datetime('now', '-5 minutes') THEN 1 END) as online_count
+            FROM devices
+        """)
+        result = db.execute(online_query).fetchone()
         
-        all_subscriptions = subscription_service.get_all()
-        for subscription in all_subscriptions:
-            devices = subscription_service.get_devices(subscription.id)
-            total_devices += len(devices)
-            for device in devices:
-                if device.is_online:
-                    online_count += 1
+        total_devices = result.total_count or 0
+        online_count = result.online_count or 0
         
         return ResponseBase(data={
             "online_devices": online_count,

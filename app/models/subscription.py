@@ -23,7 +23,6 @@ class Subscription(Base):
     
     def __repr__(self):
         return f"<Subscription(id={self.id}, user_id={self.user_id}, url='{self.subscription_url}')>"
-
 class Device(Base):
     __tablename__ = "devices"
 

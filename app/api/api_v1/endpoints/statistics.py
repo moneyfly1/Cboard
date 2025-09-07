@@ -87,8 +87,16 @@ def get_subscription_statistics(
     expiring_in_30_days = subscription_service.count_expiring_soon(30)
     
     # 设备统计
-    total_devices = subscription_service.count_total_devices()
-    online_devices = subscription_service.count_online_devices()
+    from sqlalchemy import text
+    device_stats_query = text("""
+        SELECT COUNT(*) as total_count,
+               COUNT(CASE WHEN last_access > datetime('now', '-5 minutes') THEN 1 END) as online_count
+        FROM devices
+    """)
+    device_stats = db.execute(device_stats_query).fetchone()
+    
+    total_devices = device_stats.total_count or 0
+    online_devices = device_stats.online_count or 0
     
     # 订阅时长分布
     duration_distribution = [

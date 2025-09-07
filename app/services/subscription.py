@@ -102,9 +102,9 @@ class SubscriptionService:
         """删除设备"""
         try:
             from sqlalchemy import text
-            # 直接操作user_devices表
+            # 直接操作devices表
             result = self.db.execute(text("""
-                DELETE FROM user_devices WHERE id = :device_id
+                DELETE FROM devices WHERE id = :device_id
             """), {'device_id': device_id})
             
             self.db.commit()

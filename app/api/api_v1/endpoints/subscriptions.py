@@ -236,9 +236,9 @@ def get_user_devices(
         # 获取设备列表 - 直接查询user_devices表
         from sqlalchemy import text
         device_query = text("""
-            SELECT * FROM user_devices 
-            WHERE subscription_id = :subscription_id 
-            ORDER BY last_seen DESC
+            SELECT * FROM devices
+            WHERE subscription_id = :subscription_id
+            ORDER BY last_access DESC
         """)
         device_rows = db.execute(device_query, {"subscription_id": subscription.id}).fetchall()
         
@@ -246,20 +246,13 @@ def get_user_devices(
         for device_row in device_rows:
             device_list.append({
                 "id": device_row.id,
-                "device_name": f"{device_row.software_name} ({device_row.os_name})" if device_row.software_name and device_row.os_name else "未知设备",
-                "device_type": get_device_type_from_os(device_row.os_name),
+                "device_name": device_row.device_name or "未知设备",
+                "device_type": device_row.device_type or "unknown",
                 "ip_address": device_row.ip_address,
                 "user_agent": device_row.user_agent,
-                "software_name": device_row.software_name,
-                "software_version": device_row.software_version,
-                "os_name": device_row.os_name,
-                "os_version": device_row.os_version,
-                "device_model": device_row.device_model,
-                "device_brand": device_row.device_brand,
-                "last_access": device_row.last_seen if device_row.last_seen else None,
-                "first_seen": device_row.first_seen if device_row.first_seen else None,
-                "access_count": device_row.access_count,
-                "is_allowed": device_row.is_allowed
+                "last_access": device_row.last_access.isoformat() if device_row.last_access else None,
+                "is_active": device_row.is_active,
+                "created_at": device_row.created_at.isoformat() if device_row.created_at else None
             })
         
         return ResponseBase(data={"devices": device_list})
@@ -288,12 +281,11 @@ def remove_device(
         # 验证设备是否属于当前用户
         from sqlalchemy import text
         device_query = text("""
-            SELECT id FROM user_devices 
-            WHERE id = :device_id AND user_id = :user_id AND subscription_id = :subscription_id
+            SELECT id FROM devices 
+            WHERE id = :device_id AND subscription_id = :subscription_id
         """)
         device = db.execute(device_query, {
             'device_id': device_id,
-            'user_id': current_user.id,
             'subscription_id': subscription.id
         }).fetchone()
         
@@ -305,7 +297,7 @@ def remove_device(
         
         # 删除设备
         result = db.execute(text("""
-            DELETE FROM user_devices WHERE id = :device_id
+            DELETE FROM devices WHERE id = :device_id
         """), {'device_id': device_id})
         
         if result.rowcount > 0:
