@@ -489,75 +489,160 @@
     </el-dialog>
 
     <!-- 设备管理对话框 -->
-    <el-dialog v-model="showDeviceDialog" title="设备管理" width="1000px">
-      <div class="device-management">
-        <div class="device-header">
-          <h4>用户：{{ currentUser?.username }}</h4>
-          <div class="device-actions">
-            <el-button type="danger" size="small" @click="clearAllDevices">
-              <el-icon><Delete /></el-icon>
-              清理所有设备
-            </el-button>
+    <el-dialog v-model="showDeviceDialog" title="设备管理" width="1200px">
+      <div class="devices-container">
+        <!-- 页面头部 -->
+        <div class="page-header">
+          <h3>用户设备管理</h3>
+          <p>管理用户 {{ currentUser?.username }} 的订阅设备</p>
+        </div>
+
+        <!-- 设备统计 -->
+        <el-card class="stats-card">
+          <div class="stats-content">
+            <div class="stat-item">
+              <div class="stat-number">{{ deviceStats.total }}</div>
+              <div class="stat-label">总设备数</div>
+            </div>
+            <div class="stat-item">
+              <div class="stat-number">{{ deviceStats.online }}</div>
+              <div class="stat-label">在线设备</div>
+            </div>
+            <div class="stat-item">
+              <div class="stat-number">{{ deviceStats.mobile }}</div>
+              <div class="stat-label">移动设备</div>
+            </div>
+            <div class="stat-item">
+              <div class="stat-number">{{ deviceStats.desktop }}</div>
+              <div class="stat-label">桌面设备</div>
+            </div>
           </div>
-        </div>
-        
-        <el-table :data="userDevices" size="small" v-loading="false">
-          <el-table-column prop="id" label="ID" width="60" />
-          <el-table-column prop="device_name" label="设备名称" min-width="150">
-            <template #default="scope">
-              <div class="device-name">
-                <i :class="getDeviceIcon(scope.row.device_type)"></i>
-                <span>{{ scope.row.device_name || '未知设备' }}</span>
-              </div>
-            </template>
-          </el-table-column>
-          <el-table-column prop="device_type" label="设备类型" width="120">
-            <template #default="scope">
-              <el-tag :type="getDeviceTypeColor(scope.row.device_type)">
-                {{ getDeviceTypeName(scope.row.device_type) }}
-              </el-tag>
-            </template>
-          </el-table-column>
-          <el-table-column prop="ip_address" label="IP地址" width="140">
-            <template #default="scope">
-              <span class="ip-address">{{ scope.row.ip_address }}</span>
-            </template>
-          </el-table-column>
-          <el-table-column prop="last_access" label="最后访问" width="180">
-            <template #default="scope">
-              <span>{{ formatTime(scope.row.last_access) }}</span>
-            </template>
-          </el-table-column>
-          <el-table-column prop="user_agent" label="User Agent" min-width="200">
-            <template #default="scope">
-              <el-tooltip :content="scope.row.user_agent" placement="top">
-                <span class="user-agent">{{ truncateUserAgent(scope.row.user_agent) }}</span>
-              </el-tooltip>
-            </template>
-          </el-table-column>
-          <el-table-column prop="is_active" label="状态" width="80">
-            <template #default="scope">
-              <el-tag :type="scope.row.is_active ? 'success' : 'danger'" size="small">
-                {{ scope.row.is_active ? '活跃' : '离线' }}
-              </el-tag>
-            </template>
-          </el-table-column>
-          <el-table-column label="操作" width="100" fixed="right">
-            <template #default="scope">
+        </el-card>
+
+        <!-- 设备列表 -->
+        <el-card class="devices-card">
+          <template #header>
+            <div class="card-header">
+              <i class="el-icon-monitor"></i>
+              设备列表
               <el-button 
+                type="primary" 
                 size="small" 
-                type="danger" 
-                @click="deleteDevice(scope.row)"
+                @click="refreshUserDevices"
+                :loading="deviceLoading"
               >
-                删除
+                <i class="el-icon-refresh"></i>
+                刷新
               </el-button>
-            </template>
-          </el-table-column>
-        </el-table>
-        
-        <div v-if="userDevices.length === 0" class="no-devices">
-          <el-empty description="暂无设备记录" />
-        </div>
+              <el-button 
+                type="danger" 
+                size="small" 
+                @click="clearAllDevices"
+                :disabled="userDevices.length === 0"
+              >
+                <i class="el-icon-delete"></i>
+                清理所有设备
+              </el-button>
+            </div>
+          </template>
+
+          <el-table 
+            :data="userDevices" 
+            v-loading="deviceLoading"
+            style="width: 100%"
+          >
+            <el-table-column prop="device_name" label="设备名称" min-width="150">
+              <template #default="{ row }">
+                <div class="device-name">
+                  <i :class="getDeviceIcon(row.device_type)"></i>
+                  <span>{{ row.device_name || '未知设备' }}</span>
+                </div>
+              </template>
+            </el-table-column>
+
+            <el-table-column prop="device_type" label="设备类型" width="120">
+              <template #default="{ row }">
+                <el-tag :type="getDeviceTypeColor(row.device_type)">
+                  {{ getDeviceTypeName(row.device_type) }}
+                </el-tag>
+              </template>
+            </el-table-column>
+
+            <el-table-column prop="ip_address" label="IP地址" width="140">
+              <template #default="{ row }">
+                <span class="ip-address">{{ row.ip_address }}</span>
+              </template>
+            </el-table-column>
+
+            <el-table-column prop="last_access" label="最后访问" width="180">
+              <template #default="{ row }">
+                <span>{{ formatTime(row.last_access) }}</span>
+              </template>
+            </el-table-column>
+
+            <el-table-column prop="user_agent" label="User Agent" min-width="200">
+              <template #default="{ row }">
+                <el-tooltip :content="row.user_agent" placement="top">
+                  <span class="user-agent">{{ truncateUserAgent(row.user_agent) }}</span>
+                </el-tooltip>
+              </template>
+            </el-table-column>
+
+            <el-table-column prop="is_active" label="状态" width="80">
+              <template #default="{ row }">
+                <el-tag :type="row.is_active ? 'success' : 'danger'" size="small">
+                  {{ row.is_active ? '活跃' : '离线' }}
+                </el-tag>
+              </template>
+            </el-table-column>
+
+            <el-table-column label="操作" width="120" fixed="right">
+              <template #default="{ row }">
+                <el-button 
+                  type="danger" 
+                  size="small" 
+                  @click="deleteDevice(row)"
+                  :loading="row.removing"
+                >
+                  删除
+                </el-button>
+              </template>
+            </el-table-column>
+          </el-table>
+
+          <!-- 空状态 -->
+          <el-empty 
+            v-if="!deviceLoading && userDevices.length === 0" 
+            description="暂无设备记录"
+          >
+            <el-button type="primary" @click="refreshUserDevices">
+              刷新设备列表
+            </el-button>
+          </el-empty>
+        </el-card>
+
+        <!-- 设备类型统计 -->
+        <el-card class="chart-card">
+          <template #header>
+            <div class="card-header">
+              <i class="el-icon-pie-chart"></i>
+              设备类型统计
+            </div>
+          </template>
+          
+          <div class="chart-container">
+            <div class="chart-item" v-for="(count, type) in deviceTypeStats" :key="type">
+              <div class="chart-label">{{ getDeviceTypeName(type) }}</div>
+              <div class="chart-bar">
+                <div 
+                  class="chart-fill" 
+                  :style="{ width: getPercentage(count) + '%' }"
+                ></div>
+              </div>
+              <div class="chart-count">{{ count }}</div>
+            </div>
+          </div>
+        </el-card>
       </div>
     </el-dialog>
   </div>
@@ -601,6 +686,23 @@ export default {
     const userSubscriptions = ref([])
     const userDevices = ref([])
     const currentUser = ref(null)
+    const deviceLoading = ref(false)
+
+    const deviceStats = reactive({
+      total: 0,
+      online: 0,
+      mobile: 0,
+      desktop: 0
+    })
+
+    const deviceTypeStats = computed(() => {
+      const stats = {}
+      userDevices.value.forEach(device => {
+        const type = device.device_type || 'unknown'
+        stats[type] = (stats[type] || 0) + 1
+      })
+      return stats
+    })
 
     const searchForm = reactive({
       email: '',
@@ -1156,6 +1258,7 @@ export default {
 
     const manageUserDevices = async (user) => {
       try {
+        deviceLoading.value = true
         const response = await api.get(`/admin/devices/user/${user.id}`)
         console.log('管理员获取设备列表响应:', response)
         
@@ -1165,17 +1268,50 @@ export default {
           userDevices.value = []
         }
         currentUser.value = user
+        updateDeviceStats()
         showDeviceDialog.value = true
       } catch (error) {
         ElMessage.error('获取设备列表失败')
         console.error('获取设备列表失败:', error)
+      } finally {
+        deviceLoading.value = false
       }
+    }
+
+    // 刷新用户设备列表
+    const refreshUserDevices = async () => {
+      if (currentUser.value) {
+        await manageUserDevices(currentUser.value)
+      }
+    }
+
+    // 更新设备统计
+    const updateDeviceStats = () => {
+      deviceStats.total = userDevices.value.length
+      deviceStats.online = userDevices.value.filter(d => isOnline(d.last_access)).length
+      deviceStats.mobile = userDevices.value.filter(d => d.device_type === 'mobile').length
+      deviceStats.desktop = userDevices.value.filter(d => d.device_type === 'desktop').length
+    }
+
+    // 检查是否在线（24小时内访问过）
+    const isOnline = (lastAccess) => {
+      if (!lastAccess) return false
+      const lastTime = new Date(lastAccess)
+      const now = new Date()
+      const diffHours = (now - lastTime) / (1000 * 60 * 60)
+      return diffHours < 24
+    }
+
+    // 计算百分比
+    const getPercentage = (count) => {
+      if (deviceStats.total === 0) return 0
+      return Math.round((count / deviceStats.total) * 100)
     }
 
     const deleteDevice = async (device) => {
       try {
         await ElMessageBox.confirm(
-          `确定要删除设备 "${device.software_name || '未知设备'}" 吗？`,
+          `确定要删除设备 "${device.device_name || '未知设备'}" 吗？`,
           '确认删除',
           {
             confirmButtonText: '确定',
@@ -1183,17 +1319,22 @@ export default {
             type: 'warning'
           }
         )
-        
+
+        // 设置删除状态
+        device.removing = true
+
         await api.delete(`/admin/devices/devices/${device.id}`)
         ElMessage.success('设备删除成功')
         
         // 重新加载设备列表
-        await manageUserDevices(currentUser.value)
+        await refreshUserDevices()
       } catch (error) {
         if (error !== 'cancel') {
           ElMessage.error('删除设备失败')
           console.error('删除设备失败:', error)
         }
+        // 重置删除状态
+        device.removing = false
       }
     }
 
@@ -1213,7 +1354,7 @@ export default {
         ElMessage.success('所有设备清理成功')
         
         // 重新加载设备列表
-        await manageUserDevices(currentUser.value)
+        await refreshUserDevices()
       } catch (error) {
         if (error !== 'cancel') {
           ElMessage.error('清理设备失败')
@@ -1475,6 +1616,14 @@ export default {
       getDeviceTypeName,
       formatTime,
       truncateUserAgent,
+      // 新增的设备管理相关变量和函数
+      deviceLoading,
+      deviceStats,
+      deviceTypeStats,
+      refreshUserDevices,
+      updateDeviceStats,
+      isOnline,
+      getPercentage,
       loginAsUser,
       // 新增的响应式变量
       showBulkImportDialog,
@@ -1832,6 +1981,166 @@ export default {
   font-size: 12px;
   color: #909399;
   cursor: help;
+}
+
+/* 设备管理页面样式 - 复制自普通用户设备管理页面 */
+.devices-container {
+  padding: 20px;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.page-header {
+  margin-bottom: 2rem;
+  text-align: center;
+}
+
+.page-header h3 {
+  color: #1677ff;
+  font-size: 1.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.page-header p {
+  color: #666;
+  font-size: 1rem;
+}
+
+.stats-card {
+  margin-bottom: 2rem;
+  border-radius: 12px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+}
+
+.stats-content {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 2rem;
+  padding: 1rem 0;
+}
+
+.stat-item {
+  text-align: center;
+}
+
+.stat-number {
+  font-size: 2.5rem;
+  font-weight: bold;
+  color: #1677ff;
+  margin-bottom: 0.5rem;
+}
+
+.stat-label {
+  color: #666;
+  font-size: 0.9rem;
+}
+
+.devices-card,
+.chart-card {
+  margin-bottom: 2rem;
+  border-radius: 12px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+}
+
+.card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  font-weight: 600;
+}
+
+.device-name {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.device-name i {
+  font-size: 1.2rem;
+  color: #1677ff;
+}
+
+.ip-address {
+  font-family: 'Courier New', monospace;
+  color: #666;
+}
+
+.user-agent {
+  color: #666;
+  font-size: 0.9rem;
+}
+
+.chart-container {
+  padding: 1rem 0;
+}
+
+.chart-item {
+  display: flex;
+  align-items: center;
+  margin-bottom: 1rem;
+  gap: 1rem;
+}
+
+.chart-label {
+  width: 100px;
+  font-weight: 500;
+  color: #333;
+}
+
+.chart-bar {
+  flex: 1;
+  height: 20px;
+  background: #f0f0f0;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.chart-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #1677ff, #4096ff);
+  border-radius: 10px;
+  transition: width 0.3s ease;
+}
+
+.chart-count {
+  width: 60px;
+  text-align: right;
+  font-weight: 600;
+  color: #1677ff;
+}
+
+@media (max-width: 768px) {
+  .devices-container {
+    padding: 10px;
+  }
+  
+  .stats-content {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1rem;
+  }
+  
+  .stat-number {
+    font-size: 2rem;
+  }
+  
+  .chart-item {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+  
+  .chart-label {
+    width: auto;
+  }
+  
+  .chart-bar {
+    width: 100%;
+  }
+  
+  .chart-count {
+    width: auto;
+  }
 }
 
 .device-header h4 {
