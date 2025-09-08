@@ -23,14 +23,17 @@
 
       <!-- 搜索栏 -->
       <el-form :inline="true" :model="searchForm" class="search-form">
-        <el-form-item label="订单号">
-          <el-input v-model="searchForm.order_no" placeholder="搜索订单号" />
-        </el-form-item>
-        <el-form-item label="用户邮箱">
-          <el-input v-model="searchForm.user_email" placeholder="搜索用户邮箱" />
+        <el-form-item label="搜索">
+          <el-input 
+            v-model="searchForm.keyword" 
+            placeholder="输入订单号、用户邮箱或用户名进行搜索"
+            style="width: 300px;"
+            clearable
+            @keyup.enter="searchOrders"
+          />
         </el-form-item>
         <el-form-item label="状态">
-          <el-select v-model="searchForm.status" placeholder="选择状态">
+          <el-select v-model="searchForm.status" placeholder="选择状态" style="width: 120px;">
             <el-option label="全部" value="" />
             <el-option label="待支付" value="pending" />
             <el-option label="已支付" value="paid" />
@@ -38,17 +41,11 @@
             <el-option label="已退款" value="refunded" />
           </el-select>
         </el-form-item>
-        <el-form-item label="日期范围">
-          <el-date-picker
-            v-model="searchForm.date_range"
-            type="daterange"
-            range-separator="至"
-            start-placeholder="开始日期"
-            end-placeholder="结束日期"
-          />
-        </el-form-item>
         <el-form-item>
-          <el-button type="primary" @click="searchOrders">搜索</el-button>
+          <el-button type="primary" @click="searchOrders">
+            <el-icon><Search /></el-icon>
+            搜索
+          </el-button>
           <el-button @click="resetSearch">重置</el-button>
         </el-form-item>
       </el-form>
@@ -220,14 +217,14 @@
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { 
-  Download, Operation, DataAnalysis, View, Check, Money, Close 
+  Download, Operation, DataAnalysis, View, Check, Money, Close, Search 
 } from '@element-plus/icons-vue'
 import { useApi } from '@/utils/api'
 
 export default {
   name: 'AdminOrders',
   components: {
-    Download, Operation, DataAnalysis, View, Check, Money, Close
+    Download, Operation, DataAnalysis, View, Check, Money, Close, Search
   },
   setup() {
     const api = useApi()
@@ -243,10 +240,8 @@ export default {
     const bulkLoading = ref(false)
 
     const searchForm = reactive({
-      order_no: '',
-      user_email: '',
-      status: '',
-      date_range: []
+      keyword: '',
+      status: ''
     })
 
     const bulkForm = reactive({
@@ -265,15 +260,16 @@ export default {
       loading.value = true
       try {
         const params = {
-          page: currentPage.value,
-          size: pageSize.value,
-          ...searchForm
+          skip: (currentPage.value - 1) * pageSize.value,
+          limit: pageSize.value
         }
         
-        // 处理日期范围
-        if (searchForm.date_range && searchForm.date_range.length === 2) {
-          params.start_date = searchForm.date_range[0]
-          params.end_date = searchForm.date_range[1]
+        // 添加搜索参数
+        if (searchForm.keyword) {
+          params.search = searchForm.keyword
+        }
+        if (searchForm.status) {
+          params.status = searchForm.status
         }
         
         const response = await api.get('/admin/orders', { params })
@@ -295,10 +291,8 @@ export default {
 
     const resetSearch = () => {
       Object.assign(searchForm, { 
-        order_no: '', 
-        user_email: '', 
-        status: '', 
-        date_range: [] 
+        keyword: '', 
+        status: '' 
       })
       searchOrders()
     }
@@ -325,7 +319,7 @@ export default {
           cancelButtonText: '取消',
           type: 'warning'
         })
-        await api.put(`/admin/orders/${order.id}/status`, { status: 'paid' })
+        await api.put(`/admin/orders/${order.id}`, { status: 'paid' })
         ElMessage.success('订单状态更新成功')
         loadOrders()
       } catch (error) {
@@ -342,7 +336,7 @@ export default {
           cancelButtonText: '取消',
           type: 'warning'
         })
-        await api.put(`/admin/orders/${order.id}/status`, { status: 'cancelled' })
+        await api.put(`/admin/orders/${order.id}`, { status: 'cancelled' })
         ElMessage.success('订单已取消')
         loadOrders()
       } catch (error) {
@@ -359,7 +353,7 @@ export default {
           cancelButtonText: '取消',
           type: 'warning'
         })
-        await api.put(`/admin/orders/${order.id}/status`, { status: 'refunded' })
+        await api.put(`/admin/orders/${order.id}`, { status: 'refunded' })
         ElMessage.success('订单已退款')
         loadOrders()
       } catch (error) {
@@ -431,9 +425,22 @@ export default {
     const loadStatistics = async () => {
       try {
         const response = await api.get('/admin/orders/statistics')
-        Object.assign(statistics, response.data)
+        console.log('订单统计API响应:', response)
+        console.log('订单统计数据:', response.data)
+        
+        if (response.data && response.data.success && response.data.data) {
+          const statsData = response.data.data
+          statistics.totalOrders = statsData.total_orders || 0
+          statistics.pendingOrders = statsData.pending_orders || 0
+          statistics.paidOrders = statsData.paid_orders || 0
+          statistics.totalRevenue = statsData.total_revenue || 0
+          console.log('更新后的统计数据:', statistics)
+        } else {
+          console.warn('订单统计API返回数据格式异常:', response.data)
+        }
       } catch (error) {
         console.error('加载统计数据失败:', error)
+        ElMessage.error('加载统计数据失败')
       }
     }
 

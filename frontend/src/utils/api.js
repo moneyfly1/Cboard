@@ -145,6 +145,8 @@ export const adminAPI = {
   updateUser: (userId, data) => api.put(`/admin/users/${userId}`, data),
   deleteUser: (userId) => api.delete(`/admin/users/${userId}`),
   loginAsUser: (userId) => api.post(`/admin/users/${userId}/login-as`),
+  getAbnormalUsers: () => api.get('/admin/users/abnormal'),
+  getUserDetails: (userId) => api.get(`/admin/users/${userId}/details`),
   
   // 用户批量操作
   batchDeleteUsers: (userIds) => api.post('/admin/users/batch-delete', { user_ids: userIds }),
@@ -306,7 +308,24 @@ export const paymentAPI = {
   getPaymentTransactionDetail: (transactionId) => api.get(`/admin/payment-transactions/${transactionId}`),
   
   // 支付统计
-  getPaymentStats: () => api.get('/admin/payment-stats')
+  getPaymentStats: () => api.get('/admin/payment-stats'),
+  
+  // 配置更新
+  getConfigUpdateStatus: () => api.get('/admin/config-update/status'),
+  startConfigUpdate: () => api.post('/admin/config-update/start'),
+  stopConfigUpdate: () => api.post('/admin/config-update/stop'),
+  testConfigUpdate: () => api.post('/admin/config-update/test'),
+  getConfigUpdateLogs: (params) => api.get('/admin/config-update/logs', { params }),
+  getConfigUpdateConfig: () => api.get('/admin/config-update/config'),
+  updateConfigUpdateConfig: (data) => api.put('/admin/config-update/config', data),
+  getConfigUpdateFiles: () => api.get('/admin/config-update/files'),
+  getConfigUpdateSchedule: () => api.get('/admin/config-update/schedule'),
+  updateConfigUpdateSchedule: (data) => api.put('/admin/config-update/schedule', data),
+  startConfigUpdateSchedule: () => api.post('/admin/config-update/schedule/start'),
+  stopConfigUpdateSchedule: () => api.post('/admin/config-update/schedule/stop'),
+  clearConfigUpdateLogs: () => api.post('/admin/config-update/logs/clear'),
+  startLogCleanupTimer: () => api.post('/admin/config-update/logs/cleanup/start'),
+  stopLogCleanupTimer: () => api.post('/admin/config-update/logs/cleanup/stop')
 }
 
 // 系统设置相关API

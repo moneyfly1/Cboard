@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>API测试页面</title>
+</head>
+<body>
+    <h1>配置更新API测试</h1>
+    <button onclick="testStartUpdate()">测试开始更新</button>
+    <button onclick="testGetStatus()">测试获取状态</button>
+    <div id="result"></div>
+
+    <script>
+        const API_BASE = 'http://localhost:8000/api/v1';
+        const TOKEN = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxIiwidXNlcl9pZCI6MSwiZXhwIjoxNzU3NDExODM2fQ.Aer6-H3UzR3ZRZiAcrUQ6Hz7CZGaUzeq5NerChuBSdk';
+
+        async function testStartUpdate() {
+            try {
+                const response = await fetch(`${API_BASE}/admin/config-update/start`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${TOKEN}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+                const data = await response.json();
+                document.getElementById('result').innerHTML = `<pre>${JSON.stringify(data, null, 2)}</pre>`;
+            } catch (error) {
+                document.getElementById('result').innerHTML = `<pre>错误: ${error.message}</pre>`;
+            }
+        }
+
+        async function testGetStatus() {
+            try {
+                const response = await fetch(`${API_BASE}/admin/config-update/status`, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${TOKEN}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+                const data = await response.json();
+                document.getElementById('result').innerHTML = `<pre>${JSON.stringify(data, null, 2)}</pre>`;
+            } catch (error) {
+                document.getElementById('result').innerHTML = `<pre>错误: ${error.message}</pre>`;
+            }
+        }
+    </script>
+</body>
+</html>

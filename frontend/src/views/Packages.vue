@@ -252,15 +252,21 @@ export default {
         if (response.data && response.data.success) {
           const order = response.data.data
           
+          console.log('订单创建成功:', order)
+          
           // 设置订单信息
           orderInfo.orderNo = order.order_no
           orderInfo.packageName = selectedPackage.value.name
           orderInfo.amount = order.amount
           orderInfo.duration = selectedPackage.value.duration_days
           
+          console.log('订单信息设置完成:', orderInfo)
+          
           // 关闭购买确认对话框，显示支付对话框
           purchaseDialogVisible.value = false
           paymentDialogVisible.value = true
+          
+          console.log('显示支付对话框')
         } else {
           throw new Error(response.data?.message || '创建订单失败')
         }

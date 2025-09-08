@@ -53,9 +53,9 @@
             ¥{{ row.price }}
           </template>
         </el-table-column>
-        <el-table-column prop="duration" label="时长">
+        <el-table-column prop="duration_days" label="时长">
           <template #default="{ row }">
-            {{ row.duration }} 天
+            {{ row.duration_days }} 天
           </template>
         </el-table-column>
         <el-table-column prop="device_limit" label="设备限制" />
@@ -66,10 +66,10 @@
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="status" label="状态">
+        <el-table-column prop="is_active" label="状态">
           <template #default="{ row }">
-            <el-tag :type="row.status === 'active' ? 'success' : 'danger'">
-              {{ row.status === 'active' ? '启用' : '禁用' }}
+            <el-tag :type="row.is_active ? 'success' : 'danger'">
+              {{ row.is_active ? '启用' : '禁用' }}
             </el-tag>
           </template>
         </el-table-column>
@@ -133,9 +133,9 @@
           />
         </el-form-item>
         
-        <el-form-item label="时长(天)" prop="duration">
+        <el-form-item label="时长(天)" prop="duration_days">
           <el-input-number
-            v-model="form.duration"
+            v-model="form.duration_days"
             :min="1"
             :precision="0"
             placeholder="请输入时长"
@@ -155,10 +155,10 @@
           <el-switch v-model="form.is_recommended" />
         </el-form-item>
         
-        <el-form-item label="状态" prop="status">
-          <el-select v-model="form.status" placeholder="选择状态">
-            <el-option label="启用" value="active" />
-            <el-option label="禁用" value="inactive" />
+        <el-form-item label="状态" prop="is_active">
+          <el-select v-model="form.is_active" placeholder="选择状态">
+            <el-option label="启用" :value="true" />
+            <el-option label="禁用" :value="false" />
           </el-select>
         </el-form-item>
         
@@ -191,7 +191,7 @@
 <script>
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { packageAPI } from '@/utils/api'
+import { adminAPI } from '@/utils/api'
 
 export default {
   name: 'AdminPackages',
@@ -217,10 +217,10 @@ export default {
     const form = reactive({
       name: '',
       price: 0,
-      duration: 30,
+      duration_days: 30,
       device_limit: 1,
       is_recommended: false,
-      status: 'active',
+      is_active: true,
       description: ''
     })
 
@@ -231,13 +231,13 @@ export default {
       price: [
         { required: true, message: '请输入价格', trigger: 'blur' }
       ],
-      duration: [
+      duration_days: [
         { required: true, message: '请输入时长', trigger: 'blur' }
       ],
       device_limit: [
         { required: true, message: '请输入设备限制', trigger: 'blur' }
       ],
-      status: [
+      is_active: [
         { required: true, message: '请选择状态', trigger: 'change' }
       ]
     }
@@ -251,7 +251,7 @@ export default {
           size: pagination.size,
           ...searchForm
         }
-        const response = await packageAPI.getPackages(params)
+        const response = await adminAPI.getPackages(params)
         console.log('套餐API响应:', response)
         console.log('套餐响应数据结构:', response.data)
         packages.value = response.data.data?.packages || response.data.items || []
@@ -311,10 +311,10 @@ export default {
       Object.assign(form, {
         name: '',
         price: 0,
-        duration: 30,
+        duration_days: 30,
         device_limit: 1,
         is_recommended: false,
-        status: 'active',
+        is_active: true,
         description: ''
       })
       if (formRef.value) {
@@ -331,10 +331,10 @@ export default {
         submitLoading.value = true
 
         if (isEdit.value) {
-          await packageAPI.updatePackage(form.id, form)
+          await adminAPI.updatePackage(form.id, form)
           ElMessage.success('套餐更新成功')
         } else {
-          await packageAPI.createPackage(form)
+          await adminAPI.createPackage(form)
           ElMessage.success('套餐添加成功')
         }
 
@@ -364,7 +364,7 @@ export default {
           }
         )
 
-        await packageAPI.deletePackage(id)
+        await adminAPI.deletePackage(id)
         ElMessage.success('套餐删除成功')
         fetchPackages()
       } catch (error) {

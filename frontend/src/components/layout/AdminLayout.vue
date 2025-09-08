@@ -119,6 +119,30 @@
             <span class="nav-text" v-show="!sidebarCollapsed">用户列表</span>
           </router-link>
           <router-link 
+            to="/admin/abnormal-users"
+            class="nav-item"
+            :class="{ active: $route.path === '/admin/abnormal-users' }"
+          >
+            <i class="el-icon-warning"></i>
+            <span class="nav-text" v-show="!sidebarCollapsed">异常用户监控</span>
+          </router-link>
+          <router-link 
+            to="/admin/config-update"
+            class="nav-item"
+            :class="{ active: $route.path === '/admin/config-update' }"
+          >
+            <i class="el-icon-refresh"></i>
+            <span class="nav-text" v-show="!sidebarCollapsed">配置更新</span>
+          </router-link>
+          <router-link 
+            to="/admin/config-update-test"
+            class="nav-item"
+            :class="{ active: $route.path === '/admin/config-update-test' }"
+          >
+            <i class="el-icon-setting"></i>
+            <span class="nav-text" v-show="!sidebarCollapsed">配置更新测试</span>
+          </router-link>
+          <router-link 
             to="/admin/subscriptions"
             class="nav-item"
             :class="{ active: $route.path === '/admin/subscriptions' }"
@@ -291,9 +315,17 @@ const handleAdminCommand = (command) => {
 const loadStats = async () => {
   try {
     const response = await adminAPI.getDashboard()
-    stats.value = response.data
+    console.log('顶部统计数据响应:', response)
+    
+    if (response.data && response.data.success && response.data.data) {
+      stats.value = response.data.data
+    } else {
+      console.warn('顶部统计数据格式异常:', response.data)
+      stats.value = { users: 0, subscriptions: 0, revenue: 0 }
+    }
   } catch (error) {
     console.error('加载统计数据失败:', error)
+    stats.value = { users: 0, subscriptions: 0, revenue: 0 }
   }
 }
 

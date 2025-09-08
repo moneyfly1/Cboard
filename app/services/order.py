@@ -45,6 +45,7 @@ class OrderService:
         # 设置支付方式名称
         payment_method_name = payment_method
 
+        from datetime import datetime
         order = Order(
             order_no=order_no,
             user_id=user_id,
@@ -52,7 +53,8 @@ class OrderService:
             amount=amount,
             status="pending",
             payment_method_id=payment_config_id,
-            payment_method_name=payment_method_name
+            payment_method_name=payment_method_name,
+            created_at=datetime.now()
         )
 
         self.db.add(order)
@@ -109,7 +111,7 @@ class OrderService:
                 month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
                 query = query.filter(Order.created_at >= month_start)
         
-        # 搜索条件
+        # 搜索条件 - 支持订单号、用户名、邮箱搜索
         if search:
             query = query.join(User).filter(
                 or_(
@@ -120,7 +122,7 @@ class OrderService:
             )
         
         total = query.count()
-        orders = query.offset(skip).limit(limit).order_by(Order.created_at.desc()).all()
+        orders = query.order_by(Order.created_at.desc()).offset(skip).limit(limit).all()
         return orders, total
 
     def update(self, order_id: int, order_update: OrderUpdate) -> Optional[Order]:

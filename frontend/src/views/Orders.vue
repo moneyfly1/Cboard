@@ -488,6 +488,9 @@ export default {
     
     const payOrder = async (order) => {
       try {
+        console.log('=== 订单支付流程 ===')
+        console.log('订单信息:', order)
+        
         // 创建支付订单
         const paymentData = {
           order_no: order.order_no,
@@ -500,12 +503,17 @@ export default {
           notify_url: window.location.origin + '/api/v1/payment/notify'
         }
         
+        console.log('支付数据:', paymentData)
+        
         const response = await api.post('/payment/create', paymentData)
+        console.log('支付API响应:', response.data)
         
         if (response.data && response.data.payment_url) {
+          console.log('支付URL:', response.data.payment_url)
           // 显示支付二维码
           showPaymentQR(order, response.data.payment_url)
         } else {
+          console.error('支付响应格式错误:', response.data)
           ElMessage.error('创建支付订单失败')
         }
         
@@ -516,9 +524,13 @@ export default {
     }
     
     const showPaymentQR = (order, paymentUrl) => {
+      console.log('显示支付二维码:', { order, paymentUrl })
+      
       selectedOrder.value = order
       paymentQRCode.value = paymentUrl
       paymentQRVisible.value = true
+      
+      console.log('二维码对话框状态:', paymentQRVisible.value)
       
       // 开始检查支付状态
       startPaymentStatusCheck()

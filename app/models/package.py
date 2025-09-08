@@ -20,6 +20,7 @@ class Package(Base):
     
     # 关系
     orders = relationship("Order", back_populates="package")
+    subscriptions = relationship("Subscription", back_populates="package")
     
     def __repr__(self):
         return f"<Package(id={self.id}, name='{self.name}', price={self.price})>"

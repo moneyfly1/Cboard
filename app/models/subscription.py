@@ -8,16 +8,19 @@ class Subscription(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    package_id = Column(Integer, ForeignKey("packages.id"), nullable=True)
     subscription_url = Column(String(100), unique=True, index=True, nullable=False)
     device_limit = Column(Integer, default=3)
     current_devices = Column(Integer, default=0)
     is_active = Column(Boolean, default=True)
+    status = Column(String(20), default='active')  # active, expired, cancelled
     expire_time = Column(DateTime(timezone=True), nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     
     # 关系
     user = relationship("User", back_populates="subscriptions")
+    package = relationship("Package", back_populates="subscriptions")
     devices = relationship("Device", back_populates="subscription")
     resets = relationship("SubscriptionReset", back_populates="subscription")
     

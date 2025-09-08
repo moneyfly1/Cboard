@@ -1,13 +1,14 @@
 from typing import Any, Optional, List
 from fastapi import APIRouter, Depends, HTTPException, status, Query, Body
 from sqlalchemy.orm import Session
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from app.core.database import get_db
 from app.schemas.common import ResponseBase
 from app.services.user import UserService
 from app.utils.security import get_current_admin_user
 from app.services.subscription import SubscriptionService
+from app.services.order import OrderService
 from app.services.settings import SettingsService
 from app.services.payment_config import PaymentConfigService
 from app.services.email_template import EmailTemplateService
@@ -28,8 +29,7 @@ def test_admin_api(current_admin = Depends(get_current_admin_user)) -> Any:
 def get_users(
     page: int = Query(1, ge=1),
     size: int = Query(20, ge=1, le=100),
-    email: str = Query("", description="邮箱搜索"),
-    username: str = Query("", description="用户名搜索"),
+    keyword: str = Query("", description="关键词搜索（邮箱或用户名）"),
     status: str = Query("", description="状态筛选"),
     date_range: str = Query("", description="注册时间范围"),
     db: Session = Depends(get_db),
@@ -38,17 +38,15 @@ def get_users(
     """获取用户列表"""
     try:
         print(f"=== 管理员用户列表API被调用 ===")
-        print(f"请求参数: page={page}, size={size}, email={email}, username={username}, status={status}")
+        print(f"请求参数: page={page}, size={size}, keyword={keyword}, status={status}")
         
         user_service = UserService(db)
         subscription_service = SubscriptionService(db)
         
         # 构建搜索参数
         search_params = {}
-        if email:
-            search_params['email'] = email
-        if username:
-            search_params['username'] = username
+        if keyword:
+            search_params['search'] = keyword
         if status:
             search_params['status'] = status
             
@@ -345,7 +343,7 @@ def batch_disable_users(
     except Exception as e:
         return ResponseBase(success=False, message=f"批量禁用用户失败: {str(e)}")
 
-@router.get("/users/{user_id}", response_model=ResponseBase)
+@router.get("/users/detail/{user_id}", response_model=ResponseBase)
 def get_user_detail(
     user_id: int,
     db: Session = Depends(get_db),
@@ -773,13 +771,31 @@ def login_as_user(
         return ResponseBase(success=False, message=f"登录失败: {str(e)}")
 
 @router.get("/dashboard", response_model=ResponseBase)
-def get_admin_dashboard(current_admin = Depends(get_current_admin_user)) -> Any:
+def get_admin_dashboard(
+    current_admin = Depends(get_current_admin_user),
+    db: Session = Depends(get_db)
+) -> Any:
     """获取管理端首页统计数据"""
-    return ResponseBase(data={
-        "users": {"total": 0, "active": 0},
-        "subscriptions": {"total": 0, "active": 0},
-        "orders": {"total": 0, "revenue": 0.0}
-    })
+    try:
+        user_service = UserService(db)
+        subscription_service = SubscriptionService(db)
+        order_service = OrderService(db)
+        
+        # 获取统计数据
+        total_users = user_service.count()
+        active_users = user_service.count_active_users(30)
+        total_subscriptions = subscription_service.count()
+        active_subscriptions = subscription_service.count_active()
+        total_orders = order_service.count()
+        total_revenue = order_service.get_total_revenue()
+        
+        return ResponseBase(data={
+            "users": total_users,
+            "subscriptions": total_subscriptions,
+            "revenue": total_revenue
+        })
+    except Exception as e:
+        return ResponseBase(success=False, message=f"获取统计数据失败: {str(e)}")
 
 @router.get("/stats", response_model=ResponseBase)
 def get_admin_stats(
@@ -790,6 +806,7 @@ def get_admin_stats(
     try:
         user_service = UserService(db)
         subscription_service = SubscriptionService(db)
+        order_service = OrderService(db)
         
         # 获取用户统计
         total_users = user_service.count()
@@ -801,11 +818,22 @@ def get_admin_stats(
         active_subscriptions = subscription_service.count_active()
         expiring_soon = subscription_service.count_expiring_soon()
         
+        # 获取订单统计
+        order_stats = order_service.get_order_stats()
+        
         return ResponseBase(data={
-            "users": {"total": total_users, "active": active_users, "new_today": new_today},
-            "subscriptions": {"total": total_subscriptions, "active": active_subscriptions, "expiring_soon": expiring_soon},
-            "orders": {"total": 0, "pending": 0, "paid": 0, "revenue": 0.0},
-            "nodes": {"total": 0, "online": 0, "offline": 0}
+            "totalUsers": total_users,
+            "activeUsers": active_users,
+            "newToday": new_today,
+            "totalSubscriptions": total_subscriptions,
+            "activeSubscriptions": active_subscriptions,
+            "expiringSoon": expiring_soon,
+            "totalOrders": order_stats["total_orders"],
+            "pendingOrders": order_stats["pending_orders"],
+            "paidOrders": order_stats["paid_orders"],
+            "totalRevenue": order_stats["total_revenue"],
+            "todayOrders": order_stats["today_orders"],
+            "todayRevenue": order_stats["today_revenue"]
         })
     except Exception as e:
         return ResponseBase(success=False, message=f"获取统计信息失败: {str(e)}")
@@ -820,31 +848,409 @@ def get_recent_users(
         user_service = UserService(db)
         recent_users = user_service.get_recent_users(7)  # 最近7天
         
-        return ResponseBase(data={
-            "users": [{"id": user.id, "username": user.username, "email": user.email, 
-                      "created_at": user.created_at.isoformat() if user.created_at else None} for user in recent_users],
-            "total": len(recent_users)
-        })
+        # 转换为前端期望的格式
+        users_data = []
+        for user in recent_users:
+            users_data.append({
+                "id": user.id,
+                "username": user.username,
+                "email": user.email,
+                "created_at": user.created_at.strftime('%Y-%m-%d %H:%M:%S') if user.created_at else None,
+                "status": "active" if user.is_active else "inactive"
+            })
+        
+        return ResponseBase(data=users_data)
     except Exception as e:
         return ResponseBase(success=False, message=f"获取最近用户失败: {str(e)}")
 
 @router.get("/orders/recent", response_model=ResponseBase)
-def get_recent_orders(current_admin = Depends(get_current_admin_user)) -> Any:
+def get_recent_orders(
+    days: int = 7,
+    limit: int = 10,
+    db: Session = Depends(get_db),
+    current_admin = Depends(get_current_admin_user)
+) -> Any:
     """获取最近的订单"""
-    return ResponseBase(data={
-        "orders": [],
-        "total": 0
-    })
+    try:
+        from app.services.order import OrderService
+        
+        order_service = OrderService(db)
+        
+        # 获取最近订单
+        recent_orders = order_service.get_recent_orders(days=days)
+        
+        # 限制返回数量
+        if limit > 0:
+            recent_orders = recent_orders[:limit]
+        
+        # 转换为字典格式
+        orders_data = []
+        for order in recent_orders:
+            order_dict = {
+                'id': order.id,
+                'order_no': order.order_no,
+                'user_id': order.user_id,
+                'package_id': order.package_id,
+                'amount': float(order.amount),
+                'status': order.status,
+                'payment_method': order.payment_method_name or '未知',
+                'payment_method_name': order.payment_method_name,
+                'payment_time': order.payment_time.isoformat() if order.payment_time else None,
+                'created_at': order.created_at.isoformat() if order.created_at else None,
+                'package_name': order.package.name if order.package else '未知套餐',
+                'user': {
+                    'id': order.user.id,
+                    'username': order.user.username,
+                    'email': order.user.email
+                } if order.user else None,
+                'package': {
+                    'id': order.package.id,
+                    'name': order.package.name,
+                    'price': float(order.package.price)
+                } if order.package else None
+            }
+            orders_data.append(order_dict)
+        
+        return ResponseBase(data=orders_data)
+        
+    except Exception as e:
+        return ResponseBase(success=False, message=f"获取最近订单失败: {str(e)}")
+
+@router.get("/users/abnormal", response_model=ResponseBase)
+def get_abnormal_users(
+    current_admin = Depends(get_current_admin_user),
+    db: Session = Depends(get_db)
+) -> Any:
+    """获取异常用户列表（订阅次数激增、重置频繁）"""
+    try:
+        from app.models.user_activity import SubscriptionReset
+        from sqlalchemy import func, and_, or_
+        from datetime import datetime, timedelta
+        
+        # 获取最近30天内的数据
+        thirty_days_ago = datetime.utcnow() - timedelta(days=30)
+        
+        # 查询频繁重置订阅的用户（30天内重置超过5次）
+        frequent_reset_users = db.query(
+            SubscriptionReset.user_id,
+            func.count(SubscriptionReset.id).label('reset_count'),
+            func.max(SubscriptionReset.created_at).label('last_reset')
+        ).filter(
+            SubscriptionReset.created_at >= thirty_days_ago
+        ).group_by(SubscriptionReset.user_id).having(
+            func.count(SubscriptionReset.id) >= 5
+        ).all()
+        
+        # 查询订阅次数激增的用户（30天内创建多个订阅）
+        from app.models.subscription import Subscription
+        frequent_subscription_users = db.query(
+            Subscription.user_id,
+            func.count(Subscription.id).label('subscription_count'),
+            func.max(Subscription.created_at).label('last_subscription')
+        ).filter(
+            Subscription.created_at >= thirty_days_ago
+        ).group_by(Subscription.user_id).having(
+            func.count(Subscription.id) >= 3
+        ).all()
+        
+        # 获取用户详细信息
+        user_service = UserService(db)
+        abnormal_users = []
+        
+        # 处理频繁重置用户
+        for user_id, reset_count, last_reset in frequent_reset_users:
+            user = user_service.get(user_id)
+            if user:
+                abnormal_users.append({
+                    "user_id": user_id,
+                    "username": user.username,
+                    "email": user.email,
+                    "abnormal_type": "frequent_reset",
+                    "abnormal_count": reset_count,
+                    "last_activity": last_reset.strftime('%Y-%m-%d %H:%M:%S'),
+                    "description": f"30天内重置订阅{reset_count}次"
+                })
+        
+        # 处理频繁订阅用户
+        for user_id, subscription_count, last_subscription in frequent_subscription_users:
+            user = user_service.get(user_id)
+            if user:
+                # 检查是否已经在异常列表中
+                existing = next((u for u in abnormal_users if u["user_id"] == user_id), None)
+                if existing:
+                    existing["abnormal_type"] = "multiple_abnormal"
+                    existing["subscription_count"] = subscription_count
+                    existing["description"] += f"，创建{subscription_count}个订阅"
+                else:
+                    abnormal_users.append({
+                        "user_id": user_id,
+                        "username": user.username,
+                        "email": user.email,
+                        "abnormal_type": "frequent_subscription",
+                        "abnormal_count": subscription_count,
+                        "last_activity": last_subscription.strftime('%Y-%m-%d %H:%M:%S'),
+                        "description": f"30天内创建{subscription_count}个订阅"
+                    })
+        
+        # 按最后活动时间排序
+        abnormal_users.sort(key=lambda x: x["last_activity"], reverse=True)
+        
+        return ResponseBase(data=abnormal_users)
+        
+    except Exception as e:
+        return ResponseBase(success=False, message=f"获取异常用户失败: {str(e)}")
+
+@router.get("/users/{user_id}/details", response_model=ResponseBase)
+def get_user_details(
+    user_id: int,
+    current_admin = Depends(get_current_admin_user),
+    db: Session = Depends(get_db)
+) -> Any:
+    """获取用户详细信息"""
+    try:
+        user_service = UserService(db)
+        subscription_service = SubscriptionService(db)
+        order_service = OrderService(db)
+        
+        # 获取用户基本信息
+        user = user_service.get(user_id)
+        if not user:
+            return ResponseBase(success=False, message="用户不存在")
+        
+        # 获取用户订阅信息
+        subscriptions = subscription_service.get_all_by_user_id(user_id)
+        
+        # 获取用户订单信息
+        orders, total_orders = order_service.get_user_orders(user_id, skip=0, limit=100)
+        
+        # 获取用户活动记录
+        activities = user_service.get_user_activities(user_id, limit=50)
+        
+        # 获取登录历史
+        login_history = user_service.get_login_history(user_id, limit=20)
+        
+        # 获取订阅重置记录
+        subscription_resets = user_service.get_subscription_resets(user_id, limit=50)
+        
+        # 统计信息
+        total_resets = len(subscription_resets)
+        recent_resets = len([r for r in subscription_resets if r.created_at >= datetime.utcnow() - timedelta(days=30)])
+        
+        user_details = {
+            "user_info": {
+                "id": user.id,
+                "username": user.username,
+                "email": user.email,
+                "is_active": user.is_active,
+                "is_verified": user.is_verified,
+                "is_admin": user.is_admin,
+                "created_at": user.created_at.strftime('%Y-%m-%d %H:%M:%S') if user.created_at else None,
+                "last_login": user.last_login.strftime('%Y-%m-%d %H:%M:%S') if user.last_login else None
+            },
+            "subscriptions": [
+                {
+                    "id": sub.id,
+                    "subscription_url": sub.subscription_url,
+                    "device_limit": sub.device_limit,
+                    "current_devices": sub.current_devices,
+                    "is_active": sub.is_active,
+                    "expire_time": sub.expire_time.strftime('%Y-%m-%d %H:%M:%S') if sub.expire_time else None,
+                    "created_at": sub.created_at.strftime('%Y-%m-%d %H:%M:%S') if sub.created_at else None
+                } for sub in subscriptions
+            ],
+            "orders": [
+                {
+                    "id": order.id,
+                    "order_no": order.order_no,
+                    "amount": float(order.amount),
+                    "status": order.status,
+                    "payment_method": order.payment_method_name,
+                    "created_at": order.created_at.strftime('%Y-%m-%d %H:%M:%S') if order.created_at else None,
+                    "paid_at": order.payment_time.strftime('%Y-%m-%d %H:%M:%S') if order.payment_time else None
+                } for order in orders
+            ],
+            "statistics": {
+                "total_subscriptions": len(subscriptions),
+                "total_orders": total_orders,
+                "total_resets": total_resets,
+                "recent_resets_30d": recent_resets,
+                "total_spent": sum(float(order.amount) for order in orders if order.status == "paid")
+            },
+            "recent_activities": [
+                {
+                    "id": activity.id,
+                    "activity_type": activity.activity_type,
+                    "description": activity.description,
+                    "ip_address": activity.ip_address,
+                    "created_at": activity.created_at.strftime('%Y-%m-%d %H:%M:%S') if activity.created_at else None
+                } for activity in activities[:10]
+            ],
+            "login_history": [
+                {
+                    "id": login.id,
+                    "ip_address": login.ip_address,
+                    "location": login.location,
+                    "login_status": login.login_status,
+                    "login_time": login.login_time.strftime('%Y-%m-%d %H:%M:%S') if login.login_time else None
+                } for login in login_history[:10]
+            ],
+            "subscription_resets": [
+                {
+                    "id": reset.id,
+                    "reset_type": reset.reset_type,
+                    "reason": reset.reason,
+                    "device_count_before": reset.device_count_before,
+                    "device_count_after": reset.device_count_after,
+                    "reset_by": reset.reset_by,
+                    "created_at": reset.created_at.strftime('%Y-%m-%d %H:%M:%S') if reset.created_at else None
+                } for reset in subscription_resets[:10]
+            ]
+        }
+        
+        return ResponseBase(data=user_details)
+        
+    except Exception as e:
+        return ResponseBase(success=False, message=f"获取用户详情失败: {str(e)}")
 
 @router.get("/orders", response_model=ResponseBase)
-def get_orders(current_admin = Depends(get_current_admin_user)) -> Any:
+def get_orders(
+    skip: int = 0,
+    limit: int = 100,
+    status: Optional[str] = None,
+    search: Optional[str] = None,
+    user_id: Optional[int] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_admin = Depends(get_current_admin_user)
+) -> Any:
     """获取订单列表"""
-    return ResponseBase(data={"orders": [], "total": 0})
+    try:
+        from app.services.order import OrderService
+        from datetime import datetime
+        
+        order_service = OrderService(db)
+        
+        # 构建查询参数
+        query_params = {
+            'skip': skip,
+            'limit': limit
+        }
+        
+        # 添加搜索和筛选参数
+        if status:
+            query_params['status'] = status
+        if search:
+            query_params['search'] = search
+        
+        # 获取所有订单（管理员可以看到所有用户的订单）
+        orders, total = order_service.get_orders_with_pagination(**query_params)
+        
+        # 转换为字典格式
+        orders_data = []
+        for order in orders:
+            order_dict = {
+                'id': order.id,
+                'order_no': order.order_no,
+                'user_id': order.user_id,
+                'package_id': order.package_id,
+                'amount': float(order.amount),
+                'status': order.status,
+                'payment_method': order.payment_method_name or '未知',
+                'payment_method_name': order.payment_method_name,
+                'payment_time': order.payment_time.isoformat() if order.payment_time else None,
+                'created_at': order.created_at.isoformat() if order.created_at else None,
+                'updated_at': order.updated_at.isoformat() if order.updated_at else None,
+                'package_name': order.package.name if order.package else '未知套餐',
+                'user': {
+                    'id': order.user.id,
+                    'username': order.user.username,
+                    'email': order.user.email
+                } if order.user else None,
+                'package': {
+                    'id': order.package.id,
+                    'name': order.package.name,
+                    'price': float(order.package.price)
+                } if order.package else None
+            }
+            orders_data.append(order_dict)
+        
+        return ResponseBase(data={
+            "orders": orders_data,
+            "total": total,
+            "skip": skip,
+            "limit": limit
+        })
+        
+    except Exception as e:
+        return ResponseBase(success=False, message=f"获取订单列表失败: {str(e)}")
 
 @router.get("/orders/statistics", response_model=ResponseBase)
-def get_orders_statistics(current_admin = Depends(get_current_admin_user)) -> Any:
+def get_orders_statistics(
+    db: Session = Depends(get_db),
+    current_admin = Depends(get_current_admin_user)
+) -> Any:
     """获取订单统计信息"""
-    return ResponseBase(data={"total_orders": 0, "total_revenue": 0.0})
+    try:
+        from app.services.order import OrderService
+        
+        order_service = OrderService(db)
+        
+        # 获取订单统计
+        total_orders = order_service.count()
+        pending_orders = order_service.count_by_status('pending')
+        paid_orders = order_service.count_by_status('paid')
+        cancelled_orders = order_service.count_by_status('cancelled')
+        total_revenue = order_service.get_total_revenue()
+        
+        return ResponseBase(data={
+            "total_orders": total_orders,
+            "pending_orders": pending_orders,
+            "paid_orders": paid_orders,
+            "cancelled_orders": cancelled_orders,
+            "total_revenue": total_revenue
+        })
+        
+    except Exception as e:
+        return ResponseBase(success=False, message=f"获取订单统计失败: {str(e)}")
+
+@router.post("/subscriptions/check-expired", response_model=ResponseBase)
+def check_expired_subscriptions(
+    db: Session = Depends(get_db),
+    current_admin = Depends(get_current_admin_user)
+) -> Any:
+    """手动检查并处理过期的订阅"""
+    try:
+        from app.services.subscription_manager import SubscriptionManager
+        
+        subscription_manager = SubscriptionManager(db)
+        expired_count = subscription_manager.check_expired_subscriptions()
+        
+        return ResponseBase(
+            message=f"检查完成，处理了 {expired_count} 个过期订阅",
+            data={"expired_count": expired_count}
+        )
+        
+    except Exception as e:
+        return ResponseBase(success=False, message=f"检查过期订阅失败: {str(e)}")
+
+@router.get("/users/{user_id}/subscription", response_model=ResponseBase)
+def get_user_subscription(
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_admin = Depends(get_current_admin_user)
+) -> Any:
+    """获取用户订阅信息"""
+    try:
+        from app.services.subscription_manager import SubscriptionManager
+        
+        subscription_manager = SubscriptionManager(db)
+        subscription_info = subscription_manager.get_user_subscription_info(user_id)
+        
+        return ResponseBase(data=subscription_info)
+        
+    except Exception as e:
+        return ResponseBase(success=False, message=f"获取用户订阅信息失败: {str(e)}")
 
 @router.put("/orders/{order_id}", response_model=ResponseBase)
 def update_order(
@@ -871,6 +1277,20 @@ def update_order(
         if "status" in order_data:
             update_fields.append("status = :status")
             update_values["status"] = order_data["status"]
+            
+            # 如果状态更新为已支付，处理订阅
+            if order_data["status"] == "paid":
+                from app.services.subscription_manager import SubscriptionManager
+                from app.services.order import OrderService
+                
+                order_service = OrderService(db)
+                order = order_service.get(order_id)
+                
+                if order:
+                    subscription_manager = SubscriptionManager(db)
+                    success = subscription_manager.process_paid_order(order)
+                    if not success:
+                        return ResponseBase(success=False, message="处理订单支付失败")
         
         if "payment_status" in order_data:
             update_fields.append("payment_status = :payment_status")
@@ -2841,12 +3261,37 @@ def get_packages(
 ) -> Any:
     """获取套餐列表"""
     try:
-        # 这里需要实现PackageService
-        packages = []
-        total = 0
+        from app.services.package import PackageService
+        
+        package_service = PackageService(db)
+        
+        # 计算偏移量
+        skip = (page - 1) * size
+        
+        # 获取所有套餐（管理员可以看到所有套餐，包括禁用的）
+        packages = package_service.get_all_packages(skip=skip, limit=size)
+        total = package_service.count()
+        
+        # 转换为字典格式
+        package_list = []
+        for package in packages:
+            package_dict = {
+                'id': package.id,
+                'name': package.name,
+                'description': package.description,
+                'price': float(package.price),
+                'duration_days': package.duration_days,
+                'device_limit': package.device_limit,
+                'bandwidth_limit': package.bandwidth_limit,
+                'sort_order': package.sort_order,
+                'is_active': package.is_active,
+                'created_at': package.created_at.isoformat() if package.created_at else None,
+                'updated_at': package.updated_at.isoformat() if package.updated_at else None
+            }
+            package_list.append(package_dict)
         
         return ResponseBase(data={
-            "packages": packages,
+            "packages": package_list,
             "total": total,
             "page": page,
             "size": size,

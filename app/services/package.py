@@ -22,6 +22,14 @@ class PackageService:
     def get_active_packages(self) -> List[Package]:
         """获取所有活跃套餐"""
         return self.db.query(Package).filter(Package.is_active == True).all()
+    
+    def get_all_packages(self, skip: int = 0, limit: int = 100) -> List[Package]:
+        """获取所有套餐（包括禁用的）"""
+        return self.db.query(Package).offset(skip).limit(limit).all()
+    
+    def count(self) -> int:
+        """获取套餐总数"""
+        return self.db.query(Package).count()
 
     def create(self, package: PackageCreate) -> Package:
         """创建新套餐"""

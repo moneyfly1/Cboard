@@ -20,6 +20,8 @@ class PackageUpdate(BaseModel):
     price: Optional[Decimal] = None
     duration_days: Optional[int] = None
     device_limit: Optional[int] = None
+    bandwidth_limit: Optional[int] = None
+    sort_order: Optional[int] = None
     is_active: Optional[bool] = None
 
 class Package(PackageBase):

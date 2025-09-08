@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>支付流程测试</title>
+    <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .step { margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 5px; }
+        .success { background-color: #d4edda; border-color: #c3e6cb; }
+        .error { background-color: #f8d7da; border-color: #f5c6cb; }
+        .info { background-color: #d1ecf1; border-color: #bee5eb; }
+        button { padding: 10px 20px; margin: 5px; cursor: pointer; }
+        pre { background: #f8f9fa; padding: 10px; border-radius: 3px; overflow-x: auto; }
+    </style>
+</head>
+<body>
+    <h1>支付流程测试</h1>
+    
+    <div class="step info">
+        <h3>步骤1: 登录</h3>
+        <button onclick="login()">登录用户 3219904322</button>
+        <div id="login-result"></div>
+    </div>
+    
+    <div class="step info">
+        <h3>步骤2: 获取支付方式</h3>
+        <button onclick="getPaymentMethods()">获取可用支付方式</button>
+        <div id="payment-methods-result"></div>
+    </div>
+    
+    <div class="step info">
+        <h3>步骤3: 创建订单</h3>
+        <button onclick="createOrder()">创建订单</button>
+        <div id="order-result"></div>
+    </div>
+    
+    <div class="step info">
+        <h3>步骤4: 创建支付</h3>
+        <button onclick="createPayment()">创建支付</button>
+        <div id="payment-result"></div>
+    </div>
+    
+    <div class="step info">
+        <h3>步骤5: 显示二维码</h3>
+        <div id="qr-code-result"></div>
+    </div>
+
+    <script>
+        const api = axios.create({
+            baseURL: '/api/v1',
+            timeout: 10000,
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+
+        let currentOrder = null;
+
+        // 添加请求拦截器
+        api.interceptors.request.use(config => {
+            const token = localStorage.getItem('token');
+            if (token) {
+                config.headers.Authorization = `Bearer ${token}`;
+            }
+            return config;
+        });
+
+        async function login() {
+            try {
+                const response = await api.post('/auth/login-json', {
+                    username: '3219904322',
+                    password: '123456'
+                });
+                
+                const { access_token, user } = response.data;
+                localStorage.setItem('token', access_token);
+                localStorage.setItem('user', JSON.stringify(user));
+                
+                document.getElementById('login-result').innerHTML = 
+                    '<div class="success">登录成功！用户: ' + user.username + '</div>';
+            } catch (error) {
+                document.getElementById('login-result').innerHTML = 
+                    '<div class="error">登录失败: ' + error.message + '</div>';
+            }
+        }
+
+        async function getPaymentMethods() {
+            try {
+                const response = await api.get('/payment/methods');
+                document.getElementById('payment-methods-result').innerHTML = 
+                    '<div class="success">获取支付方式成功</div><pre>' + 
+                    JSON.stringify(response.data, null, 2) + '</pre>';
+            } catch (error) {
+                document.getElementById('payment-methods-result').innerHTML = 
+                    '<div class="error">获取支付方式失败: ' + error.message + '</div>';
+            }
+        }
+
+        async function createOrder() {
+            try {
+                const orderData = {
+                    package_id: 1,
+                    amount: 19.9,
+                    payment_method: 'alipay'
+                };
+                
+                const response = await api.post('/orders/create', orderData);
+                currentOrder = response.data.data;
+                
+                document.getElementById('order-result').innerHTML = 
+                    '<div class="success">订单创建成功</div><pre>' + 
+                    JSON.stringify(response.data, null, 2) + '</pre>';
+            } catch (error) {
+                document.getElementById('order-result').innerHTML = 
+                    '<div class="error">订单创建失败: ' + error.message + '</div>';
+            }
+        }
+
+        async function createPayment() {
+            if (!currentOrder) {
+                document.getElementById('payment-result').innerHTML = 
+                    '<div class="error">请先创建订单</div>';
+                return;
+            }
+            
+            try {
+                const paymentData = {
+                    order_no: currentOrder.order_no,
+                    amount: currentOrder.amount,
+                    currency: 'CNY',
+                    payment_method: 'alipay',
+                    subject: '订阅套餐 - 基础套餐',
+                    body: '购买30天订阅套餐'
+                };
+                
+                const response = await api.post('/payment/create', paymentData);
+                
+                document.getElementById('payment-result').innerHTML = 
+                    '<div class="success">支付创建成功</div><pre>' + 
+                    JSON.stringify(response.data, null, 2) + '</pre>';
+                
+                // 显示二维码
+                if (response.data.payment_url) {
+                    document.getElementById('qr-code-result').innerHTML = 
+                        '<div class="success">支付二维码</div>' +
+                        '<img src="' + response.data.payment_url + '" alt="支付二维码" style="max-width: 200px;">' +
+                        '<p>支付URL: ' + response.data.payment_url + '</p>';
+                }
+            } catch (error) {
+                document.getElementById('payment-result').innerHTML = 
+                    '<div class="error">支付创建失败: ' + error.message + '</div>';
+            }
+        }
+    </script>
+</body>
+</html>

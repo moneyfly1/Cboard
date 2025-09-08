@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from datetime import datetime
@@ -16,7 +16,7 @@ from app.schemas.payment import (
     PaymentCallback,
     PaymentMethod
 )
-from app.services.payment import PaymentService
+from app.services.payment_service import PaymentService
 from app.core.auth import get_current_user
 
 router = APIRouter()
@@ -47,33 +47,18 @@ async def create_payment(
                 detail="订单状态不正确"
             )
         
-        # 生成支付URL（简化版本）
-        if payment_data.payment_method == "alipay":
-            payment_url = f"https://openapi.alipay.com/gateway.do?order_no={order.order_no}&amount={payment_data.amount}&subject={payment_data.subject}"
-        elif payment_data.payment_method == "wechat":
-            payment_url = f"weixin://wxpay/bizpayurl?order_no={order.order_no}&amount={payment_data.amount}"
-        else:
-            payment_url = f"https://example.com/payment?order_no={order.order_no}&amount={payment_data.amount}"
+        # 使用新的支付服务创建支付
+        payment_service = PaymentService(db)
+        payment_response = payment_service.create_payment(order, payment_data.payment_method)
         
-        # 创建支付交易记录
-        payment = PaymentTransaction(
-            user_id=current_user.id,
-            order_id=order.id,
-            payment_method_id=1,  # 临时使用ID 1
-            transaction_id=f"TXN{datetime.now().strftime('%Y%m%d%H%M%S')}{order.id}",
-            amount=int(payment_data.amount * 100),  # 转换为分
-            currency=payment_data.currency,
-            status='pending',
-            payment_data={"payment_url": payment_url, "method": payment_data.payment_method}
-        )
-        
-        db.add(payment)
-        db.commit()
-        db.refresh(payment)
+        # 获取最新的支付记录
+        payment = db.query(PaymentTransaction).filter(
+            PaymentTransaction.order_id == order.id
+        ).order_by(PaymentTransaction.created_at.desc()).first()
         
         return PaymentResponse(
             id=payment.id,
-            payment_url=payment_url,
+            payment_url=payment_response.data,
             order_no=payment_data.order_no,
             amount=payment_data.amount,
             payment_method=payment_data.payment_method,
@@ -88,13 +73,11 @@ async def create_payment(
             detail=f"创建支付订单失败: {str(e)}"
         )
 
-@router.get("/methods", response_model=List[PaymentMethod])
-async def get_payment_methods():
+@router.get("/methods")
+async def get_payment_methods(db: Session = Depends(get_db)):
     """获取支持的支付方式"""
-    return [
-        PaymentMethod.alipay,
-        PaymentMethod.wechat
-    ]
+    payment_service = PaymentService(db)
+    return payment_service.get_available_payment_methods()
 
 @router.get("/transactions", response_model=List[PaymentResponse])
 async def get_payment_transactions(
@@ -156,26 +139,40 @@ async def get_payment_transaction(
         created_at=payment.created_at
     )
 
-@router.post("/verify")
-async def verify_payment(
-    payment_data: PaymentCallback,
+@router.post("/notify/{payment_method}")
+async def payment_notify(
+    payment_method: str,
+    request: Request,
     db: Session = Depends(get_db)
 ):
-    """验证支付结果"""
+    """支付回调通知"""
     try:
-        # 验证支付签名
-        if not payment_service.verify_payment(db, payment_data.dict()):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="支付验证失败"
-            )
+        # 获取回调参数
+        if payment_method in ['alipay']:
+            # 支付宝回调参数在query string中
+            params = dict(request.query_params)
+        else:
+            # 其他支付方式的回调参数在body中
+            body = await request.body()
+            if request.headers.get('content-type', '').startswith('application/json'):
+                params = await request.json()
+            else:
+                # 解析表单数据
+                params = dict(await request.form())
         
-        return {"status": "success", "message": "支付验证成功"}
+        # 验证支付回调
+        payment_service = PaymentService(db)
+        notify = payment_service.verify_payment_notify(payment_method, params)
+        
+        if notify:
+            return {"status": "success", "message": "支付验证成功"}
+        else:
+            return {"status": "failed", "message": "支付验证失败"}
         
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"支付验证失败: {str(e)}"
+            detail=f"支付回调处理失败: {str(e)}"
         )
 
 @router.post("/refund/{payment_id}")

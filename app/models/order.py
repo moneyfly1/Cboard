@@ -17,8 +17,8 @@ class Order(Base):
     payment_time = Column(DateTime(timezone=True), nullable=True)
     payment_transaction_id = Column(String(100), nullable=True, comment="支付交易号")
     expire_time = Column(DateTime(timezone=True), nullable=True)
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    created_at = Column(DateTime(timezone=True), server_default=func.now('localtime'))
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now('localtime'))
     
     # 关系
     user = relationship("User", back_populates="orders")

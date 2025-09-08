@@ -24,15 +24,18 @@
       <div class="payment-methods">
         <h3>支付方式</h3>
         <el-radio-group v-model="selectedPaymentMethod" @change="onPaymentMethodChange">
-          <el-radio-button value="alipay">
-            <i class="payment-icon alipay-icon"></i>
-            支付宝
-          </el-radio-button>
-          <el-radio-button value="wechat">
-            <i class="payment-icon wechat-icon"></i>
-            微信支付
+          <el-radio-button 
+            v-for="method in availablePaymentMethods" 
+            :key="method.key" 
+            :value="method.key"
+          >
+            <i :class="`payment-icon ${method.icon}-icon`"></i>
+            {{ method.name }}
           </el-radio-button>
         </el-radio-group>
+        <div class="payment-description" v-if="selectedPaymentMethod">
+          <p>{{ getPaymentDescription() }}</p>
+        </div>
       </div>
 
       <!-- 支付按钮 -->
@@ -194,6 +197,7 @@ export default {
     const wechatQRVisible = ref(false)
     const wechatQRCode = ref('')
     const resultVisible = ref(false)
+    const availablePaymentMethods = ref([])
     const paymentResult = reactive({
       success: false,
       message: '',
@@ -231,6 +235,10 @@ export default {
       try {
         isProcessing.value = true
         
+        console.log('=== 开始支付流程 ===')
+        console.log('订单信息:', props.orderInfo)
+        console.log('选择的支付方式:', selectedPaymentMethod.value)
+        
         // 创建支付订单
         const paymentData = {
           order_no: props.orderInfo.orderNo,
@@ -243,21 +251,21 @@ export default {
           notify_url: window.location.origin + '/api/v1/payment/notify'
         }
         
-        const response = await api.post('/payment/create', paymentData)
+        console.log('支付数据:', paymentData)
         
-        if (response.data && response.data.success) {
-          const paymentResult = response.data.data
-          
-          if (paymentResult.payment_url) {
-            // 统一显示二维码，不区分支付方式
-            wechatQRCode.value = paymentResult.payment_url
-            wechatQRVisible.value = true
-            startStatusCheck()
-          } else {
-            throw new Error('获取支付链接失败')
-          }
+        const response = await api.post('/payment/create', paymentData)
+        console.log('支付API响应:', response.data)
+        
+        if (response.data && response.data.payment_url) {
+          console.log('支付URL:', response.data.payment_url)
+          // 直接使用返回的payment_url
+          wechatQRCode.value = response.data.payment_url
+          wechatQRVisible.value = true
+          console.log('显示二维码对话框')
+          startStatusCheck()
         } else {
-          throw new Error(response.data?.message || '创建支付订单失败')
+          console.error('支付响应格式错误:', response.data)
+          throw new Error('获取支付链接失败')
         }
         
       } catch (error) {
@@ -346,10 +354,32 @@ export default {
       }
     }
     
+    // 加载可用的支付方式
+    const loadPaymentMethods = async () => {
+      try {
+        const response = await api.get('/payment/methods')
+        availablePaymentMethods.value = response.data || []
+        
+        // 设置默认支付方式
+        if (availablePaymentMethods.value.length > 0) {
+          selectedPaymentMethod.value = availablePaymentMethods.value[0].key
+        }
+      } catch (error) {
+        console.error('加载支付方式失败:', error)
+        ElMessage.error('加载支付方式失败')
+      }
+    }
+    
+    // 获取支付方式描述
+    const getPaymentDescription = () => {
+      const method = availablePaymentMethods.value.find(m => m.key === selectedPaymentMethod.value)
+      return method ? method.description : ''
+    }
+    
     // 生命周期
     onMounted(() => {
-      // 默认选择支付宝
-      selectedPaymentMethod.value = 'alipay'
+      // 加载支付方式
+      loadPaymentMethods()
     })
     
     onUnmounted(() => {
@@ -366,6 +396,7 @@ export default {
       wechatQRCode,
       resultVisible,
       paymentResult,
+      availablePaymentMethods,
       canProceed,
       onPaymentMethodChange,
       getPaymentButtonText,
@@ -373,6 +404,7 @@ export default {
       checkPaymentStatus,
       retryPayment,
       handleResultClose,
+      getPaymentDescription,
       formatDateTime
     }
   }
@@ -420,6 +452,15 @@ export default {
   font-size: 16px;
 }
 
+.payment-description {
+  margin-top: 10px;
+  padding: 10px;
+  background-color: #f5f7fa;
+  border-radius: 4px;
+  color: #606266;
+  font-size: 14px;
+}
+
 .payment-icon {
   display: inline-block;
   width: 20px;
@@ -435,6 +476,21 @@ export default {
 
 .wechat-icon {
   background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="%2307c160" d="M8.691 2.188C3.891 2.188 0 5.476 0 9.53c0 2.212 1.17 4.203 3.002 5.55a.59.59 0 0 1 .213.665l-.39 1.48c-.019.07-.048.141-.048.212 0 .163.13.295.29.295a.326.326 0 0 0 .167-.054l1.903-1.114a.864.864 0 0 1 .717-.098 10.16 10.16 0 0 0 2.837.403c.276 0 .543-.027.811-.05-.857-2.578.157-4.972 1.932-6.446 1.703-1.415 4.882-1.932 6.109-.207 1.227 1.725.792 4.82-.207 6.109-1.932 1.703-4.972 1.703-6.109.207-1.227-1.725-.792-4.82.207-6.109 1.932-1.703 4.972-1.703 6.109-.207z"/></svg>') no-repeat center;
+  background-size: contain;
+}
+
+.paypal-icon {
+  background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="%230073B6" d="M7.076 21.337H2.47a.641.641 0 0 1-.633-.74L4.944.901C5.026.382 5.474 0 5.998 0h7.46c2.57 0 4.578.543 5.69 1.81 1.01 1.15 1.304 2.42 1.012 4.287-.023.143-.047.288-.077.437-.983 5.05-4.349 6.797-8.647 6.797h-2.19c-.524 0-.968.382-1.05.9l-1.12 7.106zm14.146-14.42a3.35 3.35 0 0 0-.105-.726c-1.263-5.05-4.349-6.797-8.647-6.797H5.998c-.524 0-.968.382-1.05.9L2.47 20.597h4.606l1.12-7.106c.082-.518.526-.9 1.05-.9h2.19c4.298 0 7.384-1.747 8.647-6.797.023-.143.047-.288.077-.437z"/></svg>') no-repeat center;
+  background-size: contain;
+}
+
+.stripe-icon {
+  background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="%23635BFF" d="M13.976 9.15c-2.172-.806-3.356-1.426-3.356-2.409 0-.831.683-1.305 1.901-1.305 2.227 0 4.515.858 6.09 1.631l.89-5.494C18.252.274 15.697 0 12.165 0 9.667 0 7.589.654 6.104 1.872 4.56 3.147 3.757 4.992 3.757 7.218c0 4.039 2.467 5.76 6.476 7.219 2.585.92 3.445 1.574 3.445 2.583 0 .98-.84 1.407-2.354 1.407-1.905 0-4.357-.932-5.9-1.756L4.717 21.35c1.57.921 3.71 1.65 6.305 1.65 2.66 0 4.812-.654 6.218-1.85 1.531-1.305 2.227-3.147 2.227-5.4 0-3.77-2.227-5.4-6.491-7.1z"/></svg>') no-repeat center;
+  background-size: contain;
+}
+
+.bank-icon {
+  background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="%23606266" d="M12 2L2 7v10c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V7l-10-5zM4 17V9h16v8H4zm2-6h2v4H6v-4zm4 0h2v4h-2v-4zm4 0h2v4h-2v-4z"/></svg>') no-repeat center;
   background-size: contain;
 }
 
