@@ -1,5 +1,5 @@
 # ================================
-# XBoard Modern .gitignore
+# XBoard Modern .gitignore (Modified for full backup)
 # ================================
 
 # 排除old文件夹
@@ -28,31 +28,30 @@ wheels/
 *.egg
 MANIFEST
 
-# Virtual Environment
-venv/
-env/
-ENV/
-env.bak/
-venv.bak/
+# Virtual Environment - 注释掉以允许推送
+# venv/
+# env/
+# ENV/
+# env.bak/
+# venv.bak/
 
-# Environment Variables
-.env
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
+# Environment Variables - 注释掉以允许推送
+# .env
+# .env.local
+# .env.development.local
+# .env.test.local
+# .env.production.local
 
-# Database
-*.db
-*.sqlite
-*.sqlite3
+# Database - 注释掉以允许推送
+# *.db
+# *.sqlite
+# *.sqlite3
 
 # Logs
 logs/
 *.log
 npm-debug.log*
 yarn-debug.log*
-yarn-error.log*
 
 # Node.js
 node_modules/
@@ -87,9 +86,9 @@ Thumbs.db
 *.bak
 *.backup
 
-# Uploads
-uploads/
-static/uploads/
+# Uploads - 注释掉以允许推送
+# uploads/
+# static/uploads/
 
 # Cache
 .cache/
@@ -127,4 +126,4 @@ dump.rdb
 # System files
 *.pid
 *.seed
-*.pid.lock 
+*.pid.lock
