@@ -135,14 +135,6 @@
             <span class="nav-text" v-show="!sidebarCollapsed">配置更新</span>
           </router-link>
           <router-link 
-            to="/admin/config-update-test"
-            class="nav-item"
-            :class="{ active: $route.path === '/admin/config-update-test' }"
-          >
-            <i class="el-icon-setting"></i>
-            <span class="nav-text" v-show="!sidebarCollapsed">配置更新测试</span>
-          </router-link>
-          <router-link 
             to="/admin/subscriptions"
             class="nav-item"
             :class="{ active: $route.path === '/admin/subscriptions' }"
@@ -314,17 +306,36 @@ const handleAdminCommand = (command) => {
 
 const loadStats = async () => {
   try {
+    console.log('开始加载统计数据...')
+    console.log('当前认证状态:', authStore.isAuthenticated)
+    console.log('当前用户:', authStore.user)
+    
+    // 检查是否已认证
+    if (!authStore.isAuthenticated) {
+      console.log('用户未认证，跳过统计数据加载')
+      stats.value = { users: 0, subscriptions: 0, revenue: 0 }
+      return
+    }
+    
     const response = await adminAPI.getDashboard()
     console.log('顶部统计数据响应:', response)
+    console.log('响应数据结构:', {
+      hasData: !!response.data,
+      hasSuccess: response.data ? response.data.success : false,
+      hasDataData: response.data ? !!response.data.data : false,
+      fullResponse: response.data
+    })
     
     if (response.data && response.data.success && response.data.data) {
       stats.value = response.data.data
+      console.log('统计数据加载成功:', stats.value)
     } else {
       console.warn('顶部统计数据格式异常:', response.data)
       stats.value = { users: 0, subscriptions: 0, revenue: 0 }
     }
   } catch (error) {
     console.error('加载统计数据失败:', error)
+    console.error('错误详情:', error.response ? error.response.data : error.message)
     stats.value = { users: 0, subscriptions: 0, revenue: 0 }
   }
 }

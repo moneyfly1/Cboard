@@ -25,6 +25,8 @@ class EmailQueueProcessor:
         self.max_retries = 3
         self.retry_delays = [60, 300, 1800]  # 重试延迟：1分钟、5分钟、30分钟
         self._stop_event = threading.Event()
+        self._auto_restart = True  # 自动重启标志
+        self._restart_timer = None
     
     def start_processing(self):
         """启动邮件队列处理"""
@@ -37,6 +39,9 @@ class EmailQueueProcessor:
         self.processing_thread = threading.Thread(target=self._process_queue_loop, daemon=True)
         self.processing_thread.start()
         logger.info("邮件队列处理器已启动")
+        
+        # 设置健康检查定时器
+        self._start_health_check()
     
     def stop_processing(self):
         """停止邮件队列处理"""
@@ -44,7 +49,13 @@ class EmailQueueProcessor:
             return
             
         self.is_running = False
+        self._auto_restart = False  # 停止自动重启
         self._stop_event.set()
+        
+        # 取消重启定时器
+        if self._restart_timer:
+            self._restart_timer.cancel()
+            self._restart_timer = None
         
         if self.processing_thread and self.processing_thread.is_alive():
             self.processing_thread.join(timeout=10)
@@ -67,6 +78,11 @@ class EmailQueueProcessor:
                 # 出错时等待30秒，但检查停止信号
                 if self._stop_event.wait(30):
                     break
+        
+        # 如果循环退出且启用了自动重启，则安排重启
+        if self._auto_restart and not self._stop_event.is_set():
+            logger.warning("邮件队列处理器意外停止，将在10秒后自动重启")
+            self._schedule_restart(10)
     
     def _process_batch(self):
         """处理一批邮件"""
@@ -323,6 +339,154 @@ class EmailQueueProcessor:
         except Exception as e:
             logger.error(f"健康检查失败: {e}")
             return False
+    
+    def get_email_queue(self, page: int = 1, size: int = 20, status: str = None) -> List[EmailQueue]:
+        """获取邮件队列列表"""
+        db = SessionLocal()
+        try:
+            query = db.query(EmailQueue)
+            if status:
+                query = query.filter(EmailQueue.status == status)
+            
+            # 分页
+            offset = (page - 1) * size
+            emails = query.order_by(EmailQueue.created_at.desc()).offset(offset).limit(size).all()
+            return emails
+        finally:
+            db.close()
+    
+    def get_email_queue_count(self, status: str = None) -> int:
+        """获取邮件队列总数"""
+        db = SessionLocal()
+        try:
+            query = db.query(EmailQueue)
+            if status:
+                query = query.filter(EmailQueue.status == status)
+            return query.count()
+        finally:
+            db.close()
+    
+    def get_email_by_id(self, email_id: int) -> Optional[EmailQueue]:
+        """根据ID获取邮件"""
+        db = SessionLocal()
+        try:
+            return db.query(EmailQueue).filter(EmailQueue.id == email_id).first()
+        finally:
+            db.close()
+    
+    def retry_email(self, email_id: int) -> bool:
+        """重试发送邮件"""
+        db = SessionLocal()
+        try:
+            email = db.query(EmailQueue).filter(EmailQueue.id == email_id).first()
+            if not email:
+                return False
+            
+            # 重置状态为pending
+            email.status = 'pending'
+            email.retry_count += 1
+            email.error_message = None
+            
+            db.commit()
+            
+            # 尝试立即发送
+            email_service = EmailService(db)
+            success = email_service.send_email(email)
+            
+            if success:
+                email.status = 'sent'
+                email.sent_at = datetime.now()
+            else:
+                email.status = 'failed'
+                email.error_message = '重试发送失败'
+            
+            db.commit()
+            return success
+            
+        except Exception as e:
+            db.rollback()
+            logger.error(f"重试邮件失败: {e}")
+            return False
+        finally:
+            db.close()
+    
+    def delete_email_from_queue(self, email_id: int) -> bool:
+        """从队列中删除邮件"""
+        db = SessionLocal()
+        try:
+            email = db.query(EmailQueue).filter(EmailQueue.id == email_id).first()
+            if not email:
+                return False
+            
+            db.delete(email)
+            db.commit()
+            return True
+            
+        except Exception as e:
+            db.rollback()
+            logger.error(f"删除邮件失败: {e}")
+            return False
+        finally:
+            db.close()
+    
+    def clear_email_queue(self, status: str = None) -> bool:
+        """清空邮件队列"""
+        db = SessionLocal()
+        try:
+            query = db.query(EmailQueue)
+            if status:
+                query = query.filter(EmailQueue.status == status)
+            
+            deleted_count = query.delete()
+            db.commit()
+            logger.info(f"清空邮件队列成功，删除了 {deleted_count} 条记录")
+            return True
+            
+        except Exception as e:
+            db.rollback()
+            logger.error(f"清空邮件队列失败: {e}")
+            return False
+        finally:
+            db.close()
+
+    def _start_health_check(self):
+        """启动健康检查"""
+        def health_check():
+            if self._auto_restart and not self._stop_event.is_set():
+                if not self.is_running or not self.processing_thread or not self.processing_thread.is_alive():
+                    logger.warning("检测到邮件队列处理器异常，准备重启")
+                    self._schedule_restart(5)
+                else:
+                    # 继续健康检查
+                    self._restart_timer = threading.Timer(30, health_check)
+                    self._restart_timer.start()
+        
+        # 启动第一次健康检查
+        self._restart_timer = threading.Timer(30, health_check)
+        self._restart_timer.start()
+    
+    def _schedule_restart(self, delay_seconds: int = 10):
+        """安排重启"""
+        if self._restart_timer:
+            self._restart_timer.cancel()
+        
+        def restart():
+            if self._auto_restart and not self._stop_event.is_set():
+                logger.info("自动重启邮件队列处理器")
+                self.is_running = False
+                if self.processing_thread and self.processing_thread.is_alive():
+                    self.processing_thread.join(timeout=5)
+                self.start_processing()
+        
+        self._restart_timer = threading.Timer(delay_seconds, restart)
+        self._restart_timer.start()
+    
+    def force_restart(self):
+        """强制重启邮件队列处理器"""
+        logger.info("强制重启邮件队列处理器")
+        self.stop_processing()
+        self._auto_restart = True
+        self.start_processing()
 
 # 全局邮件队列处理器实例
 email_queue_processor = EmailQueueProcessor()

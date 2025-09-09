@@ -15,12 +15,29 @@
         class="register-form"
       >
         <el-form-item prop="email">
-          <el-input
-            v-model="registerForm.email"
-            placeholder="邮箱地址"
-            prefix-icon="Message"
-            size="large"
-          />
+          <div class="email-input-group">
+            <el-input
+              v-model="registerForm.emailPrefix"
+              placeholder="邮箱前缀"
+              prefix-icon="Message"
+              size="large"
+              class="email-prefix"
+            />
+            <span class="email-separator">@</span>
+            <el-select
+              v-model="registerForm.emailDomain"
+              placeholder="选择邮箱类型"
+              size="large"
+              class="email-domain"
+            >
+              <el-option
+                v-for="domain in allowedEmailDomains"
+                :key="domain"
+                :label="domain"
+                :value="domain"
+              />
+            </el-select>
+          </div>
         </el-form-item>
 
         <el-form-item prop="username">
@@ -75,7 +92,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed } from 'vue'
+import { ref, reactive, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { authAPI } from '@/utils/api'
@@ -89,10 +106,31 @@ const loading = ref(false)
 const registerFormRef = ref()
 
 const registerForm = reactive({
-  email: '',
+  emailPrefix: '',
+  emailDomain: '',
+  email: '', // 计算属性，由前缀和域名组成
   username: '',
   password: '',
   confirmPassword: ''
+})
+
+// 允许的邮箱域名
+const allowedEmailDomains = [
+  'gmail.com',
+  'qq.com', 
+  '126.com',
+  '163.com',
+  'hotmail.com',
+  'foxmail.com'
+]
+
+// 监听邮箱前缀和域名的变化，自动组合完整邮箱
+watch([() => registerForm.emailPrefix, () => registerForm.emailDomain], ([prefix, domain]) => {
+  if (prefix && domain) {
+    registerForm.email = `${prefix}@${domain}`
+  } else {
+    registerForm.email = ''
+  }
 })
 
 // 计算属性
@@ -101,48 +139,37 @@ const settings = computed(() => settingsStore)
 // 表单验证规则
 const registerRules = computed(() => ({
   email: [
-    { required: true, message: '请输入邮箱地址', trigger: 'blur' },
-    { 
-      validator: (rule, value, callback) => {
-        const error = settingsStore.getEmailError(value)
-        if (error) {
-          callback(new Error(error))
-        } else {
-          callback()
-        }
-      }, 
-      trigger: 'blur' 
-    }
+    { required: true, message: '请选择邮箱类型', trigger: 'change' }
   ],
   username: [
     { required: true, message: '请输入用户名', trigger: 'blur' },
-    { min: 2, max: 20, message: '用户名长度在 2 到 20 个字符', trigger: 'blur' }
+    { min: 2, max: 20, message: '用户名长度在 2 到 20 个字符', trigger: 'blur' },
+    { 
+      pattern: /^[a-zA-Z0-9_]+$/, 
+      message: '用户名只能包含字母、数字和下划线', 
+      trigger: 'blur' 
+    }
   ],
   password: [
     { required: true, message: '请输入密码', trigger: 'blur' },
+    { min: 8, max: 50, message: '密码长度在 8 到 50 个字符', trigger: 'blur' },
     { 
-      validator: (rule, value, callback) => {
-        const error = settingsStore.getPasswordError(value)
-        if (error) {
-          callback(new Error(error))
-        } else {
-          callback()
-        }
-      }, 
+      pattern: /^(?=.*[A-Za-z])(?=.*\d)/, 
+      message: '密码必须包含字母和数字', 
       trigger: 'blur' 
     }
   ],
   confirmPassword: [
     { required: true, message: '请确认密码', trigger: 'blur' },
-    {
+    { 
       validator: (rule, value, callback) => {
         if (value !== registerForm.password) {
           callback(new Error('两次输入密码不一致'))
         } else {
           callback()
         }
-      },
-      trigger: 'blur'
+      }, 
+      trigger: 'blur' 
     }
   ]
 }))
@@ -231,6 +258,29 @@ const handleRegister = async () => {
     height: 48px;
     font-size: 16px;
     font-weight: 500;
+  }
+}
+
+.email-input-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  
+  .email-prefix {
+    flex: 1;
+  }
+  
+  .email-separator {
+    font-size: 16px;
+    font-weight: 500;
+    color: var(--text-color-secondary);
+    min-width: 20px;
+    text-align: center;
+  }
+  
+  .email-domain {
+    flex: 1;
+    min-width: 120px;
   }
 }
 

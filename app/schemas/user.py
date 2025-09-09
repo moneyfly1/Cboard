@@ -3,26 +3,59 @@ from typing import Optional
 from datetime import datetime
 import re
 
+# 允许的邮箱后缀
+ALLOWED_EMAIL_DOMAINS = [
+    'gmail.com',
+    'qq.com', 
+    '126.com',
+    '163.com',
+    'hotmail.com',
+    'foxmail.com'
+]
+
 class UserBase(BaseModel):
     email: EmailStr
 
 class UserCreate(UserBase):
     password: str
-    username: Optional[str] = None  # 可选，会自动从QQ邮箱提取
+    username: str  # 必填用户名
     
     @validator('email')
     def validate_email(cls, v):
-        """验证邮箱格式"""
+        """验证邮箱格式和域名"""
         email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
         if not re.match(email_pattern, v):
             raise ValueError('请输入正确的邮箱地址')
+        
+        # 检查邮箱域名是否在允许列表中
+        domain = v.split('@')[1].lower()
+        if domain not in ALLOWED_EMAIL_DOMAINS:
+            raise ValueError(f'只支持以下邮箱类型: {", ".join(ALLOWED_EMAIL_DOMAINS)}')
+        
         return v
+    
+    @validator('username')
+    def validate_username(cls, v):
+        """验证用户名"""
+        if not v or len(v.strip()) < 2:
+            raise ValueError('用户名长度不能少于2位')
+        if len(v) > 20:
+            raise ValueError('用户名长度不能超过20位')
+        # 只允许字母、数字、下划线
+        if not re.match(r'^[a-zA-Z0-9_]+$', v):
+            raise ValueError('用户名只能包含字母、数字和下划线')
+        return v.strip()
     
     @validator('password')
     def validate_password(cls, v):
         """验证密码强度"""
-        if len(v) < 6:
-            raise ValueError('密码长度不能少于6位')
+        if len(v) < 8:
+            raise ValueError('密码长度不能少于8位')
+        if len(v) > 50:
+            raise ValueError('密码长度不能超过50位')
+        # 至少包含字母和数字
+        if not re.search(r'[A-Za-z]', v) or not re.search(r'[0-9]', v):
+            raise ValueError('密码必须包含字母和数字')
         return v
 
 class UserUpdate(BaseModel):
@@ -57,32 +90,36 @@ class UserLogin(BaseModel):
 class UserPasswordChange(BaseModel):
     old_password: str
     new_password: str
-    
-    @validator('new_password')
-    def validate_new_password(cls, v):
-        """验证新密码强度"""
-        if len(v) < 6:
-            raise ValueError('密码长度不能少于6位')
-        return v
 
-class UserPasswordReset(BaseModel):
+class EmailVerificationRequest(BaseModel):
     email: EmailStr
-    
-    @validator('email')
-    def validate_email(cls, v):
-        """验证邮箱格式"""
-        email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
-        if not re.match(email_pattern, v):
-            raise ValueError('请输入正确的邮箱地址')
-        return v
 
-class UserPasswordResetConfirm(BaseModel):
+class EmailVerification(BaseModel):
+    token: str
+
+class PasswordResetRequest(BaseModel):
+    email: EmailStr
+
+class PasswordReset(BaseModel):
     token: str
     new_password: str
     
     @validator('new_password')
-    def validate_new_password(cls, v):
-        """验证新密码强度"""
-        if len(v) < 6:
-            raise ValueError('密码长度不能少于6位')
-        return v 
+    def validate_password(cls, v):
+        """验证密码强度"""
+        if len(v) < 8:
+            raise ValueError('密码长度不能少于8位')
+        if len(v) > 50:
+            raise ValueError('密码长度不能超过50位')
+        # 至少包含字母和数字
+        if not re.search(r'[A-Za-z]', v) or not re.search(r'[0-9]', v):
+            raise ValueError('密码必须包含字母和数字')
+        return v
+
+# 导出允许的邮箱域名列表
+__all__ = [
+    'UserBase', 'UserCreate', 'UserUpdate', 'UserInDB', 'User',
+    'UserLogin', 'UserPasswordChange', 'EmailVerificationRequest',
+    'EmailVerification', 'PasswordResetRequest', 'PasswordReset',
+    'ALLOWED_EMAIL_DOMAINS'
+]

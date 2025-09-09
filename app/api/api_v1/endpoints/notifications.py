@@ -5,7 +5,8 @@ from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.schemas.notification import NotificationCreate, NotificationUpdate, EmailTemplateCreate, EmailTemplateUpdate
 from app.schemas.common import ResponseBase, PaginationParams
-from app.services.notification import NotificationService, EmailTemplateService
+from app.services.notification import NotificationService
+from app.services.email_template import EmailTemplateService
 from app.utils.security import get_current_user, get_current_admin_user
 
 router = APIRouter()

@@ -148,6 +148,10 @@ export const adminAPI = {
   getAbnormalUsers: () => api.get('/admin/users/abnormal'),
   getUserDetails: (userId) => api.get(`/admin/users/${userId}/details`),
   
+  // 用户状态管理
+  updateUserStatus: (userId, status) => api.put(`/admin/users/${userId}/status`, { status }),
+  resetUserPassword: (userId, password) => api.post(`/admin/users/${userId}/reset-password`, { password }),
+  
   // 用户批量操作
   batchDeleteUsers: (userIds) => api.post('/admin/users/batch-delete', { user_ids: userIds }),
   batchEnableUsers: (userIds) => api.post('/admin/users/batch-enable', { user_ids: userIds }),
@@ -289,6 +293,7 @@ export const statisticsAPI = {
   getStatisticsOverview: () => api.get('/admin/statistics/overview'),
   exportStatistics: (type, format) => api.get('/admin/statistics/export', { params: { type, format } })
 }
+
 
 // 支付相关API
 export const paymentAPI = {

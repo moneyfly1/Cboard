@@ -1,6 +1,7 @@
 from .user import (
     User, UserCreate, UserUpdate, UserInDB,
-    UserLogin, UserPasswordChange, UserPasswordReset, UserPasswordResetConfirm
+    UserLogin, UserPasswordChange, EmailVerificationRequest, 
+    EmailVerification, PasswordResetRequest, PasswordReset
 )
 from .subscription import (
     Subscription, SubscriptionCreate, SubscriptionUpdate, SubscriptionInDB,
@@ -42,7 +43,8 @@ from .common import (
 __all__ = [
     # User schemas
     "User", "UserCreate", "UserUpdate", "UserInDB",
-    "UserLogin", "UserPasswordChange", "UserPasswordReset", "UserPasswordResetConfirm",
+    "UserLogin", "UserPasswordChange", "EmailVerificationRequest", 
+    "EmailVerification", "PasswordResetRequest", "PasswordReset",
     
     # Subscription schemas
     "Subscription", "SubscriptionCreate", "SubscriptionUpdate", "SubscriptionInDB",

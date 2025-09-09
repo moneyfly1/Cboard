@@ -12,6 +12,7 @@ from .models import (
     PaymentConfig, PaymentCallback, SystemConfig, Announcement, 
     ThemeConfig, UserActivity, SubscriptionReset, LoginHistory
 )
+from .services.email_queue_processor import get_email_queue_processor
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
@@ -38,11 +39,29 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 # 应用启动事件
 @app.on_event("startup")
 async def startup_event():
-    """应用启动时初始化数据库"""
+    """应用启动时初始化数据库和启动邮件队列处理器"""
     try:
         init_database()
+        print("数据库初始化成功")
+        
+        # 启动邮件队列处理器
+        email_processor = get_email_queue_processor()
+        email_processor.start_processing()
+        print("邮件队列处理器已启动")
+        
     except Exception as e:
-        print(f"数据库初始化失败: {e}")
+        print(f"应用启动失败: {e}")
+
+# 应用关闭事件
+@app.on_event("shutdown")
+async def shutdown_event():
+    """应用关闭时停止邮件队列处理器"""
+    try:
+        email_processor = get_email_queue_processor()
+        email_processor.stop_processing()
+        print("邮件队列处理器已停止")
+    except Exception as e:
+        print(f"停止邮件队列处理器失败: {e}")
 
 @app.get("/")
 async def root():

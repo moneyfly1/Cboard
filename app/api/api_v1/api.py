@@ -28,4 +28,4 @@ api_router.include_router(email_stats.router, prefix="/email-stats", tags=["邮�
 api_router.include_router(device_management.router, prefix="/admin/devices", tags=["设备管理"])
 api_router.include_router(announcements.router, prefix="/announcements", tags=["公告"])
 api_router.include_router(software_config.router, prefix="/software-config", tags=["软件配置"])
-api_router.include_router(config_update.router, prefix="/admin/config-update", tags=["配置更新"]) 
+api_router.include_router(config_update.router, prefix="/admin/config-update", tags=["配置更新"])

@@ -8,7 +8,7 @@ from app.schemas.notification import (
     EmailTemplateList, EmailTemplatePreview, EmailTemplateTest, EmailTemplateDuplicate
 )
 from app.services.email_template import EmailTemplateService
-from app.services.email_enhanced import EnhancedEmailService
+from app.services.email import EmailService
 from app.utils.security import get_current_admin_user
 from app.schemas.common import ResponseBase
 
@@ -170,7 +170,7 @@ def test_email_template(
 ):
     """测试邮件模板"""
     service = EmailTemplateService(db)
-    email_service = EnhancedEmailService(db)
+    email_service = EmailService(db)
     
     try:
         # 验证模板变量
@@ -252,7 +252,7 @@ def send_template_email(
     current_user = Depends(get_current_admin_user)
 ):
     """使用指定模板发送邮件"""
-    email_service = EnhancedEmailService(db)
+    email_service = EmailService(db)
     
     try:
         # 验证模板变量

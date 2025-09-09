@@ -134,42 +134,58 @@ class EmailService:
             print(f"发送模板邮件失败: {e}")
             return False
 
-    def send_verification_email(self, user_email: str, token: str) -> bool:
+    def send_verification_email(self, user_email: str, token: str, username: str = None) -> bool:
         """发送验证邮件"""
         if not self.is_email_enabled():
             return False
         
         try:
-            # 使用模板发送验证邮件
-            variables = {
-                "verification_url": f"http://localhost:3000/verify-email?token={token}",
-                "site_name": settings_manager.get_site_name(self.db)
-            }
+            # 使用增强版模板发送验证邮件
+            verification_url = f"http://localhost:5173/verify-email?token={token}"
+            html_content = EmailTemplateEnhanced.get_activation_template(username or "用户", verification_url)
             
-            return self.send_template_email("verification", user_email, variables, "verification")
+            # 创建邮件队列
+            email_data = EmailQueueCreate(
+                to_email=user_email,
+                subject="账户激活 - 网络服务",
+                content=html_content,
+                content_type='html',
+                email_type='verification'
+            )
+            
+            email_queue = self.create_email_queue(email_data)
+            return self.send_email(email_queue)
             
         except Exception as e:
-            # 如果模板不存在，使用默认内容
-            print(f"使用模板发送验证邮件失败，使用默认内容: {e}")
+            # 如果增强模板失败，使用默认内容
+            print(f"使用增强模板发送验证邮件失败，使用默认内容: {e}")
             return self._send_default_verification_email(user_email, token)
 
-    def send_reset_password_email(self, user_email: str, token: str) -> bool:
+    def send_reset_password_email(self, user_email: str, token: str, username: str = None) -> bool:
         """发送重置密码邮件"""
         if not self.is_email_enabled():
             return False
         
         try:
-            # 使用模板发送重置密码邮件
-            variables = {
-                "reset_url": f"http://localhost:3000/reset-password?token={token}",
-                "site_name": settings_manager.get_site_name(self.db)
-            }
+            # 使用增强版模板发送重置密码邮件
+            reset_url = f"http://localhost:5173/reset-password?token={token}"
+            html_content = EmailTemplateEnhanced.get_password_reset_template(username or "用户", reset_url)
             
-            return self.send_template_email("reset_password", user_email, variables, "reset_password")
+            # 创建邮件队列
+            email_data = EmailQueueCreate(
+                to_email=user_email,
+                subject="密码重置 - 网络服务",
+                content=html_content,
+                content_type='html',
+                email_type='reset_password'
+            )
+            
+            email_queue = self.create_email_queue(email_data)
+            return self.send_email(email_queue)
             
         except Exception as e:
-            # 如果模板不存在，使用默认内容
-            print(f"使用模板发送重置密码邮件失败，使用默认内容: {e}")
+            # 如果增强模板失败，使用默认内容
+            print(f"使用增强模板发送重置密码邮件失败，使用默认内容: {e}")
             return self._send_default_reset_password_email(user_email, token)
 
     def send_welcome_email(self, user_email: str, username: str) -> bool:
@@ -206,8 +222,8 @@ class EmailService:
                 to_email=user_email,
                 subject="您的服务配置信息 - 网络服务",
                 content=html_content,
-                email_type="subscription",
-                status="pending"
+                content_type='html',
+                email_type="subscription"
             )
             
             email_queue = self.create_email_queue(email_queue_data)
@@ -218,26 +234,30 @@ class EmailService:
             return False
 
     def send_subscription_expiry_reminder(self, user_email: str, username: str, days_left: int, 
-                                       package_name: str, expiry_date: str) -> bool:
+                                       package_name: str, expiry_date: str, is_expired: bool = False) -> bool:
         """发送订阅到期提醒"""
         if not self.is_email_enabled():
             return False
         
         try:
-            # 使用模板发送到期提醒
-            variables = {
-                "username": username,
-                "days_left": days_left,
-                "package_name": package_name,
-                "expiry_date": expiry_date,
-                "site_name": settings_manager.get_site_name(self.db)
-            }
+            # 使用增强版模板发送到期提醒
+            html_content = EmailTemplateEnhanced.get_expiration_template(username, expiry_date, is_expired)
             
-            return self.send_template_email("subscription_expiry", user_email, variables, "subscription_expiry")
+            # 创建邮件队列
+            email_data = EmailQueueCreate(
+                to_email=user_email,
+                subject=f"{'服务已到期' if is_expired else '服务即将到期'} - 网络服务",
+                content=html_content,
+                content_type='html',
+                email_type='subscription_expiry'
+            )
+            
+            email_queue = self.create_email_queue(email_data)
+            return self.send_email(email_queue)
             
         except Exception as e:
-            # 如果模板不存在，使用默认内容
-            print(f"使用模板发送到期提醒失败，使用默认内容: {e}")
+            # 如果增强模板失败，使用默认内容
+            print(f"使用增强模板发送到期提醒失败，使用默认内容: {e}")
             return self._send_default_expiry_reminder(user_email, username, days_left, package_name, expiry_date)
 
     def send_subscription_reset_notification(self, user_email: str, username: str, 
@@ -248,16 +268,28 @@ class EmailService:
             return False
         
         try:
-            # 使用模板发送重置通知
-            variables = {
-                "username": username,
-                "new_subscription_url": new_subscription_url,
-                "reset_time": reset_time,
-                "reset_reason": reset_reason,
-                "site_name": settings_manager.get_site_name(self.db)
-            }
+            # 使用增强模板发送重置通知
+            from app.services.email_template_enhanced import EmailTemplateEnhanced
             
-            return self.send_template_email("subscription_reset", user_email, variables, "subscription_reset")
+            content = EmailTemplateEnhanced.get_subscription_reset_template(
+                username=username,
+                new_subscription_url=new_subscription_url,
+                reset_time=reset_time,
+                reset_reason=reset_reason
+            )
+            
+            subject = f"{settings_manager.get_site_name(self.db)} - 订阅重置通知"
+            
+            email_data = EmailQueueCreate(
+                to_email=user_email,
+                subject=subject,
+                content=content,
+                content_type='html',
+                email_type='subscription_reset'
+            )
+            
+            email_queue = self.create_email_queue(email_data)
+            return self.send_email(email_queue)
             
         except Exception as e:
             # 如果模板不存在，使用默认内容
@@ -581,4 +613,351 @@ class EmailService:
         return {
             "by_type": {stat.email_type or 'unknown': stat.count for stat in type_stats},
             "total_types": len(type_stats)
-        } 
+        }
+    
+    def send_verification_email(self, email: str, username: str, verification_url: str) -> bool:
+        """发送邮箱验证邮件"""
+        try:
+            subject = "邮箱验证 - XBoard Modern"
+            html_content = f"""
+            <html>
+            <body>
+                <h2>邮箱验证</h2>
+                <p>亲爱的 {username}，</p>
+                <p>感谢您注册 XBoard Modern！请点击下面的链接验证您的邮箱：</p>
+                <p><a href="{verification_url}" style="background-color: #4CAF50; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">验证邮箱</a></p>
+                <p>如果按钮无法点击，请复制以下链接到浏览器中打开：</p>
+                <p>{verification_url}</p>
+                <p>此链接24小时内有效。</p>
+                <p>如果您没有注册此账户，请忽略此邮件。</p>
+                <br>
+                <p>此邮件由系统自动发送，请勿回复。</p>
+            </body>
+            </html>
+            """
+            
+            text_content = f"""
+            邮箱验证
+            
+            亲爱的 {username}，
+            
+            感谢您注册 XBoard Modern！请点击下面的链接验证您的邮箱：
+            {verification_url}
+            
+            此链接24小时内有效。
+            
+            如果您没有注册此账户，请忽略此邮件。
+            
+            此邮件由系统自动发送，请勿回复。
+            """
+            
+            # 创建邮件队列
+            email_data = {
+                "to_email": email,
+                "subject": subject,
+                "html_content": html_content,
+                "text_content": text_content,
+                "email_type": "verification"
+            }
+            
+            self.create_email_queue(EmailQueueCreate(**email_data))
+            return True
+            
+        except Exception as e:
+            print(f"创建验证邮件失败: {e}")
+            return False
+    
+    def send_password_reset_email(self, email: str, username: str, reset_url: str) -> bool:
+        """发送密码重置邮件"""
+        try:
+            subject = "密码重置 - XBoard Modern"
+            html_content = f"""
+            <html>
+            <body>
+                <h2>密码重置</h2>
+                <p>亲爱的 {username}，</p>
+                <p>您请求重置密码。请点击下面的链接重置您的密码：</p>
+                <p><a href="{reset_url}" style="background-color: #f44336; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">重置密码</a></p>
+                <p>如果按钮无法点击，请复制以下链接到浏览器中打开：</p>
+                <p>{reset_url}</p>
+                <p>此链接1小时内有效。</p>
+                <p>如果您没有请求重置密码，请忽略此邮件。</p>
+                <br>
+                <p>此邮件由系统自动发送，请勿回复。</p>
+            </body>
+            </html>
+            """
+            
+            text_content = f"""
+            密码重置
+            
+            亲爱的 {username}，
+            
+            您请求重置密码。请点击下面的链接重置您的密码：
+            {reset_url}
+            
+            此链接1小时内有效。
+            
+            如果您没有请求重置密码，请忽略此邮件。
+            
+            此邮件由系统自动发送，请勿回复。
+            """
+            
+            # 创建邮件队列
+            email_data = {
+                "to_email": email,
+                "subject": subject,
+                "html_content": html_content,
+                "text_content": text_content,
+                "email_type": "password_reset"
+            }
+            
+            self.create_email_queue(EmailQueueCreate(**email_data))
+            return True
+            
+        except Exception as e:
+            print(f"创建重置邮件失败: {e}")
+            return False
+
+    def send_order_confirmation_email(self, user_email: str, username: str, order_data: Dict[str, Any]) -> bool:
+        """发送下单确认邮件"""
+        if not self.is_email_enabled():
+            return False
+        
+        try:
+            # 使用增强版模板发送下单确认邮件
+            html_content = EmailTemplateEnhanced.get_order_confirmation_template(username, order_data)
+            
+            # 创建邮件队列
+            email_data = EmailQueueCreate(
+                to_email=user_email,
+                subject="订单确认 - 网络服务",
+                content=html_content,
+                content_type='html',
+                email_type='order_confirmation'
+            )
+            
+            email_queue = self.create_email_queue(email_data)
+            return self.send_email(email_queue)
+            
+        except Exception as e:
+            # 如果增强模板失败，使用默认内容
+            print(f"使用增强模板发送下单确认邮件失败，使用默认内容: {e}")
+            return self._send_default_order_confirmation_email(user_email, username, order_data)
+
+    def send_payment_success_email(self, user_email: str, username: str, payment_data: Dict[str, Any]) -> bool:
+        """发送支付成功邮件"""
+        if not self.is_email_enabled():
+            return False
+        
+        try:
+            # 使用增强版模板发送支付成功邮件
+            html_content = EmailTemplateEnhanced.get_payment_success_template(username, payment_data)
+            
+            # 创建邮件队列
+            email_data = EmailQueueCreate(
+                to_email=user_email,
+                subject="支付成功 - 网络服务",
+                content=html_content,
+                content_type='html',
+                email_type='payment_success'
+            )
+            
+            email_queue = self.create_email_queue(email_data)
+            return self.send_email(email_queue)
+            
+        except Exception as e:
+            # 如果增强模板失败，使用默认内容
+            print(f"使用增强模板发送支付成功邮件失败，使用默认内容: {e}")
+            return self._send_default_payment_success_email(user_email, username, payment_data)
+
+    def send_account_deletion_email(self, user_email: str, username: str, deletion_data: Dict[str, Any]) -> bool:
+        """发送账号删除确认邮件"""
+        if not self.is_email_enabled():
+            return False
+        
+        try:
+            # 使用增强版模板发送账号删除邮件
+            html_content = EmailTemplateEnhanced.get_account_deletion_template(username, deletion_data)
+            
+            # 创建邮件队列
+            email_data = EmailQueueCreate(
+                to_email=user_email,
+                subject="账号删除确认 - 网络服务",
+                content=html_content,
+                content_type='html',
+                email_type='account_deletion'
+            )
+            
+            email_queue = self.create_email_queue(email_data)
+            return self.send_email(email_queue)
+            
+        except Exception as e:
+            # 如果增强模板失败，使用默认内容
+            print(f"使用增强模板发送账号删除邮件失败，使用默认内容: {e}")
+            return self._send_default_account_deletion_email(user_email, username, deletion_data)
+
+    def send_renewal_confirmation_email(self, user_email: str, username: str, renewal_data: Dict[str, Any]) -> bool:
+        """发送续费确认邮件"""
+        if not self.is_email_enabled():
+            return False
+        
+        try:
+            # 使用增强版模板发送续费确认邮件
+            html_content = EmailTemplateEnhanced.get_renewal_confirmation_template(username, renewal_data)
+            
+            # 创建邮件队列
+            email_data = EmailQueueCreate(
+                to_email=user_email,
+                subject="续费成功 - 网络服务",
+                content=html_content,
+                content_type='html',
+                email_type='renewal_confirmation'
+            )
+            
+            email_queue = self.create_email_queue(email_data)
+            return self.send_email(email_queue)
+            
+        except Exception as e:
+            # 如果增强模板失败，使用默认内容
+            print(f"使用增强模板发送续费确认邮件失败，使用默认内容: {e}")
+            return self._send_default_renewal_confirmation_email(user_email, username, renewal_data)
+
+    def _send_default_order_confirmation_email(self, user_email: str, username: str, order_data: Dict[str, Any]) -> bool:
+        """发送默认下单确认邮件"""
+        site_name = settings_manager.get_site_name(self.db)
+        
+        subject = f"{site_name} - 订单确认"
+        content = f"""
+        <html>
+        <body>
+            <h2>订单确认</h2>
+            <p>亲爱的 {username}，</p>
+            <p>感谢您的订单！您的订单详情如下：</p>
+            <ul>
+                <li>订单号: {order_data.get('order_no')}</li>
+                <li>套餐名称: {order_data.get('package_name')}</li>
+                <li>订单金额: ¥{order_data.get('amount')}</li>
+                <li>支付方式: {order_data.get('payment_method')}</li>
+                <li>下单时间: {order_data.get('created_at')}</li>
+            </ul>
+            <p>请及时完成支付以激活服务。</p>
+            <p>感谢您使用 {site_name}！</p>
+        </body>
+        </html>
+        """
+        
+        email_data = EmailQueueCreate(
+            to_email=user_email,
+            subject=subject,
+            content=content,
+            content_type='html',
+            email_type='order_confirmation'
+        )
+        
+        email_queue = self.create_email_queue(email_data)
+        return self.send_email(email_queue)
+
+    def _send_default_payment_success_email(self, user_email: str, username: str, payment_data: Dict[str, Any]) -> bool:
+        """发送默认支付成功邮件"""
+        site_name = settings_manager.get_site_name(self.db)
+        
+        subject = f"{site_name} - 支付成功"
+        content = f"""
+        <html>
+        <body>
+            <h2>支付成功</h2>
+            <p>亲爱的 {username}，</p>
+            <p>恭喜！您的支付已成功完成。</p>
+            <ul>
+                <li>订单号: {payment_data.get('order_no')}</li>
+                <li>套餐名称: {payment_data.get('package_name')}</li>
+                <li>支付金额: ¥{payment_data.get('amount')}</li>
+                <li>支付方式: {payment_data.get('payment_method')}</li>
+                <li>交易时间: {payment_data.get('paid_at')}</li>
+                <li>交易ID: {payment_data.get('transaction_id')}</li>
+            </ul>
+            <p>您的服务已激活，现在可以开始使用了！</p>
+            <p>感谢您使用 {site_name}！</p>
+        </body>
+        </html>
+        """
+        
+        email_data = EmailQueueCreate(
+            to_email=user_email,
+            subject=subject,
+            content=content,
+            content_type='html',
+            email_type='payment_success'
+        )
+        
+        email_queue = self.create_email_queue(email_data)
+        return self.send_email(email_queue)
+
+    def _send_default_account_deletion_email(self, user_email: str, username: str, deletion_data: Dict[str, Any]) -> bool:
+        """发送默认账号删除邮件"""
+        site_name = settings_manager.get_site_name(self.db)
+        
+        subject = f"{site_name} - 账号删除确认"
+        content = f"""
+        <html>
+        <body>
+            <h2>账号删除确认</h2>
+            <p>亲爱的 {username}，</p>
+            <p>您的账号删除请求已处理完成。</p>
+            <ul>
+                <li>删除原因: {deletion_data.get('reason')}</li>
+                <li>删除时间: {deletion_data.get('deletion_date')}</li>
+                <li>数据保留期: {deletion_data.get('data_retention_period', '30天')}</li>
+            </ul>
+            <p>您的所有数据将在保留期结束后永久删除。</p>
+            <p>感谢您曾经使用 {site_name}！</p>
+        </body>
+        </html>
+        """
+        
+        email_data = EmailQueueCreate(
+            to_email=user_email,
+            subject=subject,
+            content=content,
+            content_type='html',
+            email_type='account_deletion'
+        )
+        
+        email_queue = self.create_email_queue(email_data)
+        return self.send_email(email_queue)
+
+    def _send_default_renewal_confirmation_email(self, user_email: str, username: str, renewal_data: Dict[str, Any]) -> bool:
+        """发送默认续费确认邮件"""
+        site_name = settings_manager.get_site_name(self.db)
+        
+        subject = f"{site_name} - 续费成功"
+        content = f"""
+        <html>
+        <body>
+            <h2>续费成功</h2>
+            <p>亲爱的 {username}，</p>
+            <p>您的订阅续费已成功完成！</p>
+            <ul>
+                <li>套餐名称: {renewal_data.get('package_name')}</li>
+                <li>原到期时间: {renewal_data.get('old_expiry_date')}</li>
+                <li>新到期时间: {renewal_data.get('new_expiry_date')}</li>
+                <li>续费金额: ¥{renewal_data.get('amount')}</li>
+                <li>续费时间: {renewal_data.get('renewal_date')}</li>
+            </ul>
+            <p>您的服务已延长，可以继续正常使用。</p>
+            <p>感谢您使用 {site_name}！</p>
+        </body>
+        </html>
+        """
+        
+        email_data = EmailQueueCreate(
+            to_email=user_email,
+            subject=subject,
+            content=content,
+            content_type='html',
+            email_type='renewal_confirmation'
+        )
+        
+        email_queue = self.create_email_queue(email_data)
+        return self.send_email(email_queue) 

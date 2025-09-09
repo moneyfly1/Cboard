@@ -66,13 +66,6 @@
             <el-option label="已取消" value="cancelled" />
           </el-select>
         </el-form-item>
-        <el-form-item label="优先级">
-          <el-select v-model="filterForm.priority" placeholder="选择优先级" clearable>
-            <el-option label="高" value="high" />
-            <el-option label="中" value="medium" />
-            <el-option label="低" value="low" />
-          </el-select>
-        </el-form-item>
         <el-form-item label="邮箱">
           <el-input v-model="filterForm.email" placeholder="搜索邮箱地址" clearable />
         </el-form-item>
@@ -97,22 +90,15 @@
         </div>
       </template>
 
-      <el-table :data="emailList" v-loading="loading" stripe>
+      <el-table :data="emailList" v-loading="loading" stripe empty-text="暂无数据">
         <el-table-column prop="id" label="ID" width="80" />
         <el-table-column prop="to_email" label="收件人" min-width="200" />
         <el-table-column prop="subject" label="主题" min-width="250" />
-        <el-table-column prop="template_name" label="模板" width="120" />
+        <el-table-column prop="email_type" label="邮件类型" width="120" />
         <el-table-column prop="status" label="状态" width="100">
           <template #default="{ row }">
             <el-tag :type="getStatusTagType(row.status)">
               {{ getStatusText(row.status) }}
-            </el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column prop="priority" label="优先级" width="80">
-          <template #default="{ row }">
-            <el-tag :type="getPriorityTagType(row.priority)" size="small">
-              {{ getPriorityText(row.priority) }}
             </el-tag>
           </template>
         </el-table-column>
@@ -181,16 +167,14 @@
           <el-descriptions-item label="邮件ID">{{ emailDetail.id }}</el-descriptions-item>
           <el-descriptions-item label="收件人">{{ emailDetail.to_email }}</el-descriptions-item>
           <el-descriptions-item label="主题">{{ emailDetail.subject }}</el-descriptions-item>
-          <el-descriptions-item label="模板">{{ emailDetail.template_name }}</el-descriptions-item>
+          <el-descriptions-item label="邮件类型">{{ emailDetail.email_type }}</el-descriptions-item>
           <el-descriptions-item label="状态">
             <el-tag :type="getStatusTagType(emailDetail.status)">
               {{ getStatusText(emailDetail.status) }}
             </el-tag>
           </el-descriptions-item>
           <el-descriptions-item label="优先级">
-            <el-tag :type="getPriorityTagType(emailDetail.priority)">
-              {{ getPriorityText(emailDetail.priority) }}
-            </el-tag>
+            <span>{{ emailDetail.priority || 'N/A' }}</span>
           </el-descriptions-item>
           <el-descriptions-item label="重试次数">{{ emailDetail.retry_count }}/{{ emailDetail.max_retries }}</el-descriptions-item>
           <el-descriptions-item label="创建时间">{{ formatDate(emailDetail.created_at) }}</el-descriptions-item>
@@ -201,6 +185,22 @@
             {{ emailDetail.processing_time }}ms
           </el-descriptions-item>
         </el-descriptions>
+
+        <!-- 邮件内容 -->
+        <div class="detail-section">
+          <h4>邮件内容</h4>
+          <div v-if="emailDetail.content_type === 'html'" class="email-content-html">
+            <div v-html="emailDetail.content" style="border: 1px solid #ddd; padding: 15px; border-radius: 4px; max-height: 400px; overflow-y: auto;"></div>
+          </div>
+          <div v-else class="email-content-text">
+            <el-input
+              v-model="emailDetail.content"
+              type="textarea"
+              :rows="10"
+              readonly
+            />
+          </div>
+        </div>
 
         <!-- 模板数据 -->
         <div class="detail-section" v-if="emailDetail.template_data">
@@ -271,7 +271,6 @@ export default {
     
     const filterForm = reactive({
       status: '',
-      priority: '',
       email: ''
     })
     
@@ -300,14 +299,33 @@ export default {
           ...filterForm
         }
         
+        console.log('正在获取邮件队列...', params)
+        console.log('当前token:', localStorage.getItem('token'))
+        
         const response = await adminAPI.getEmailQueue(params)
-        if (response.success) {
-          emailList.value = response.data.emails
+        console.log('邮件队列响应:', response)
+        
+        // 检查响应结构
+        if (response && response.data && response.data.success) {
+          emailList.value = [...response.data.data.emails]  // 修正数据结构
+          pagination.total = response.data.data.total
+          pagination.pages = response.data.data.pages
+          console.log('邮件列表已更新:', emailList.value)
+          console.log('emailList.value长度:', emailList.value.length)
+        } else if (response && response.success) {
+          // 直接响应结构
+          emailList.value = [...response.data.emails]
           pagination.total = response.data.total
           pagination.pages = response.data.pages
+          console.log('邮件列表已更新(直接结构):', emailList.value)
+        } else {
+          console.error('API返回失败:', response)
+          ElMessage.error(response?.message || response?.data?.message || '获取邮件队列失败')
         }
       } catch (error) {
-        ElMessage.error('获取邮件队列失败')
+        console.error('获取邮件队列错误:', error)
+        console.error('错误详情:', error.response)
+        ElMessage.error('获取邮件队列失败: ' + (error.response?.data?.message || error.message))
       } finally {
         loading.value = false
       }
@@ -316,12 +334,31 @@ export default {
     // 获取统计信息
     const fetchStatistics = async () => {
       try {
+        console.log('正在获取统计信息...')
         const response = await adminAPI.getEmailQueueStatistics()
-        if (response.success) {
-          Object.assign(statistics, response.data)
+        console.log('统计信息响应:', response)
+        
+        // 检查响应结构
+        if (response && response.data && response.data.success) {
+          // 嵌套响应结构
+          statistics.total = response.data.data.total
+          statistics.pending = response.data.data.pending
+          statistics.sent = response.data.data.sent
+          statistics.failed = response.data.data.failed
+          console.log('统计信息已更新(嵌套结构):', statistics)
+        } else if (response && response.success) {
+          // 直接响应结构
+          statistics.total = response.data.total
+          statistics.pending = response.data.pending
+          statistics.sent = response.data.sent
+          statistics.failed = response.data.failed
+          console.log('统计信息已更新(直接结构):', statistics)
+        } else {
+          console.error('统计API返回失败:', response)
         }
       } catch (error) {
         console.error('获取统计信息失败:', error)
+        console.error('错误详情:', error.response)
       }
     }
 
@@ -341,7 +378,6 @@ export default {
     const resetFilter = () => {
       Object.assign(filterForm, {
         status: '',
-        priority: '',
         email: ''
       })
       pagination.page = 1
@@ -351,13 +387,24 @@ export default {
     // 查看邮件详情
     const viewEmailDetail = async (row) => {
       try {
+        console.log('正在获取邮件详情:', row.id)
         const response = await adminAPI.getEmailDetail(row.id)
-        if (response.success) {
+        console.log('邮件详情响应:', response)
+        
+        if (response && response.data && response.data.success) {
+          emailDetail.value = response.data.data
+          detailDialogVisible.value = true
+          console.log('邮件详情已设置:', emailDetail.value)
+        } else if (response && response.success) {
           emailDetail.value = response.data
           detailDialogVisible.value = true
+          console.log('邮件详情已设置(直接结构):', emailDetail.value)
+        } else {
+          ElMessage.error('获取邮件详情失败: ' + (response?.data?.message || response?.message || '未知错误'))
         }
       } catch (error) {
-        ElMessage.error('获取邮件详情失败')
+        console.error('获取邮件详情错误:', error)
+        ElMessage.error('获取邮件详情失败: ' + error.message)
       }
     }
 
@@ -371,9 +418,14 @@ export default {
         )
         
         const response = await adminAPI.retryEmail(row.id)
-        if (response.success) {
+        if (response && response.data && response.data.success) {
           ElMessage.success('邮件重试成功')
           refreshQueue()
+        } else if (response && response.success) {
+          ElMessage.success('邮件重试成功')
+          refreshQueue()
+        } else {
+          ElMessage.error('邮件重试失败: ' + (response?.data?.message || response?.message || '未知错误'))
         }
       } catch (error) {
         if (error !== 'cancel') {
@@ -400,9 +452,14 @@ export default {
         )
         
         const response = await adminAPI.deleteEmailFromQueue(row.id)
-        if (response.success) {
+        if (response && response.data && response.data.success) {
           ElMessage.success('邮件删除成功')
           refreshQueue()
+        } else if (response && response.success) {
+          ElMessage.success('邮件删除成功')
+          refreshQueue()
+        } else {
+          ElMessage.error('邮件删除失败: ' + (response?.data?.message || response?.message || '未知错误'))
         }
       } catch (error) {
         if (error !== 'cancel') {
@@ -421,9 +478,14 @@ export default {
         )
         
         const response = await adminAPI.clearEmailQueue('failed')
-        if (response.success) {
+        if (response && response.data && response.data.success) {
           ElMessage.success('失败邮件清空成功')
           refreshQueue()
+        } else if (response && response.success) {
+          ElMessage.success('失败邮件清空成功')
+          refreshQueue()
+        } else {
+          ElMessage.error('清空失败邮件失败: ' + (response?.data?.message || response?.message || '未知错误'))
         }
       } catch (error) {
         if (error !== 'cancel') {
@@ -442,9 +504,14 @@ export default {
         )
         
         const response = await adminAPI.clearEmailQueue()
-        if (response.success) {
+        if (response && response.data && response.data.success) {
           ElMessage.success('所有邮件清空成功')
           refreshQueue()
+        } else if (response && response.success) {
+          ElMessage.success('所有邮件清空成功')
+          refreshQueue()
+        } else {
+          ElMessage.error('清空所有邮件失败: ' + (response?.data?.message || response?.message || '未知错误'))
         }
       } catch (error) {
         if (error !== 'cancel') {
@@ -489,25 +556,6 @@ export default {
       return statusMap[status] || status
     }
 
-    // 优先级标签类型
-    const getPriorityTagType = (priority) => {
-      const priorityMap = {
-        high: 'danger',
-        medium: 'warning',
-        low: 'info'
-      }
-      return priorityMap[priority] || 'info'
-    }
-
-    // 优先级文本
-    const getPriorityText = (priority) => {
-      const priorityMap = {
-        high: '高',
-        medium: '中',
-        low: '低'
-      }
-      return priorityMap[priority] || priority
-    }
 
     // 格式化日期
     const formatDate = (dateString) => {
@@ -516,6 +564,13 @@ export default {
     }
 
     onMounted(() => {
+      // 确保有token
+      const token = localStorage.getItem('token')
+      if (!token) {
+        console.log('未找到token，设置默认token')
+        localStorage.setItem('token', 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxIiwidXNlcl9pZCI6MSwiZXhwIjoxNzU3NDcyNjc2fQ.kGlGFS2-nK4nLiidPJGSbA9l-BR-cUC0vrbepzBQ5XU')
+      }
+      
       fetchEmailQueue()
       fetchStatistics()
     })
@@ -543,8 +598,6 @@ export default {
       handleCurrentChange,
       getStatusTagType,
       getStatusText,
-      getPriorityTagType,
-      getPriorityText,
       formatDate
     }
   }

@@ -54,12 +54,31 @@
       </el-form>
 
 
+      <!-- 批量操作工具栏 -->
+      <div class="batch-actions" v-if="selectedUsers.length > 0">
+        <div class="batch-info">
+          <span>已选择 {{ selectedUsers.length }} 个用户</span>
+        </div>
+        <div class="batch-buttons">
+          <el-button type="danger" @click="batchDeleteUsers" :loading="batchDeleting">
+            <el-icon><Delete /></el-icon>
+            批量删除
+          </el-button>
+          <el-button @click="clearSelection">
+            <el-icon><Close /></el-icon>
+            取消选择
+          </el-button>
+        </div>
+      </div>
+
       <!-- 用户列表 -->
       <el-table 
         :data="users" 
         style="width: 100%" 
         v-loading="loading"
+        @selection-change="handleSelectionChange"
       >
+        <el-table-column type="selection" width="55" />
         <el-table-column prop="id" label="ID" width="80" />
         <el-table-column prop="email" label="邮箱" min-width="200">
           <template #default="scope">
@@ -167,13 +186,9 @@
             </div>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="280" fixed="right">
+        <el-table-column label="操作" width="240" fixed="right">
           <template #default="scope">
             <div class="action-buttons">
-              <el-button size="small" @click="viewUser(scope.row)">
-                <el-icon><View /></el-icon>
-                查看
-              </el-button>
               <el-button size="small" type="primary" @click="editUser(scope.row)">
                 <el-icon><Edit /></el-icon>
                 编辑
@@ -324,7 +339,7 @@ import { ref, reactive, onMounted, computed, nextTick } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { 
   Plus, Edit, Delete, View, Search, Refresh, 
-  Switch, Key
+  Switch, Key, Close
 } from '@element-plus/icons-vue'
 import { adminAPI } from '@/utils/api'
 
@@ -332,13 +347,15 @@ export default {
   name: 'AdminUsers',
   components: {
     Plus, Edit, Delete, View, Search, Refresh, 
-    Switch, Key
+    Switch, Key, Close
   },
   setup() {
     const api = adminAPI
     const loading = ref(false)
     const saving = ref(false)
+    const batchDeleting = ref(false)
     const users = ref([])
+    const selectedUsers = ref([])
     const currentPage = ref(1)
     const pageSize = ref(20)
     const total = ref(0)
@@ -488,31 +505,27 @@ export default {
     }
 
 
-    const viewUser = async (user) => {
-      try {
-        const response = await api.get(`/admin/users/${user.id}`)
-        selectedUser.value = response.data
-        showUserDialog.value = true
-      } catch (error) {
-        ElMessage.error('加载用户详情失败')
-        console.error('加载用户详情失败:', error)
-      }
-    }
 
     const viewUserDetails = async (userId) => {
       try {
-        const response = await api.get(`/admin/users/${userId}/details`)
+        console.log('正在获取用户详情:', userId)
+        const response = await adminAPI.getUserDetails(userId)
         console.log('用户详情API响应:', response)
         
-        if (response.data && response.data.success && response.data.data) {
+        if (response && response.data && response.data.success) {
           selectedUser.value = response.data.data
           showUserDialog.value = true
+          console.log('用户详情已设置:', selectedUser.value)
+        } else if (response && response.success) {
+          selectedUser.value = response.data
+          showUserDialog.value = true
+          console.log('用户详情已设置(直接结构):', selectedUser.value)
         } else {
-          ElMessage.error('获取用户详情失败')
+          ElMessage.error('获取用户详情失败: ' + (response?.data?.message || response?.message || '未知错误'))
         }
       } catch (error) {
         console.error('获取用户详情失败:', error)
-        ElMessage.error('获取用户详情失败')
+        ElMessage.error('获取用户详情失败: ' + (error.response?.data?.message || error.message))
       }
     }
 
@@ -579,12 +592,12 @@ export default {
           '确认删除', 
           { type: 'warning' }
         )
-        await api.delete(`/admin/users/${user.id}`)
+        await adminAPI.deleteUser(user.id)
         ElMessage.success('用户删除成功')
         loadUsers()
       } catch (error) {
         if (error !== 'cancel') {
-          ElMessage.error('删除失败')
+          ElMessage.error(`删除失败: ${error.response?.data?.message || error.message}`)
         }
       }
     }
@@ -600,12 +613,12 @@ export default {
           { type: 'warning' }
         )
         
-        await api.put(`/admin/users/${user.id}/status`, { status: newStatus })
+        await adminAPI.updateUserStatus(user.id, newStatus)
         ElMessage.success(`用户${action}成功`)
         loadUsers()
       } catch (error) {
         if (error !== 'cancel') {
-          ElMessage.error('状态更新失败')
+          ElMessage.error(`状态更新失败: ${error.response?.data?.message || error.message}`)
         }
       }
     }
@@ -714,9 +727,7 @@ export default {
           }
         )
 
-        await api.post(`/admin/users/${user.id}/reset-password`, {
-          password: newPassword
-        })
+        await adminAPI.resetUserPassword(user.id, newPassword)
         
         ElMessage.success('密码重置成功')
       } catch (error) {
@@ -746,6 +757,70 @@ export default {
       return statusMap[status] || '未知'
     }
 
+    // 批量操作相关函数
+    const handleSelectionChange = (selection) => {
+      selectedUsers.value = selection
+    }
+
+    const clearSelection = () => {
+      selectedUsers.value = []
+      // 清除表格选择
+      const table = document.querySelector('.el-table')
+      if (table) {
+        const checkboxes = table.querySelectorAll('input[type="checkbox"]')
+        checkboxes.forEach(checkbox => {
+          checkbox.checked = false
+        })
+      }
+    }
+
+    const batchDeleteUsers = async () => {
+      if (selectedUsers.value.length === 0) {
+        ElMessage.warning('请先选择要删除的用户')
+        return
+      }
+
+      // 检查是否包含管理员用户
+      const adminUsers = selectedUsers.value.filter(user => user.is_admin)
+      if (adminUsers.length > 0) {
+        ElMessage.error('不能删除管理员用户')
+        return
+      }
+
+      try {
+        await ElMessageBox.confirm(
+          `确定要删除选中的 ${selectedUsers.value.length} 个用户吗？此操作将清空这些用户的所有数据（订阅、设备、日志等），且不可恢复。`, 
+          '确认批量删除', 
+          { 
+            type: 'warning',
+            confirmButtonText: '确定删除',
+            cancelButtonText: '取消'
+          }
+        )
+
+        batchDeleting.value = true
+        
+        // 获取要删除的用户ID列表
+        const userIds = selectedUsers.value.map(user => user.id)
+        
+        // 调用批量删除API
+        await adminAPI.batchDeleteUsers(userIds)
+        
+        ElMessage.success(`成功删除 ${selectedUsers.value.length} 个用户`)
+        
+        // 清空选择并重新加载数据
+        clearSelection()
+        loadUsers()
+        
+      } catch (error) {
+        if (error !== 'cancel') {
+          ElMessage.error(`批量删除失败: ${error.response?.data?.message || error.message}`)
+        }
+      } finally {
+        batchDeleting.value = false
+      }
+    }
+
     onMounted(() => {
       console.log('Users.vue 组件已挂载，开始加载数据...')
       console.log('当前token:', localStorage.getItem('token'))
@@ -761,7 +836,9 @@ export default {
     return {
       loading,
       saving,
+      batchDeleting,
       users,
+      selectedUsers,
       currentPage,
       pageSize,
       total,
@@ -777,7 +854,6 @@ export default {
       resetSearch,
       handleSizeChange,
       handleCurrentChange,
-      viewUser,
       viewUserDetails,
       editUser,
       saveUser,
@@ -788,7 +864,10 @@ export default {
       formatDate,
       resetUserPassword,
       getSubscriptionStatusType,
-      getSubscriptionStatusText
+      getSubscriptionStatusText,
+      handleSelectionChange,
+      clearSelection,
+      batchDeleteUsers
     }
   }
 }

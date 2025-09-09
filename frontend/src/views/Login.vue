@@ -53,7 +53,7 @@
           <el-link type="primary" @click="$router.push('/register')">
             注册账户
           </el-link>
-          <el-link type="primary" @click="showForgotPassword = true">
+          <el-link type="primary" @click="$router.push('/forgot-password')">
             忘记密码？
           </el-link>
         </div>

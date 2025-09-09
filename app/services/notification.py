@@ -3,8 +3,8 @@ from typing import Optional, List, Tuple
 from sqlalchemy.orm import Session
 from sqlalchemy import func, and_
 
-from app.models.notification import Notification, EmailTemplate
-from app.schemas.notification import NotificationCreate, NotificationUpdate, EmailTemplateCreate, EmailTemplateUpdate
+from app.models.notification import Notification
+from app.schemas.notification import NotificationCreate, NotificationUpdate
 
 class NotificationService:
     def __init__(self, db: Session):
@@ -121,79 +121,3 @@ class NotificationService:
                 Notification.is_read == False
             )
         ).count()
-
-class EmailTemplateService:
-    def __init__(self, db: Session):
-        self.db = db
-
-    def get(self, template_id: int) -> Optional[EmailTemplate]:
-        """根据ID获取邮件模板"""
-        return self.db.query(EmailTemplate).filter(EmailTemplate.id == template_id).first()
-
-    def get_by_name(self, name: str) -> Optional[EmailTemplate]:
-        """根据名称获取邮件模板"""
-        return self.db.query(EmailTemplate).filter(EmailTemplate.name == name).first()
-
-    def get_all_templates(self) -> List[EmailTemplate]:
-        """获取所有邮件模板"""
-        return self.db.query(EmailTemplate).order_by(EmailTemplate.id.desc()).all()
-
-    def get_active_templates(self) -> List[EmailTemplate]:
-        """获取活跃的邮件模板"""
-        return self.db.query(EmailTemplate).filter(EmailTemplate.is_active == True).all()
-
-    def create(self, template_in: EmailTemplateCreate) -> EmailTemplate:
-        """创建邮件模板"""
-        template = EmailTemplate(
-            name=template_in.name,
-            subject=template_in.subject,
-            content=template_in.content,
-            variables=template_in.variables
-        )
-        
-        self.db.add(template)
-        self.db.commit()
-        self.db.refresh(template)
-        return template
-
-    def update(self, template_id: int, template_in: EmailTemplateUpdate) -> Optional[EmailTemplate]:
-        """更新邮件模板"""
-        template = self.get(template_id)
-        if not template:
-            return None
-        
-        update_data = template_in.dict(exclude_unset=True)
-        
-        for field, value in update_data.items():
-            setattr(template, field, value)
-        
-        self.db.commit()
-        self.db.refresh(template)
-        return template
-
-    def delete(self, template_id: int) -> bool:
-        """删除邮件模板"""
-        template = self.get(template_id)
-        if not template:
-            return False
-        
-        self.db.delete(template)
-        self.db.commit()
-        return True
-
-    def render_template(self, template_name: str, variables: dict) -> Tuple[str, str]:
-        """渲染邮件模板"""
-        template = self.get_by_name(template_name)
-        if not template:
-            raise ValueError(f"模板 {template_name} 不存在")
-        
-        subject = template.subject
-        content = template.content
-        
-        # 简单的变量替换
-        for key, value in variables.items():
-            placeholder = f"{{{{{key}}}}}"
-            subject = subject.replace(placeholder, str(value))
-            content = content.replace(placeholder, str(value))
-        
-        return subject, content 

@@ -17,6 +17,14 @@ class User(Base):
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     last_login = Column(DateTime(timezone=True), nullable=True)
     
+    # 邮箱验证相关字段
+    verification_token = Column(String(255), nullable=True)
+    verification_expires = Column(DateTime(timezone=True), nullable=True)
+    
+    # 密码重置相关字段
+    reset_token = Column(String(255), nullable=True)
+    reset_expires = Column(DateTime(timezone=True), nullable=True)
+    
     # 关系将在 __init__.py 中定义
     # subscriptions, orders, payments, notifications, activities, subscription_resets, login_history
     

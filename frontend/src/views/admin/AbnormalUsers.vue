@@ -285,14 +285,20 @@ export default {
 
     const viewUserDetails = async (userId) => {
       try {
+        console.log('正在获取用户详情:', userId)
         const response = await adminAPI.getUserDetails(userId)
         console.log('用户详情API响应:', response)
         
-        if (response.data && response.data.success && response.data.data) {
+        if (response && response.data && response.data.success) {
           userDetails.value = response.data.data
           showUserDetailsDialog.value = true
+          console.log('用户详情已设置:', userDetails.value)
+        } else if (response && response.success) {
+          userDetails.value = response.data
+          showUserDetailsDialog.value = true
+          console.log('用户详情已设置(直接结构):', userDetails.value)
         } else {
-          ElMessage.error('获取用户详情失败')
+          ElMessage.error('获取用户详情失败: ' + (response?.data?.message || response?.message || '未知错误'))
         }
       } catch (error) {
         console.error('获取用户详情失败:', error)

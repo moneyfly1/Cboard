@@ -280,21 +280,49 @@ def batch_delete_users(
     db: Session = Depends(get_db),
     current_admin = Depends(get_current_admin_user)
 ) -> Any:
-    """批量删除用户"""
+    """批量删除用户（清空所有相关数据）"""
     try:
         user_service = UserService(db)
         deleted_count = 0
         
         user_id_list = user_ids.get("user_ids", [])
+        
         for user_id in user_id_list:
             user = user_service.get(user_id)
             if user and not user.is_admin:  # 不允许删除管理员
+                # 删除用户的所有订阅和设备
+                from app.models.subscription import Subscription, Device
+                
+                # 获取用户的所有订阅
+                user_subscriptions = db.query(Subscription).filter(Subscription.user_id == user.id).all()
+                for subscription in user_subscriptions:
+                    # 删除订阅下的所有设备
+                    devices = db.query(Device).filter(Device.subscription_id == subscription.id).all()
+                    for device in devices:
+                        db.delete(device)
+                    # 删除订阅
+                    db.delete(subscription)
+                
+                # 删除用户活动记录
+                from app.models.user_activity import UserActivity
+                activities = db.query(UserActivity).filter(UserActivity.user_id == user.id).all()
+                for activity in activities:
+                    db.delete(activity)
+                
+                # 删除用户订单记录
+                from app.models.order import Order
+                orders = db.query(Order).filter(Order.user_id == user.id).all()
+                for order in orders:
+                    db.delete(order)
+                
+                # 删除用户
                 db.delete(user)
                 deleted_count += 1
         
         db.commit()
-        return ResponseBase(message=f"成功删除 {deleted_count} 个用户")
+        return ResponseBase(message=f"成功删除 {deleted_count} 个用户及其所有相关数据")
     except Exception as e:
+        db.rollback()
         return ResponseBase(success=False, message=f"批量删除用户失败: {str(e)}")
 
 @router.post("/users/batch-enable", response_model=ResponseBase)
@@ -480,17 +508,28 @@ def delete_user(
         if user.is_admin:
             raise HTTPException(status_code=400, detail="不能删除管理员用户")
         
-        # 删除用户订阅和设备
-        subscription = subscription_service.get_by_user_id(user.id)
-        if subscription:
-            devices = subscription_service.get_devices_by_subscription_id(subscription.id)
+        # 删除用户的所有订阅和设备
+        from app.models.subscription import Subscription, Device
+        
+        # 获取用户的所有订阅
+        user_subscriptions = db.query(Subscription).filter(Subscription.user_id == user.id).all()
+        for subscription in user_subscriptions:
+            # 删除订阅下的所有设备
+            devices = db.query(Device).filter(Device.subscription_id == subscription.id).all()
             for device in devices:
-                subscription_service.db.delete(device)
-            subscription_service.db.delete(subscription)
+                db.delete(device)
+            # 删除订阅
+            db.delete(subscription)
+        
+        # 删除用户活动记录
+        from app.models.user_activity import UserActivity
+        activities = db.query(UserActivity).filter(UserActivity.user_id == user.id).all()
+        for activity in activities:
+            db.delete(activity)
         
         # 删除用户
-        user_service.db.delete(user)
-        user_service.db.commit()
+        db.delete(user)
+        db.commit()
         
         return ResponseBase(message="用户删除成功")
     except HTTPException:
@@ -661,6 +700,30 @@ def reset_user_subscription(
         subscription.current_devices = 0
         subscription_service.db.commit()
         
+        # 发送重置通知邮件
+        try:
+            from app.services.email import EmailService
+            from app.models.user import User
+            from datetime import datetime
+            
+            # 获取用户信息
+            user = db.query(User).filter(User.id == user_id).first()
+            if user and user.email:
+                email_service = EmailService(db)
+                reset_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                
+                # 发送重置通知邮件
+                email_service.send_subscription_reset_notification(
+                    user_email=user.email,
+                    username=user.username,
+                    new_subscription_url=new_url,
+                    reset_time=reset_time,
+                    reset_reason="管理员重置"
+                )
+                print(f"已发送管理员重置订阅通知邮件到: {user.email}")
+        except Exception as e:
+            print(f"发送管理员重置订阅通知邮件失败: {e}")
+        
         return ResponseBase(message="订阅重置成功", data={"new_subscription_url": new_url})
     except HTTPException:
         raise
@@ -737,6 +800,45 @@ def reset_user_password(
         raise
     except Exception as e:
         return ResponseBase(success=False, message=f"密码重置失败: {str(e)}")
+
+@router.put("/users/{user_id}/status", response_model=ResponseBase)
+def update_user_status(
+    user_id: int,
+    status_data: dict,
+    db: Session = Depends(get_db),
+    current_admin = Depends(get_current_admin_user)
+) -> Any:
+    """更新用户状态"""
+    try:
+        user_service = UserService(db)
+        
+        user = user_service.get(user_id)
+        if not user:
+            raise HTTPException(status_code=404, detail="用户不存在")
+        
+        new_status = status_data.get("status")
+        if new_status not in ["active", "disabled", "inactive"]:
+            raise HTTPException(status_code=400, detail="无效的状态值")
+        
+        # 更新用户状态
+        user.is_active = (new_status == "active")
+        user_service.db.commit()
+        
+        # 记录操作日志
+        from app.models.user_activity import UserActivity
+        activity = UserActivity(
+            user_id=user_id,
+            activity_type="status_changed",
+            description=f"管理员 {current_admin.username} 将用户状态更改为 {new_status}",
+            ip_address="127.0.0.1",  # 可以从请求中获取
+            user_agent="Admin Panel"
+        )
+        user_service.db.add(activity)
+        user_service.db.commit()
+        
+        return ResponseBase(success=True, message="用户状态更新成功")
+    except Exception as e:
+        return ResponseBase(success=False, message=f"状态更新失败: {str(e)}")
 
 @router.post("/users/{user_id}/login-as", response_model=ResponseBase)
 def login_as_user(
@@ -837,6 +939,67 @@ def get_admin_stats(
         })
     except Exception as e:
         return ResponseBase(success=False, message=f"获取统计信息失败: {str(e)}")
+
+@router.get("/statistics", response_model=ResponseBase)
+def get_statistics(
+    current_admin = Depends(get_current_admin_user),
+    db: Session = Depends(get_db)
+) -> Any:
+    """获取数据统计页面的统计数据"""
+    try:
+        user_service = UserService(db)
+        subscription_service = SubscriptionService(db)
+        order_service = OrderService(db)
+        
+        # 获取基础统计数据
+        total_users = user_service.count()
+        active_subscriptions = subscription_service.count_active()
+        total_orders = order_service.count()
+        total_revenue = order_service.get_total_revenue()
+        
+        # 获取用户统计详情
+        user_stats = [
+            {"name": "总用户数", "value": total_users, "percentage": 100},
+            {"name": "活跃用户", "value": user_service.count_active_users(30), "percentage": round((user_service.count_active_users(30) / total_users * 100) if total_users > 0 else 0, 1)},
+            {"name": "今日新增", "value": user_service.count_recent_users(1), "percentage": round((user_service.count_recent_users(1) / total_users * 100) if total_users > 0 else 0, 1)},
+            {"name": "本周新增", "value": user_service.count_recent_users(7), "percentage": round((user_service.count_recent_users(7) / total_users * 100) if total_users > 0 else 0, 1)}
+        ]
+        
+        # 获取订阅统计详情
+        total_subscriptions = subscription_service.count()
+        subscription_stats = [
+            {"name": "总订阅数", "value": total_subscriptions, "percentage": 100},
+            {"name": "活跃订阅", "value": active_subscriptions, "percentage": round((active_subscriptions / total_subscriptions * 100) if total_subscriptions > 0 else 0, 1)},
+            {"name": "即将过期", "value": subscription_service.count_expiring_soon(), "percentage": round((subscription_service.count_expiring_soon() / total_subscriptions * 100) if total_subscriptions > 0 else 0, 1)},
+            {"name": "已过期", "value": total_subscriptions - active_subscriptions, "percentage": round(((total_subscriptions - active_subscriptions) / total_subscriptions * 100) if total_subscriptions > 0 else 0, 1)}
+        ]
+        
+        # 获取最近活动（最近订单）
+        recent_orders = order_service.get_recent_orders(7)
+        recent_activities = []
+        for order in recent_orders[:10]:  # 只取最近10个
+            recent_activities.append({
+                "id": order.id,
+                "type": "订单",
+                "description": f"用户 {order.user_id} 创建了订单 #{order.order_no}",
+                "amount": order.amount,
+                "status": order.status,
+                "time": order.created_at.isoformat()
+            })
+        
+        return ResponseBase(data={
+            "overview": {
+                "totalUsers": total_users,
+                "activeSubscriptions": active_subscriptions,
+                "totalOrders": total_orders,
+                "totalRevenue": total_revenue
+            },
+            "userStats": user_stats,
+            "subscriptionStats": subscription_stats,
+            "recentActivities": recent_activities
+        })
+    except Exception as e:
+        return ResponseBase(success=False, message=f"获取统计数据失败: {str(e)}")
 
 @router.get("/users/recent", response_model=ResponseBase)
 def get_recent_users(
@@ -2498,6 +2661,7 @@ def reset_user_all_subscriptions(
         subscription_service = SubscriptionService(db)
         
         # 获取用户的所有订阅
+        from app.models.subscription import Subscription
         user_subscriptions = db.query(Subscription).filter(Subscription.user_id == user_id).all()
         
         if not user_subscriptions:
@@ -2529,9 +2693,13 @@ def reset_user_all_subscriptions(
             VALUES (:user_id, :subscription_url, :device_limit, :current_devices, :is_active, :expire_time, :created_at, :updated_at)
         """)
         
+        # 构建完整的订阅URL
+        v2ray_url = f"http://localhost:8000/api/v1/subscriptions/v2ray/{v2ray_key}"
+        clash_url = f"http://localhost:8000/api/v1/subscriptions/clash/{clash_key}"
+        
         db.execute(v2ray_insert_query, {
             "user_id": user_id,
-            "subscription_url": v2ray_url,
+            "subscription_url": v2ray_key,
             "device_limit": device_limit,
             "current_devices": 0,
             "is_active": True,
@@ -2548,7 +2716,7 @@ def reset_user_all_subscriptions(
         
         db.execute(clash_insert_query, {
             "user_id": user_id,
-            "subscription_url": clash_url,
+            "subscription_url": clash_key,
             "device_limit": device_limit,
             "current_devices": 0,
             "is_active": True,
@@ -2558,6 +2726,29 @@ def reset_user_all_subscriptions(
         })
         
         db.commit()
+        
+        # 发送重置通知邮件
+        try:
+            from app.services.email import EmailService
+            from app.models.user import User
+            
+            # 获取用户信息
+            user = db.query(User).filter(User.id == user_id).first()
+            if user and user.email:
+                email_service = EmailService(db)
+                reset_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                
+                # 发送重置通知邮件（包含新的订阅地址）
+                email_service.send_subscription_reset_notification(
+                    user_email=user.email,
+                    username=user.username,
+                    new_subscription_url=f"V2Ray: {v2ray_url}\nClash: {clash_url}",
+                    reset_time=reset_time,
+                    reset_reason="管理员重置所有订阅"
+                )
+                print(f"已发送管理员重置所有订阅通知邮件到: {user.email}")
+        except Exception as e:
+            print(f"发送管理员重置所有订阅通知邮件失败: {e}")
         
         return ResponseBase(message="用户所有订阅重置成功", data={
             "v2ray_subscription_url": v2ray_key,
@@ -2921,7 +3112,7 @@ def get_email_queue(
     """获取邮件队列列表"""
     try:
         from app.services.email_queue_processor import EmailQueueProcessor
-        email_service = EmailQueueProcessor(db)
+        email_service = EmailQueueProcessor()
         
         # 获取邮件队列
         emails = email_service.get_email_queue(page=page, size=size, status=status)
@@ -2933,10 +3124,11 @@ def get_email_queue(
                 "id": email.id,
                 "to_email": email.to_email,
                 "subject": email.subject,
-                "template_name": email.template_name,
+                "email_type": email.email_type,
+                "content_type": email.content_type,
                 "status": email.status,
-                "priority": email.priority,
                 "retry_count": email.retry_count,
+                "max_retries": email.max_retries,
                 "created_at": email.created_at.isoformat() if email.created_at else None,
                 "sent_at": email.sent_at.isoformat() if email.sent_at else None,
                 "error_message": email.error_message
@@ -2953,6 +3145,20 @@ def get_email_queue(
     except Exception as e:
         return ResponseBase(success=False, message=f"获取邮件队列失败: {str(e)}")
 
+@router.get("/email-queue/statistics", response_model=ResponseBase)
+def get_email_queue_statistics(
+    current_admin = Depends(get_current_admin_user)
+) -> Any:
+    """获取邮件队列统计信息"""
+    try:
+        from app.services.email_queue_processor import EmailQueueProcessor
+        email_service = EmailQueueProcessor()
+        
+        stats = email_service.get_queue_stats()
+        return ResponseBase(data=stats)
+    except Exception as e:
+        return ResponseBase(success=False, message=f"获取邮件队列统计失败: {str(e)}")
+
 @router.get("/email-queue/{email_id}", response_model=ResponseBase)
 def get_email_detail(
     email_id: int,
@@ -2962,7 +3168,7 @@ def get_email_detail(
     """获取邮件详情"""
     try:
         from app.services.email_queue_processor import EmailQueueProcessor
-        email_service = EmailQueueProcessor(db)
+        email_service = EmailQueueProcessor()
         
         email = email_service.get_email_by_id(email_id)
         if not email:
@@ -2972,18 +3178,15 @@ def get_email_detail(
             "id": email.id,
             "to_email": email.to_email,
             "subject": email.subject,
-            "template_name": email.template_name,
-            "template_data": email.template_data,
+            "content": email.content,
+            "content_type": email.content_type,
+            "email_type": email.email_type,
             "status": email.status,
-            "priority": email.priority,
             "retry_count": email.retry_count,
             "max_retries": email.max_retries,
             "created_at": email.created_at.isoformat() if email.created_at else None,
             "sent_at": email.sent_at.isoformat() if email.sent_at else None,
-            "error_message": email.error_message,
-            "error_details": email.error_details,
-            "smtp_response": email.smtp_response,
-            "processing_time": email.processing_time
+            "error_message": email.error_message
         }
         
         return ResponseBase(data=email_data)
@@ -2999,7 +3202,7 @@ def retry_email(
     """重试发送邮件"""
     try:
         from app.services.email_queue_processor import EmailQueueProcessor
-        email_service = EmailQueueProcessor(db)
+        email_service = EmailQueueProcessor()
         
         success = email_service.retry_email(email_id)
         if success:
@@ -3018,7 +3221,7 @@ def delete_email_from_queue(
     """从邮件队列中删除邮件"""
     try:
         from app.services.email_queue_processor import EmailQueueProcessor
-        email_service = EmailQueueProcessor(db)
+        email_service = EmailQueueProcessor()
         
         success = email_service.delete_email_from_queue(email_id)
         if success:
@@ -3037,7 +3240,7 @@ def clear_email_queue(
     """清空邮件队列"""
     try:
         from app.services.email_queue_processor import EmailQueueProcessor
-        email_service = EmailQueueProcessor(db)
+        email_service = EmailQueueProcessor()
         
         success = email_service.clear_email_queue(status=status)
         if success:
@@ -3047,20 +3250,45 @@ def clear_email_queue(
     except Exception as e:
         return ResponseBase(success=False, message=f"清空邮件队列失败: {str(e)}")
 
-@router.get("/email-queue/statistics", response_model=ResponseBase)
-def get_email_queue_statistics(
-    db: Session = Depends(get_db),
+@router.post("/email-queue/start", response_model=ResponseBase)
+def start_email_queue_processor(
     current_admin = Depends(get_current_admin_user)
 ) -> Any:
-    """获取邮件队列统计信息"""
+    """启动邮件队列处理器"""
     try:
-        from app.services.email_queue_processor import EmailQueueProcessor
-        email_service = EmailQueueProcessor(db)
-        
-        stats = email_service.get_queue_statistics()
-        return ResponseBase(data=stats)
+        from app.services.email_queue_processor import get_email_queue_processor
+        processor = get_email_queue_processor()
+        processor.start_processing()
+        return ResponseBase(success=True, message="邮件队列处理器已启动")
     except Exception as e:
-        return ResponseBase(success=False, message=f"获取邮件队列统计失败: {str(e)}")
+        return ResponseBase(success=False, message=f"启动邮件队列处理器失败: {str(e)}")
+
+@router.post("/email-queue/stop", response_model=ResponseBase)
+def stop_email_queue_processor(
+    current_admin = Depends(get_current_admin_user)
+) -> Any:
+    """停止邮件队列处理器"""
+    try:
+        from app.services.email_queue_processor import get_email_queue_processor
+        processor = get_email_queue_processor()
+        processor.stop_processing()
+        return ResponseBase(success=True, message="邮件队列处理器已停止")
+    except Exception as e:
+        return ResponseBase(success=False, message=f"停止邮件队列处理器失败: {str(e)}")
+
+@router.post("/email-queue/restart", response_model=ResponseBase)
+def restart_email_queue_processor(
+    current_admin = Depends(get_current_admin_user)
+) -> Any:
+    """重启邮件队列处理器"""
+    try:
+        from app.services.email_queue_processor import get_email_queue_processor
+        processor = get_email_queue_processor()
+        processor.force_restart()
+        return ResponseBase(success=True, message="邮件队列处理器已重启")
+    except Exception as e:
+        return ResponseBase(success=False, message=f"重启邮件队列处理器失败: {str(e)}")
+
 
 # ==================== 支付配置管理 ====================
 

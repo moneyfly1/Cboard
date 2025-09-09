@@ -279,6 +279,30 @@ class SubscriptionService:
         self.db.add(reset_record)
         self.db.commit()
         
+        # 发送重置通知邮件
+        try:
+            from app.services.email import EmailService
+            from app.models.user import User
+            from datetime import datetime
+            
+            # 获取用户信息
+            user = self.db.query(User).filter(User.id == user_id).first()
+            if user and user.email:
+                email_service = EmailService(self.db)
+                reset_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                
+                # 发送重置通知邮件
+                email_service.send_subscription_reset_notification(
+                    user_email=user.email,
+                    username=user.username,
+                    new_subscription_url=new_key,
+                    reset_time=reset_time,
+                    reset_reason=reason or "订阅重置"
+                )
+                print(f"已发送订阅重置通知邮件到: {user.email}")
+        except Exception as e:
+            print(f"发送订阅重置通知邮件失败: {e}")
+        
         return True
 
     # 新增方法：获取订阅重置记录

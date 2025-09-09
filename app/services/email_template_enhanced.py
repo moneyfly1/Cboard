@@ -300,6 +300,196 @@ class EmailTemplateEnhanced:
         return EmailTemplateEnhanced.get_base_template(title, content, '开启您的专属网络体验')
 
     @staticmethod
+    def get_order_confirmation_template(username: str, order_data: dict) -> str:
+        """下单确认邮件模板"""
+        title = "订单确认"
+        content = f'''
+            <h2>订单确认</h2>
+            <p>亲爱的用户 <strong>{username}</strong>，</p>
+            <p>感谢您的购买！您的订单已成功创建，详情如下：</p>
+            
+            <div class="info-box">
+                <table class="info-table">
+                    <tr>
+                        <th>订单号</th>
+                        <td>{order_data.get('order_no', 'N/A')}</td>
+                    </tr>
+                    <tr>
+                        <th>套餐名称</th>
+                        <td>{order_data.get('package_name', 'N/A')}</td>
+                    </tr>
+                    <tr>
+                        <th>订单金额</th>
+                        <td>¥{order_data.get('amount', '0.00')}</td>
+                    </tr>
+                    <tr>
+                        <th>支付方式</th>
+                        <td>{order_data.get('payment_method', 'N/A')}</td>
+                    </tr>
+                    <tr>
+                        <th>下单时间</th>
+                        <td>{order_data.get('created_at', 'N/A')}</td>
+                    </tr>
+                </table>
+            </div>
+            
+            <div class="warning-box">
+                <p><strong>重要提醒：</strong></p>
+                <ul>
+                    <li>请尽快完成支付，订单将在24小时后自动取消</li>
+                    <li>支付成功后，服务将自动激活</li>
+                    <li>如有疑问，请联系客服</li>
+                </ul>
+            </div>
+            
+            <p>感谢您选择我们的服务！</p>
+        '''
+        
+        return EmailTemplateEnhanced.get_base_template(title, content, '开启您的专属网络体验')
+
+    @staticmethod
+    def get_payment_success_template(username: str, payment_data: dict) -> str:
+        """支付成功邮件模板"""
+        title = "支付成功"
+        content = f'''
+            <h2>支付成功</h2>
+            <p>亲爱的用户 <strong>{username}</strong>，</p>
+            <p>恭喜！您的支付已成功完成，服务已激活。</p>
+            
+            <div class="success-box">
+                <p><strong>支付详情：</strong></p>
+                <table class="info-table">
+                    <tr>
+                        <th>订单号</th>
+                        <td>{payment_data.get('order_no', 'N/A')}</td>
+                    </tr>
+                    <tr>
+                        <th>套餐名称</th>
+                        <td>{payment_data.get('package_name', 'N/A')}</td>
+                    </tr>
+                    <tr>
+                        <th>支付金额</th>
+                        <td>¥{payment_data.get('amount', '0.00')}</td>
+                    </tr>
+                    <tr>
+                        <th>支付方式</th>
+                        <td>{payment_data.get('payment_method', 'N/A')}</td>
+                    </tr>
+                    <tr>
+                        <th>支付时间</th>
+                        <td>{payment_data.get('paid_at', 'N/A')}</td>
+                    </tr>
+                    <tr>
+                        <th>交易号</th>
+                        <td>{payment_data.get('transaction_id', 'N/A')}</td>
+                    </tr>
+                </table>
+            </div>
+            
+            <div class="info-box">
+                <p><strong>服务说明：</strong></p>
+                <ul>
+                    <li>您的服务已激活，可以立即使用</li>
+                    <li>订阅地址已发送到您的邮箱</li>
+                    <li>如有技术问题，请联系技术支持</li>
+                </ul>
+            </div>
+            
+            <p>感谢您的信任，祝您使用愉快！</p>
+        '''
+        
+        return EmailTemplateEnhanced.get_base_template(title, content, '开启您的专属网络体验')
+
+    @staticmethod
+    def get_account_deletion_template(username: str, deletion_data: dict) -> str:
+        """账号删除邮件模板"""
+        title = "账号删除确认"
+        content = f'''
+            <h2>账号删除确认</h2>
+            <p>亲爱的用户 <strong>{username}</strong>，</p>
+            <p>您的账号删除请求已收到，我们对此表示遗憾。</p>
+            
+            <div class="info-box">
+                <table class="info-table">
+                    <tr>
+                        <th>删除原因</th>
+                        <td>{deletion_data.get('reason', '用户主动删除')}</td>
+                    </tr>
+                    <tr>
+                        <th>删除时间</th>
+                        <td>{deletion_data.get('deletion_date', 'N/A')}</td>
+                    </tr>
+                    <tr>
+                        <th>数据保留期</th>
+                        <td>{deletion_data.get('data_retention_period', '30天')}</td>
+                    </tr>
+                </table>
+            </div>
+            
+            <div class="warning-box">
+                <p><strong>重要提醒：</strong></p>
+                <ul>
+                    <li>您的账号将在数据保留期结束后永久删除</li>
+                    <li>删除后无法恢复，请谨慎操作</li>
+                    <li>如有疑问，请在保留期内联系客服</li>
+                </ul>
+            </div>
+            
+            <p>感谢您曾经选择我们的服务！</p>
+        '''
+        
+        return EmailTemplateEnhanced.get_base_template(title, content, '开启您的专属网络体验')
+
+    @staticmethod
+    def get_renewal_confirmation_template(username: str, renewal_data: dict) -> str:
+        """续费确认邮件模板"""
+        title = "续费成功"
+        content = f'''
+            <h2>续费成功</h2>
+            <p>亲爱的用户 <strong>{username}</strong>，</p>
+            <p>恭喜！您的服务续费已成功完成。</p>
+            
+            <div class="success-box">
+                <p><strong>续费详情：</strong></p>
+                <table class="info-table">
+                    <tr>
+                        <th>套餐名称</th>
+                        <td>{renewal_data.get('package_name', 'N/A')}</td>
+                    </tr>
+                    <tr>
+                        <th>原到期时间</th>
+                        <td>{renewal_data.get('old_expiry_date', 'N/A')}</td>
+                    </tr>
+                    <tr>
+                        <th>新到期时间</th>
+                        <td>{renewal_data.get('new_expiry_date', 'N/A')}</td>
+                    </tr>
+                    <tr>
+                        <th>续费金额</th>
+                        <td>¥{renewal_data.get('amount', '0.00')}</td>
+                    </tr>
+                    <tr>
+                        <th>续费时间</th>
+                        <td>{renewal_data.get('renewal_date', 'N/A')}</td>
+                    </tr>
+                </table>
+            </div>
+            
+            <div class="info-box">
+                <p><strong>服务说明：</strong></p>
+                <ul>
+                    <li>您的服务已成功续费，可继续使用</li>
+                    <li>新的订阅地址已更新</li>
+                    <li>如有技术问题，请联系技术支持</li>
+                </ul>
+            </div>
+            
+            <p>感谢您的续费，祝您使用愉快！</p>
+        '''
+        
+        return EmailTemplateEnhanced.get_base_template(title, content, '开启您的专属网络体验')
+
+    @staticmethod
     def get_password_reset_template(username: str, reset_link: str) -> str:
         """密码重置邮件模板"""
         title = "密码重置"
@@ -383,3 +573,39 @@ class EmailTemplateEnhanced:
         '''
         
         return EmailTemplateEnhanced.get_base_template(title, content, '我们期待继续为您服务')
+
+    @staticmethod
+    def get_subscription_reset_template(username: str, new_subscription_url: str, 
+                                      reset_time: str, reset_reason: str) -> str:
+        """订阅重置通知邮件模板"""
+        title = "订阅重置通知"
+        content = f'''
+            <h2>您的订阅已重置</h2>
+            <p>亲爱的 {username}，</p>
+            <p>您的订阅地址已被重置，请使用新的订阅地址更新您的客户端配置。</p>
+            
+            <div class="info-box">
+                <h3>📋 重置信息</h3>
+                <p><strong>重置时间：</strong>{reset_time}</p>
+                <p><strong>重置原因：</strong>{reset_reason}</p>
+            </div>
+            
+            <h3>🔗 新的订阅地址</h3>
+            <div class="url-box">
+                {new_subscription_url}
+            </div>
+            
+            <div class="warning-box">
+                <p><strong>⚠️ 重要提醒：</strong></p>
+                <ul>
+                    <li>请立即更新您的客户端配置，使用新的订阅地址</li>
+                    <li>旧的订阅地址将无法使用</li>
+                    <li>请妥善保管新的订阅地址，不要分享给他人</li>
+                    <li>如有疑问，请及时联系客服</li>
+                </ul>
+            </div>
+            
+            <p>如有任何问题，请随时联系我们的客服团队。</p>
+        '''
+        
+        return EmailTemplateEnhanced.get_base_template(title, content, '请及时更新您的客户端配置')

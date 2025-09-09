@@ -41,7 +41,7 @@ class UserService:
             email=user_in.email,
             hashed_password=hashed_password,
             is_active=True,
-            is_verified=True,  # 临时设置为已验证，跳过邮箱验证
+            is_verified=False,  # 新用户需要邮箱验证
             is_admin=False
         )
         

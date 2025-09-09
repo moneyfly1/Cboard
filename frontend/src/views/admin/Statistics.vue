@@ -193,11 +193,57 @@
       // 获取统计数据
       const fetchStatistics = async () => {
         try {
+          console.log('开始获取统计数据...')
           const response = await statisticsAPI.getStatistics()
-          Object.assign(statistics, response.data.overview)
-          userStats.value = response.data.userStats
-          subscriptionStats.value = response.data.subscriptionStats
-          recentActivities.value = response.data.recentActivities
+          console.log('API响应:', response)
+          console.log('响应数据:', response.data)
+          
+          if (response.data && response.data.data) {
+            const data = response.data.data
+            console.log('统计数据:', data)
+            
+            // 更新概览数据
+            if (data.overview) {
+              Object.assign(statistics, data.overview)
+              console.log('更新后的statistics:', statistics)
+            }
+            
+            // 更新用户统计
+            if (data.userStats) {
+              userStats.value = data.userStats.map(stat => ({
+                label: stat.name,
+                value: stat.value,
+                percentage: stat.percentage,
+                color: '#409eff'
+              }))
+              console.log('用户统计:', userStats.value)
+            }
+            
+            // 更新订阅统计
+            if (data.subscriptionStats) {
+              subscriptionStats.value = data.subscriptionStats.map(stat => ({
+                label: stat.name,
+                value: stat.value,
+                percentage: stat.percentage,
+                color: '#67c23a'
+              }))
+              console.log('订阅统计:', subscriptionStats.value)
+            }
+            
+            // 更新最近活动
+            if (data.recentActivities) {
+              recentActivities.value = data.recentActivities.map(activity => ({
+                id: activity.id,
+                type: activity.type,
+                title: activity.description,
+                description: `金额: ¥${activity.amount} | 状态: ${activity.status}`,
+                time: activity.time
+              }))
+              console.log('最近活动:', recentActivities.value)
+            }
+          } else {
+            console.error('响应数据格式不正确:', response.data)
+          }
         } catch (error) {
           console.error('获取统计数据失败:', error)
         }

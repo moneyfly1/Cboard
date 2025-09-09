@@ -154,6 +154,27 @@ def reset_subscription(
     new_key = generate_subscription_url()
     subscription_service.update_subscription_key(subscription.id, new_key)
     
+    # 发送重置通知邮件
+    try:
+        from app.services.email import EmailService
+        from datetime import datetime
+        
+        if current_user.email:
+            email_service = EmailService(db)
+            reset_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            
+            # 发送重置通知邮件
+            email_service.send_subscription_reset_notification(
+                user_email=current_user.email,
+                username=current_user.username,
+                new_subscription_url=new_key,
+                reset_time=reset_time,
+                reset_reason="用户重置"
+            )
+            print(f"已发送用户重置订阅通知邮件到: {current_user.email}")
+    except Exception as e:
+        print(f"发送用户重置订阅通知邮件失败: {e}")
+    
     return ResponseBase(message="订阅地址重置成功")
 
 @router.post("/send-subscription-email", response_model=ResponseBase)
@@ -527,6 +548,27 @@ def reset_user_subscription_url(
         
         subscription.current_devices = 0
         subscription_service.db.commit()
+        
+        # 发送重置通知邮件
+        try:
+            from app.services.email import EmailService
+            from datetime import datetime
+            
+            if current_user.email:
+                email_service = EmailService(db)
+                reset_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                
+                # 发送重置通知邮件
+                email_service.send_subscription_reset_notification(
+                    user_email=current_user.email,
+                    username=current_user.username,
+                    new_subscription_url=new_url,
+                    reset_time=reset_time,
+                    reset_reason="用户重置订阅地址"
+                )
+                print(f"已发送用户重置订阅地址通知邮件到: {current_user.email}")
+        except Exception as e:
+            print(f"发送用户重置订阅地址通知邮件失败: {e}")
         
         return ResponseBase(message="订阅地址重置成功", data={"new_subscription_url": new_url})
     except Exception as e:
