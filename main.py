@@ -63,6 +63,6 @@ if __name__ == "__main__":
         "main:app",
         host="0.0.0.0",
         port=8000,
-        reload=True,
+        reload=False,  # 禁用自动重载，避免订阅更新时服务器重启
         log_level="info"
     )

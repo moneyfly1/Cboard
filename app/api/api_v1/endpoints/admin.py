@@ -1,5 +1,5 @@
 from typing import Any, Optional, List
-from fastapi import APIRouter, Depends, HTTPException, status, Query, Body
+from fastapi import APIRouter, Depends, HTTPException, status, Query, Body, BackgroundTasks
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
 
@@ -12,7 +12,8 @@ from app.services.order import OrderService
 from app.services.settings import SettingsService
 from app.services.payment_config import PaymentConfigService
 from app.services.email_template import EmailTemplateService
-from app.services.node import NodeService
+from app.services.node_service import NodeService
+# from app.services.node_speed_monitor import get_node_speed_monitor  # 已删除
 # from app.models.user import User  # 暂时注释掉，避免循环导入
 
 router = APIRouter()
@@ -324,6 +325,31 @@ def batch_delete_users(
     except Exception as e:
         db.rollback()
         return ResponseBase(success=False, message=f"批量删除用户失败: {str(e)}")
+
+# ==================== 节点管理 API ====================
+
+@router.get("/nodes/stats", response_model=ResponseBase)
+def get_nodes_stats(
+    current_admin = Depends(get_current_admin_user)
+) -> Any:
+    """获取节点统计信息"""
+    try:
+        from app.services.node_service import NodeService
+        from app.core.database import SessionLocal
+
+        db = SessionLocal()
+        try:
+            node_service = NodeService(db)
+            stats = node_service.get_node_statistics()
+
+            return ResponseBase(
+                data=stats,
+                message="获取节点统计成功"
+            )
+        finally:
+            node_service.close()
+    except Exception as e:
+        return ResponseBase(success=False, message=f"获取节点统计失败: {str(e)}")
 
 @router.post("/users/batch-enable", response_model=ResponseBase)
 def batch_enable_users(
@@ -2784,6 +2810,10 @@ def delete_user_all_data(
 ) -> Any:
     """删除用户的所有数据（订阅、设备等）"""
     try:
+        from app.models.subscription import Subscription, Device
+        from app.models.user_activity import UserActivity
+        from app.models.order import Order
+        
         subscription_service = SubscriptionService(db)
         user_service = UserService(db)
         
@@ -4324,3 +4354,31 @@ def get_online_stats(
         })
     except Exception as e:
         return ResponseBase(success=False, message=f"获取在线设备统计失败: {str(e)}")
+
+
+@router.post("/clash-config/regenerate", response_model=ResponseBase)
+def regenerate_clash_config(
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_admin = Depends(get_current_admin_user)
+) -> Any:
+    """重新生成Clash配置文件"""
+    try:
+        from app.services.config_update_service import ConfigUpdateService
+        
+        service = ConfigUpdateService(db)
+        
+        # 检查是否已经在运行
+        if service.is_running():
+            return ResponseBase(success=False, message="配置更新任务已在运行中")
+        
+        # 启动后台任务重新生成配置
+        background_tasks.add_task(service.run_update_task)
+        
+        return ResponseBase(message="Clash配置重新生成任务已启动")
+            
+    except Exception as e:
+        return ResponseBase(
+            success=False,
+            message=f"重新生成Clash配置失败: {str(e)}"
+        )

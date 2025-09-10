@@ -191,6 +191,14 @@
             <span class="nav-text" v-show="!sidebarCollapsed">邮件队列</span>
           </router-link>
           <router-link 
+            to="/admin/node-speed-control"
+            class="nav-item"
+            :class="{ active: $route.path === '/admin/node-speed-control' }"
+          >
+            <i class="el-icon-connection"></i>
+            <span class="nav-text" v-show="!sidebarCollapsed">节点测速控制</span>
+          </router-link>
+          <router-link 
             to="/admin/statistics"
             class="nav-item"
             :class="{ active: $route.path === '/admin/statistics' }"

@@ -10,14 +10,71 @@ import threading
 import time
 import yaml
 import requests
+import urllib.parse
+import re
 from datetime import datetime, timedelta
 from typing import Dict, List, Any, Optional
 from sqlalchemy.orm import Session
-from app.core.database import get_db
+from app.core.database import get_db, SessionLocal
 from app.models.config import SystemConfig
 import logging
 
 logger = logging.getLogger(__name__)
+
+def unicode_decode(s):
+    """Unicode解码函数"""
+    try:
+        return json.loads(f'"{s}"')
+    except Exception:
+        return s
+
+def clean_name(name):
+    """清理节点名称 - 按照老代码逻辑"""
+    import re
+    if not name:
+        return name
+
+    # 检查是否是重命名后的格式（如：英国-Trojan-001, 香港-SS-001等）
+    # 如果是这种格式，直接返回，不进行清理
+    if re.match(r'^[^\s]+-[A-Za-z]+-\d+$', name):
+        return name
+
+    # 更强的机场后缀清理，支持多种常见无用后缀
+    patterns = [
+        r'[\s]*[-_][\s]*(官网|网址|连接|试用|导入|免费|Hoshino|Network|续|费|qq|超时|请更新|订阅|通知|域名|套餐|剩余|到期|流量|GB|TB|过期|expire|traffic|remain|迅云加速|快云加速|脉冲云|闪连一元公益机场|一元公益机场|公益机场|机场|加速|云)[\s]*$',
+        r'[\s]*[-_][\s]*[0-9]+[\s]*$',
+        r'[\s]*[-_][\s]*[A-Za-z]+[\s]*$',
+        # 直接以这些词结尾也去除
+        r'(官网|网址|连接|试用|导入|免费|Hoshino|Network|续|费|qq|超时|请更新|订阅|通知|域名|套餐|剩余|到期|流量|GB|TB|过期|expire|traffic|remain|迅云加速|快云加速|脉冲云|闪连一元公益机场|一元公益机场|公益机场|机场|加速|云)$',
+        # 处理没有空格的情况，如"-迅云加速"
+        r'[-_](官网|网址|连接|试用|导入|免费|Hoshino|Network|续|费|qq|超时|请更新|订阅|通知|域名|套餐|剩余|到期|流量|GB|TB|过期|expire|traffic|remain|迅云加速|快云加速|脉冲云|闪连一元公益机场|一元公益机场|公益机场|机场|加速|云)$'
+    ]
+    for pattern in patterns:
+        name = re.sub(pattern, '', name)
+
+    # 去掉所有空格
+    name = re.sub(r'[\s]+', '', name)
+    name = name.strip()
+    return name
+
+def get_unique_name(name, name_count):
+    """获取唯一名称 - 按照老代码逻辑"""
+    # 先清理名称
+    name = clean_name(name)
+    name = name.strip()
+    if not name:
+        name = "节点"
+    
+    # 检查名称是否已存在，如果存在则添加编号
+    original_name = name
+    counter = 1
+    while name in name_count:
+        counter += 1
+        name = f"{original_name}{counter:02d}"
+    
+    # 记录使用的名称
+    name_count[name] = True
+    return name
 
 class ConfigUpdateService:
     def __init__(self, db: Session):
@@ -28,7 +85,8 @@ class ConfigUpdateService:
         self.logs = []
         self.max_logs = 1000
         self.log_cleanup_timer = None
-        self._start_log_cleanup_timer()
+        self.cleanup_interval = 600  # 默认10分钟，可配置
+        # 不在初始化时自动启动日志清理定时器
         
         # 默认配置（仅作为备用，实际使用后台配置）
         self.default_config = {
@@ -64,7 +122,12 @@ class ConfigUpdateService:
         self.is_running_flag = True
         self._add_log("开始执行配置更新任务", "info")
         
+        # 在后台任务中创建新的数据库连接
+        db = SessionLocal()
         try:
+            # 更新数据库连接
+            self.db = db
+            
             # 获取配置
             config = self.get_config()
             
@@ -72,28 +135,38 @@ class ConfigUpdateService:
             target_dir = config.get("target_dir", "./uploads/config")
             os.makedirs(target_dir, exist_ok=True)
             
-            # 下载和处理节点
-            nodes = self._download_and_process_nodes(config)
+            # 节点采集功能已暂时关闭，等待后期开发
+            self._add_log("节点采集功能已暂时关闭，等待后期开发", "info")
+            self._add_log("如需使用此功能，请联系开发人员", "warning")
             
-            if nodes:
-                # 生成v2ray配置
-                v2ray_file = os.path.join(target_dir, config.get("v2ray_file", "xr"))
-                self._generate_v2ray_config(nodes, v2ray_file)
-                
-                # 生成clash配置
-                clash_file = os.path.join(target_dir, config.get("clash_file", "clash.yaml"))
-                self._generate_clash_config(nodes, clash_file)
-                
-                self._add_log(f"配置更新完成，处理了 {len(nodes)} 个节点", "success")
-                self._update_last_update_time()
-            else:
-                self._add_log("未获取到有效节点", "error")
+            # 暂时跳过节点下载和处理
+            # nodes = self._download_and_process_nodes(config)
+            
+            # 暂时跳过配置文件生成
+            # if nodes:
+            #     # 生成v2ray配置
+            #     v2ray_file = os.path.join(target_dir, config.get("v2ray_file", "xr"))
+            #     self._generate_v2ray_config(nodes, v2ray_file)
+            #     
+            #     # 生成clash配置
+            #     clash_file = os.path.join(target_dir, config.get("clash_file", "clash.yaml"))
+            #     self._generate_clash_config(nodes, clash_file)
+            #     
+            #     self._add_log(f"配置更新完成，处理了 {len(nodes)} 个节点", "success")
+            #     self._update_last_update_time()
+            # else:
+            #     self._add_log("未获取到有效节点", "error")
+            
+            self._add_log("配置更新任务完成（节点采集功能已关闭）", "success")
                 
         except Exception as e:
             self._add_log(f"配置更新失败: {str(e)}", "error")
             logger.error(f"配置更新失败: {str(e)}", exc_info=True)
         finally:
             self.is_running_flag = False
+            # 关闭数据库连接
+            if db:
+                db.close()
     
     def run_test_task(self):
         """运行测试任务（不保存文件）"""
@@ -104,23 +177,37 @@ class ConfigUpdateService:
         self.is_running_flag = True
         self._add_log("开始执行测试任务", "info")
         
+        # 在后台任务中创建新的数据库连接
+        db = SessionLocal()
         try:
+            # 更新数据库连接
+            self.db = db
+            
             # 获取配置
             config = self.get_config()
             
-            # 下载和处理节点
-            nodes = self._download_and_process_nodes(config)
+            # 节点采集功能已暂时关闭，等待后期开发
+            self._add_log("节点采集功能已暂时关闭，等待后期开发", "info")
+            self._add_log("如需使用此功能，请联系开发人员", "warning")
             
-            if nodes:
-                self._add_log(f"测试完成，处理了 {len(nodes)} 个节点", "success")
-            else:
-                self._add_log("测试失败，未获取到有效节点", "error")
+            # 暂时跳过节点下载和处理
+            # nodes = self._download_and_process_nodes(config)
+            
+            # if nodes:
+            #     self._add_log(f"测试完成，处理了 {len(nodes)} 个节点", "success")
+            # else:
+            #     self._add_log("测试失败，未获取到有效节点", "error")
+            
+            self._add_log("测试任务完成（节点采集功能已关闭）", "success")
                 
         except Exception as e:
             self._add_log(f"测试失败: {str(e)}", "error")
             logger.error(f"测试失败: {str(e)}", exc_info=True)
         finally:
             self.is_running_flag = False
+            # 关闭数据库连接
+            if db:
+                db.close()
     
     def stop_update_task(self):
         """停止更新任务"""
@@ -163,6 +250,30 @@ class ConfigUpdateService:
                 
                 # 提取节点链接
                 node_links = self._extract_node_links(content)
+                self._add_log(f"从 {url} 提取到 {len(node_links)} 个节点链接", "info")
+                
+                # 显示节点类型统计
+                if node_links:
+                    type_count = {}
+                    for link in node_links[:10]:  # 只统计前10个
+                        if link.startswith('ss://'):
+                            type_count['SS'] = type_count.get('SS', 0) + 1
+                        elif link.startswith('ssr://'):
+                            type_count['SSR'] = type_count.get('SSR', 0) + 1
+                        elif link.startswith('vmess://'):
+                            type_count['VMess'] = type_count.get('VMess', 0) + 1
+                        elif link.startswith('trojan://'):
+                            type_count['Trojan'] = type_count.get('Trojan', 0) + 1
+                        elif link.startswith('vless://'):
+                            type_count['VLESS'] = type_count.get('VLESS', 0) + 1
+                        elif link.startswith('hysteria2://') or link.startswith('hy2://'):
+                            type_count['Hysteria2'] = type_count.get('Hysteria2', 0) + 1
+                        elif link.startswith('tuic://'):
+                            type_count['TUIC'] = type_count.get('TUIC', 0) + 1
+                    
+                    if type_count:
+                        type_info = ', '.join([f"{k}: {v}" for k, v in type_count.items()])
+                        self._add_log(f"节点类型统计: {type_info}", "info")
                 
                 # 过滤节点
                 filtered_links = self._filter_nodes(node_links, filter_keywords)
@@ -246,25 +357,72 @@ class ConfigUpdateService:
             raise
     
     def _generate_clash_config(self, nodes: List[str], output_file: str):
-        """生成clash配置"""
+        """生成clash配置 - 按照老代码逻辑"""
         try:
-            # 解析所有节点
+            # 按照老代码逻辑解析所有节点
             proxies = []
             proxy_names = []
             name_count = {}
             
-            for i, node in enumerate(nodes):
-                proxy = self._parse_node_to_clash(node, f"节点{i+1}", name_count)
-                if proxy:
-                    proxies.append(proxy)
-                    proxy_names.append(proxy['name'])
+            self._add_log(f"开始解析 {len(nodes)} 个节点", "info")
+            
+            # 统计节点类型
+            node_type_count = {}
+            failed_count = 0
+            
+            for i, node in enumerate(nodes, 1):
+                try:
+                    # 记录节点类型
+                    if node.startswith('ss://'):
+                        node_type = 'SS'
+                    elif node.startswith('ssr://'):
+                        node_type = 'SSR'
+                    elif node.startswith('vmess://'):
+                        node_type = 'VMess'
+                    elif node.startswith('trojan://'):
+                        node_type = 'Trojan'
+                    elif node.startswith('vless://'):
+                        node_type = 'VLESS'
+                    elif node.startswith('hysteria2://') or node.startswith('hy2://'):
+                        node_type = 'Hysteria2'
+                    elif node.startswith('tuic://'):
+                        node_type = 'TUIC'
+                    else:
+                        node_type = 'Unknown'
+                    
+                    proxy = self._parse_node_legacy(node, name_count)
+                    if proxy:
+                        proxies.append(proxy)
+                        proxy_names.append(proxy['name'])
+                        node_type_count[node_type] = node_type_count.get(node_type, 0) + 1
+                        
+                        # 每100个节点记录一次进度
+                        if i % 100 == 0:
+                            self._add_log(f"已解析 {i}/{len(nodes)} 个节点", "info")
+                    else:
+                        failed_count += 1
+                        if failed_count <= 5:  # 只记录前5个失败案例
+                            self._add_log(f"解析第 {i} 个节点失败: {node_type} 节点格式错误", "warning")
+                        
+                except Exception as e:
+                    failed_count += 1
+                    if failed_count <= 5:  # 只记录前5个失败案例
+                        self._add_log(f"解析第 {i} 个节点异常: {str(e)}", "warning")
+                    continue
+            
+            # 显示解析结果统计
+            if node_type_count:
+                type_info = ', '.join([f"{k}: {v}" for k, v in node_type_count.items()])
+                self._add_log(f"成功解析节点类型统计: {type_info}", "info")
+            
+            self._add_log(f"成功解析 {len(proxies)} 个节点，失败 {failed_count} 个", "info")
             
             if not proxies:
                 self._add_log("没有有效的节点可以生成Clash配置", "error")
                 return
             
-            # 使用模板生成完整的Clash配置
-            clash_config_content = self._generate_clash_from_template(proxies, proxy_names)
+            # 使用老代码的模板生成完整的Clash配置
+            clash_config_content = self._generate_clash_with_legacy_template(proxies, proxy_names)
             
             # 保存到文件
             with open(output_file, 'w', encoding='utf-8') as f:
@@ -272,6 +430,15 @@ class ConfigUpdateService:
             
             # 保存到数据库
             self._save_clash_config_to_db(clash_config_content)
+            
+            # 清除节点服务缓存，确保下次获取节点时使用最新配置
+            try:
+                from app.services.node_service import NodeService
+                node_service = NodeService(self.db)
+                node_service.clear_cache()
+                node_service.close()
+            except Exception as e:
+                self._add_log(f"清除节点缓存失败: {str(e)}", "warning")
             
             self._add_log(f"clash配置已生成并保存到数据库: {output_file}，共 {len(proxies)} 个节点", "success")
         except Exception as e:
@@ -834,16 +1001,17 @@ class ConfigUpdateService:
         
         return yaml.dump(config, allow_unicode=True, default_flow_style=False, sort_keys=False)
     
-    def _start_log_cleanup_timer(self):
+    def _start_log_cleanup_timer(self, interval: int = None):
         """启动日志清理定时器"""
         try:
             if self.log_cleanup_timer is not None:
                 self.log_cleanup_timer.cancel()
             
-            # 每10分钟清理一次日志
-            self.log_cleanup_timer = threading.Timer(600, self._cleanup_logs)
+            # 使用配置的间隔时间，如果没有指定则使用默认值
+            cleanup_interval = interval or self.cleanup_interval
+            self.log_cleanup_timer = threading.Timer(cleanup_interval, self._cleanup_logs)
             self.log_cleanup_timer.start()
-            self._add_log("日志清理定时器已启动，每10分钟清理一次", "info")
+            self._add_log(f"日志清理定时器已启动，每{cleanup_interval//60}分钟清理一次", "info")
         except Exception as e:
             logger.error(f"启动日志清理定时器失败: {str(e)}")
     
@@ -878,19 +1046,41 @@ class ConfigUpdateService:
         except Exception as e:
             logger.error(f"停止日志清理定时器失败: {str(e)}")
     
+    def set_cleanup_interval(self, interval_minutes: int):
+        """设置日志清理间隔（分钟）"""
+        if interval_minutes < 1:
+            raise ValueError("清理间隔不能小于1分钟")
+        
+        self.cleanup_interval = interval_minutes * 60  # 转换为秒
+        self._add_log(f"日志清理间隔已设置为{interval_minutes}分钟", "info")
+        
+        # 如果定时器正在运行，重新启动以应用新间隔
+        if self.log_cleanup_timer is not None:
+            self._start_log_cleanup_timer()
+    
+    def get_cleanup_interval(self) -> int:
+        """获取日志清理间隔（分钟）"""
+        return self.cleanup_interval // 60
+    
     def get_logs(self, limit: int = 100) -> List[Dict[str, Any]]:
         """获取日志"""
         try:
-            # 从数据库获取日志
-            logs_record = self.db.query(SystemConfig).filter(SystemConfig.key == "config_update_logs").first()
-            if logs_record:
-                logs_data = json.loads(logs_record.value)
-                return logs_data[-limit:] if logs_data else []
-            else:
-                return []
+            # 优先从内存中获取日志（实时性更好）
+            if self.logs:
+                return self.logs[-limit:] if len(self.logs) > limit else self.logs
+            
+            # 如果内存中没有日志，从数据库获取
+            if self.db is not None:
+                logs_record = self.db.query(SystemConfig).filter(SystemConfig.key == "config_update_logs").first()
+                if logs_record:
+                    logs_data = json.loads(logs_record.value)
+                    return logs_data[-limit:] if logs_data else []
+            
+            return []
         except Exception as e:
             logger.error(f"获取日志失败: {str(e)}")
-            return []
+            # 如果出错，至少返回内存中的日志
+            return self.logs[-limit:] if self.logs else []
     
     def _add_log(self, message: str, level: str = "info"):
         """添加日志"""
@@ -900,7 +1090,17 @@ class ConfigUpdateService:
             "message": message
         }
         
+        # 先保存到内存中（用于实时显示）
+        self.logs.append(log_entry)
+        if len(self.logs) > self.max_logs:
+            self.logs = self.logs[-self.max_logs:]
+        
         try:
+            # 检查数据库连接是否有效
+            if self.db is None:
+                logger.warning("数据库连接无效，仅保存到内存")
+                return
+                
             # 从数据库获取现有日志
             logs_record = self.db.query(SystemConfig).filter(SystemConfig.key == "config_update_logs").first()
             if logs_record:
@@ -930,18 +1130,11 @@ class ConfigUpdateService:
                 self.db.add(logs_record)
             
             self.db.commit()
-            
-            # 同时保存到内存中（用于实时显示）
-            self.logs.append(log_entry)
-            if len(self.logs) > self.max_logs:
-                self.logs = self.logs[-self.max_logs:]
+            logger.info(f"日志已保存到数据库: {message}")
                 
         except Exception as e:
-            logger.error(f"保存日志失败: {str(e)}")
-            # 如果数据库保存失败，至少保存到内存中
-            self.logs.append(log_entry)
-            if len(self.logs) > self.max_logs:
-                self.logs = self.logs[-self.max_logs:]
+            logger.error(f"保存日志到数据库失败: {str(e)}")
+            # 如果数据库保存失败，至少已经保存到内存中了
     
     def get_config(self) -> Dict[str, Any]:
         """获取配置"""
@@ -956,6 +1149,63 @@ class ConfigUpdateService:
         except Exception as e:
             logger.error(f"获取配置失败: {str(e)}")
             return self.default_config.copy()
+    
+    def get_node_sources(self) -> List[str]:
+        """获取节点源URL列表"""
+        try:
+            config = self.get_config()
+            return config.get("urls", [])
+        except Exception as e:
+            self._add_log(f"获取节点源配置失败: {str(e)}", "error")
+            return []
+    
+    def update_node_sources(self, sources_data: dict) -> None:
+        """更新节点源URL列表"""
+        try:
+            urls = sources_data.get("urls", [])
+            if not isinstance(urls, list):
+                raise ValueError("节点源URL必须是列表格式")
+            
+            # 验证URL格式
+            for url in urls:
+                if not url.startswith(('http://', 'https://')):
+                    raise ValueError(f"无效的URL格式: {url}")
+            
+            # 更新配置
+            config = self.get_config()
+            config["urls"] = urls
+            self.update_config(config)
+            
+            self._add_log(f"节点源配置已更新，共 {len(urls)} 个源", "info")
+        except Exception as e:
+            self._add_log(f"更新节点源配置失败: {str(e)}", "error")
+            raise
+    
+    def get_filter_keywords(self) -> List[str]:
+        """获取过滤关键词列表"""
+        try:
+            config = self.get_config()
+            return config.get("filter_keywords", [])
+        except Exception as e:
+            self._add_log(f"获取过滤关键词配置失败: {str(e)}", "error")
+            return []
+    
+    def update_filter_keywords(self, keywords_data: dict) -> None:
+        """更新过滤关键词列表"""
+        try:
+            keywords = keywords_data.get("keywords", [])
+            if not isinstance(keywords, list):
+                raise ValueError("过滤关键词必须是列表格式")
+            
+            # 更新配置
+            config = self.get_config()
+            config["filter_keywords"] = keywords
+            self.update_config(config)
+            
+            self._add_log(f"过滤关键词配置已更新，共 {len(keywords)} 个关键词", "info")
+        except Exception as e:
+            self._add_log(f"更新过滤关键词配置失败: {str(e)}", "error")
+            raise
     
     def update_config(self, config_data: Dict[str, Any]):
         """更新配置"""
@@ -1254,3 +1504,550 @@ class ConfigUpdateService:
             self.db.rollback()
             self._add_log(f"保存V2Ray有效配置到数据库失败: {str(e)}", "error")
             raise
+    
+    def _parse_node_legacy(self, node_url: str, name_count: dict) -> Optional[Dict[str, Any]]:
+        """按照老代码逻辑解析节点"""
+        try:
+            if node_url.startswith('vmess://'):
+                return self._decode_vmess_legacy(node_url, name_count)
+            elif node_url.startswith('ss://'):
+                return self._decode_ss_legacy(node_url, name_count)
+            elif node_url.startswith('trojan://'):
+                return self._decode_trojan_legacy(node_url, name_count)
+            elif node_url.startswith('vless://'):
+                if 'reality' in node_url.lower() or 'pbk=' in node_url:
+                    return self._decode_vless_reality_legacy(node_url, name_count)
+                else:
+                    return self._decode_vless_legacy(node_url, name_count)
+            elif node_url.startswith('ssr://'):
+                return self._decode_ssr_legacy(node_url, name_count)
+            elif node_url.startswith('hysteria2://') or node_url.startswith('hy2://'):
+                return self._decode_hysteria2_legacy(node_url, name_count)
+            elif node_url.startswith('tuic://'):
+                return self._decode_tuic_legacy(node_url, name_count)
+            else:
+                return None
+        except Exception as e:
+            self._add_log(f"解析节点失败: {str(e)}", "warning")
+            return None
+    
+    def _decode_vmess_legacy(self, vmess_url: str, name_count: dict) -> Optional[Dict[str, Any]]:
+        """按照老代码逻辑解析VMess节点"""
+        try:
+            b64 = vmess_url[8:]
+            b64 += '=' * (-len(b64) % 4)
+            raw = base64.b64decode(b64).decode('utf-8')
+            data = json.loads(raw)
+            name = data.get('ps', '')
+            server = data.get('add')
+            
+            # 解码节点名称
+            if name:
+                name = urllib.parse.unquote(name)
+                name = unicode_decode(name)
+            
+            # 如果没有节点名称或名称为默认值，使用美国作为默认名称
+            if not name or name.strip() == '' or name == 'vmess':
+                name = "美国"
+            
+            port = int(data.get('port'))
+            uuid = data.get('id')
+            alterId = int(data.get('aid', 0))
+            cipher = data.get('scy', 'auto')
+            # 修复不支持的加密方法
+            if cipher == 'auto':
+                cipher = 'auto'  # VMess的auto在Clash中是支持的，但为了保险起见，我们保持原样
+            network = data.get('net', 'tcp')
+            tls = data.get('tls', '') == 'tls'
+            
+            proxy = {
+                'name': get_unique_name(name, name_count),
+                'type': 'vmess',
+                'server': server,
+                'port': port,
+                'uuid': uuid,
+                'alterId': alterId,
+                'cipher': cipher,
+                'udp': True,
+                'tls': tls,
+            }
+            
+            # 处理不同的网络类型
+            if network == 'ws':
+                proxy['network'] = 'ws'
+                proxy['ws-opts'] = {
+                    'path': data.get('path', '/'),
+                    'headers': {
+                        'Host': data.get('host', '')
+                    }
+                }
+            elif network == 'h2':
+                proxy['network'] = 'h2'
+                proxy['h2-opts'] = {
+                    'path': data.get('path', '/'),
+                    'host': [data.get('host', '')]
+                }
+            elif network == 'grpc':
+                proxy['network'] = 'grpc'
+                proxy['grpc-opts'] = {
+                    'grpc-service-name': data.get('path', '')
+                }
+            
+            return proxy
+        except Exception as e:
+            self._add_log(f"解析VMess节点失败: {str(e)}", "warning")
+            return None
+    
+    def _decode_ss_legacy(self, ss_url: str, name_count: dict) -> Optional[Dict[str, Any]]:
+        """按照老代码逻辑解析SS节点"""
+        try:
+            # 处理SS URL格式
+            if '#' in ss_url:
+                url_part, name_part = ss_url.split('#', 1)
+                name = urllib.parse.unquote(name_part)
+                name = unicode_decode(name)
+            else:
+                url_part = ss_url
+                name = "SS节点"
+            
+            # 解析URL部分
+            url_part = url_part[5:]  # 去掉 'ss://'
+            if '@' in url_part:
+                method_password, server_port = url_part.split('@', 1)
+                if ':' in server_port:
+                    server, port = server_port.split(':', 1)
+                    port = int(port)
+                else:
+                    server = server_port
+                    port = 443
+                
+                # 解码method和password
+                try:
+                    decoded = base64.b64decode(method_password + '==').decode('utf-8')
+                    if ':' in decoded:
+                        method, password = decoded.split(':', 1)
+                    else:
+                        method = 'aes-256-gcm'
+                        password = decoded
+                except:
+                    method = 'aes-256-gcm'
+                    password = ''
+            else:
+                # 处理base64编码的完整URL
+                try:
+                    decoded = base64.b64decode(url_part + '==').decode('utf-8')
+                    if '@' in decoded:
+                        method_password, server_port = decoded.split('@', 1)
+                        if ':' in method_password:
+                            method, password = method_password.split(':', 1)
+                        else:
+                            method = 'aes-256-gcm'
+                            password = method_password
+                        
+                        if ':' in server_port:
+                            server, port = server_port.split(':', 1)
+                            port = int(port)
+                        else:
+                            server = server_port
+                            port = 443
+                    else:
+                        return None
+                except:
+                    return None
+            
+            # 修复不支持的加密方法
+            if method == 'auto':
+                method = 'aes-256-gcm'  # 将auto替换为Clash支持的加密方法
+            
+            return {
+                'name': get_unique_name(name, name_count),
+                'type': 'ss',
+                'server': server,
+                'port': port,
+                'cipher': method,
+                'password': password,
+                'udp': True
+            }
+        except Exception as e:
+            self._add_log(f"解析SS节点失败: {str(e)}", "warning")
+            return None
+    
+    def _decode_trojan_legacy(self, trojan_url: str, name_count: dict) -> Optional[Dict[str, Any]]:
+        """按照老代码逻辑解析Trojan节点"""
+        try:
+            # 解析Trojan URL
+            if '#' in trojan_url:
+                url_part, name_part = trojan_url.split('#', 1)
+                name = urllib.parse.unquote(name_part)
+            else:
+                url_part = trojan_url
+                name = "Trojan节点"
+            
+            # 解析URL部分
+            url_part = url_part[9:]  # 去掉 'trojan://'
+            if '@' in url_part:
+                password, server_port = url_part.split('@', 1)
+                if '?' in server_port:
+                    server_port, params = server_port.split('?', 1)
+                
+                if ':' in server_port:
+                    server, port = server_port.split(':', 1)
+                    port = int(port)
+                else:
+                    server = server_port
+                    port = 443
+            else:
+                return None
+            
+            proxy = {
+                'name': get_unique_name(name, name_count),
+                'type': 'trojan',
+                'server': server,
+                'port': port,
+                'password': password,
+                'udp': True,
+                'sni': server
+            }
+            
+            return proxy
+        except Exception as e:
+            self._add_log(f"解析Trojan节点失败: {str(e)}", "warning")
+            return None
+    
+    def _decode_vless_legacy(self, vless_url: str, name_count: dict) -> Optional[Dict[str, Any]]:
+        """按照老代码逻辑解析VLESS节点"""
+        try:
+            # 解析VLESS URL
+            if '#' in vless_url:
+                url_part, name_part = vless_url.split('#', 1)
+                name = urllib.parse.unquote(name_part)
+            else:
+                url_part = vless_url
+                name = "VLESS节点"
+            
+            # 解析URL部分
+            url_part = url_part[8:]  # 去掉 'vless://'
+            if '@' in url_part:
+                uuid, server_port = url_part.split('@', 1)
+                if '?' in server_port:
+                    server_port, params = server_port.split('?', 1)
+                
+                if ':' in server_port:
+                    server, port = server_port.split(':', 1)
+                    port = int(port)
+                else:
+                    server = server_port
+                    port = 443
+            else:
+                return None
+            
+            proxy = {
+                'name': get_unique_name(name, name_count),
+                'type': 'vless',
+                'server': server,
+                'port': port,
+                'uuid': uuid,
+                'udp': True
+            }
+            
+            return proxy
+        except Exception as e:
+            self._add_log(f"解析VLESS节点失败: {str(e)}", "warning")
+            return None
+    
+    def _decode_vless_reality_legacy(self, vless_url: str, name_count: dict) -> Optional[Dict[str, Any]]:
+        """按照老代码逻辑解析VLESS Reality节点"""
+        try:
+            # 解析VLESS Reality URL
+            if '#' in vless_url:
+                url_part, name_part = vless_url.split('#', 1)
+                name = urllib.parse.unquote(name_part)
+            else:
+                url_part = vless_url
+                name = "VLESS Reality节点"
+            
+            # 解析URL部分
+            url_part = url_part[8:]  # 去掉 'vless://'
+            if '@' in url_part:
+                uuid, server_port = url_part.split('@', 1)
+                if '?' in server_port:
+                    server_port, params = server_port.split('?', 1)
+                
+                if ':' in server_port:
+                    server, port = server_port.split(':', 1)
+                    port = int(port)
+                else:
+                    server = server_port
+                    port = 443
+            else:
+                return None
+            
+            proxy = {
+                'name': get_unique_name(name, name_count),
+                'type': 'vless',
+                'server': server,
+                'port': port,
+                'uuid': uuid,
+                'udp': True,
+                'network': 'tcp',
+                'tls': True,
+                'reality-opts': {
+                    'public-key': '',
+                    'short-id': ''
+                }
+            }
+            
+            return proxy
+        except Exception as e:
+            self._add_log(f"解析VLESS Reality节点失败: {str(e)}", "warning")
+            return None
+    
+    def _decode_ssr_legacy(self, ssr_url: str, name_count: dict) -> Optional[Dict[str, Any]]:
+        """按照老代码逻辑解析SSR节点"""
+        try:
+            b64 = ssr_url[6:]  # 去掉 'ssr://'
+            b64 += '=' * (-len(b64) % 4)
+            raw = base64.b64decode(b64).decode('utf-8')
+            parts = raw.split(':')
+            if len(parts) < 5:
+                return None
+                
+            if len(parts) == 6:
+                # 6部分格式: server:port:protocol:method:obfs:password_base64/?params
+                server = parts[0]
+                port = int(parts[1])
+                protocol = parts[2]
+                method = parts[3]
+                actual_obfs = parts[4]
+                password_and_params = parts[5]
+                
+                # 检查第6部分是否包含参数
+                if '?' in password_and_params:
+                    password_b64 = password_and_params.split('?')[0].rstrip('/')
+                    actual_params_str = '?' + password_and_params.split('?', 1)[1]
+                else:
+                    password_b64 = password_and_params
+                    actual_params_str = ''
+            else:
+                # 5部分格式: server:port:protocol:method:obfs/?params
+                server = parts[0]
+                port = int(parts[1])
+                protocol = parts[2]
+                method = parts[3]
+                obfs_and_params = parts[4]
+                
+                if '?' in obfs_and_params:
+                    actual_obfs = obfs_and_params.split('?')[0].rstrip('/')
+                    actual_params_str = '?' + obfs_and_params.split('?', 1)[1]
+                else:
+                    actual_obfs = obfs_and_params.rstrip('/')
+                    actual_params_str = ''
+                password_b64 = ''
+            
+            # 解析参数
+            params = {}
+            if actual_params_str:
+                param_str = actual_params_str[1:]  # 移除开头的?
+                
+                # 解析URL参数
+                for param in param_str.split('&'):
+                    if '=' in param:
+                        key, value = param.split('=', 1)
+                        try:
+                            # 处理URL安全的base64编码
+                            url_safe_value = value.replace('-', '+').replace('_', '/')
+                            # 修复base64填充
+                            padding_needed = (4 - len(url_safe_value) % 4) % 4
+                            padded_value = url_safe_value + '=' * padding_needed
+                            decoded_value = base64.b64decode(padded_value).decode('utf-8')
+                            params[key] = decoded_value
+                        except Exception as e:
+                            # 如果base64解码失败，尝试直接使用原始值
+                            params[key] = value
+            
+            # 解码密码
+            if password_b64:
+                try:
+                    # 处理URL安全的base64编码
+                    url_safe_password = password_b64.replace('-', '+').replace('_', '/')
+                    # 修复base64填充
+                    padding_needed = (4 - len(url_safe_password) % 4) % 4
+                    padded_password = url_safe_password + '=' * padding_needed
+                    password = base64.b64decode(padded_password).decode('utf-8')
+                except Exception as e:
+                    password = password_b64  # 如果解码失败，使用原始值
+            else:
+                # 如果没有password_b64，尝试从参数中获取，或使用服务器信息作为密码
+                password = params.get('password', f'{server}_password')
+            
+            # 获取节点名称 - remarks参数也需要base64解码
+            name = params.get('remarks', '')
+            if name:
+                # remarks参数已经在上面解析时进行了base64解码
+                name = urllib.parse.unquote(name)
+                name = unicode_decode(name)
+            else:
+                name = "SSR节点"
+            
+            return {
+                'name': get_unique_name(name, name_count),
+                'type': 'ssr',
+                'server': server,
+                'port': port,
+                'cipher': method,
+                'password': password,
+                'obfs': actual_obfs,
+                'protocol': protocol,
+                'udp': True
+            }
+        except Exception as e:
+            self._add_log(f"解析SSR节点失败: {str(e)}", "warning")
+            return None
+    
+    def _decode_hysteria2_legacy(self, hysteria2_url: str, name_count: dict) -> Optional[Dict[str, Any]]:
+        """按照老代码逻辑解析Hysteria2节点"""
+        try:
+            # 解析Hysteria2 URL
+            if '#' in hysteria2_url:
+                url_part, name_part = hysteria2_url.split('#', 1)
+                name = urllib.parse.unquote(name_part)
+            else:
+                url_part = hysteria2_url
+                name = "Hysteria2节点"
+            
+            # 解析URL部分
+            url_part = url_part[12:]  # 去掉 'hysteria2://'
+            if '@' in url_part:
+                password, server_port = url_part.split('@', 1)
+                if '?' in server_port:
+                    server_port, params = server_port.split('?', 1)
+                
+                if ':' in server_port:
+                    server, port = server_port.split(':', 1)
+                    port = int(port)
+                else:
+                    server = server_port
+                    port = 443
+            else:
+                return None
+            
+            return {
+                'name': get_unique_name(name, name_count),
+                'type': 'hysteria2',
+                'server': server,
+                'port': port,
+                'password': password,
+                'udp': True
+            }
+        except Exception as e:
+            self._add_log(f"解析Hysteria2节点失败: {str(e)}", "warning")
+            return None
+    
+    def _decode_tuic_legacy(self, tuic_url: str, name_count: dict) -> Optional[Dict[str, Any]]:
+        """按照老代码逻辑解析TUIC节点"""
+        try:
+            # 解析TUIC URL
+            if '#' in tuic_url:
+                url_part, name_part = tuic_url.split('#', 1)
+                name = urllib.parse.unquote(name_part)
+            else:
+                url_part = tuic_url
+                name = "TUIC节点"
+            
+            # 解析URL部分
+            url_part = url_part[6:]  # 去掉 'tuic://'
+            if '@' in url_part:
+                password, server_port = url_part.split('@', 1)
+                if '?' in server_port:
+                    server_port, params = server_port.split('?', 1)
+                
+                if ':' in server_port:
+                    server, port = server_port.split(':', 1)
+                    port = int(port)
+                else:
+                    server = server_port
+                    port = 443
+            else:
+                return None
+            
+            return {
+                'name': get_unique_name(name, name_count),
+                'type': 'tuic',
+                'server': server,
+                'port': port,
+                'password': password,
+                'udp': True
+            }
+        except Exception as e:
+            self._add_log(f"解析TUIC节点失败: {str(e)}", "warning")
+            return None
+    
+    def _generate_clash_with_legacy_template(self, proxies: List[Dict[str, Any]], proxy_names: List[str]) -> str:
+        """使用老代码的模板生成Clash配置"""
+        try:
+            # 读取模板文件
+            script_dir = os.path.dirname(os.path.abspath(__file__))
+            head_file = os.path.join(script_dir, '..', '..', 'templates', 'clash_template_head.yaml')
+            tail_file = os.path.join(script_dir, '..', '..', 'templates', 'clash_template_tail.yaml')
+            
+            with open(head_file, encoding='utf-8') as f:
+                head = f.read().rstrip() + '\n'
+            with open(tail_file, encoding='utf-8') as f:
+                tail = f.read().lstrip()
+            
+            # 生成proxies部分的YAML
+            proxies_yaml = yaml.dump({'proxies': proxies}, allow_unicode=True, sort_keys=False, indent=2)
+            
+            # 处理tail部分，替换代理名称列表
+            tail_lines = tail.split('\n')
+            formatted_tail_lines = []
+            i = 0
+            while i < len(tail_lines):
+                line = tail_lines[i]
+                if line.strip():
+                    if line.startswith('  - name:') or line.startswith('- name:'):
+                        # 处理代理组
+                        if line.startswith('- name:'):
+                            formatted_tail_lines.append('  ' + line)
+                        else:
+                            formatted_tail_lines.append(line)
+                        
+                        # 查找proxies字段并替换
+                        j = i + 1
+                        while j < len(tail_lines):
+                            next_line = tail_lines[j]
+                            if 'proxies:' in next_line:
+                                formatted_tail_lines.append(next_line)
+                                
+                                # 跳过原有的代理列表
+                                k = j + 1
+                                while k < len(tail_lines) and (tail_lines[k].startswith('      -') or not tail_lines[k].strip()):
+                                    if tail_lines[k].strip():
+                                        formatted_tail_lines.append(tail_lines[k])
+                                    k += 1
+                                
+                                # 添加新的代理名称列表
+                                for proxy_name in proxy_names:
+                                    formatted_tail_lines.append(f'      - {proxy_name}')
+                                
+                                i = k - 1
+                                break
+                            else:
+                                formatted_tail_lines.append(next_line)
+                                j += 1
+                        if j >= len(tail_lines):
+                            i = len(tail_lines)
+                    else:
+                        formatted_tail_lines.append(line)
+                else:
+                    formatted_tail_lines.append(line)
+                i += 1
+            
+            formatted_tail = '\n'.join(formatted_tail_lines)
+            final_content = head + '\nproxies:\n' + proxies_yaml[9:] + '\nproxy-groups:\n' + formatted_tail
+            
+            return final_content
+        except Exception as e:
+            self._add_log(f"使用模板生成Clash配置失败: {str(e)}", "error")
+            # 如果模板生成失败，使用基本配置
+            return self._create_basic_clash_config_fallback(proxies, proxy_names)

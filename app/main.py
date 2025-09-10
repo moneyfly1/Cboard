@@ -13,6 +13,7 @@ from .models import (
     ThemeConfig, UserActivity, SubscriptionReset, LoginHistory
 )
 from .services.email_queue_processor import get_email_queue_processor
+# from .services.node_speed_monitor import get_node_speed_monitor  # 已删除
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
@@ -49,6 +50,11 @@ async def startup_event():
         email_processor.start_processing()
         print("邮件队列处理器已启动")
         
+        # 启动节点测速监控 - 已删除
+        # node_monitor = get_node_speed_monitor()
+        # node_monitor.start()
+        # print("节点测速监控已启动")
+        
     except Exception as e:
         print(f"应用启动失败: {e}")
 
@@ -60,8 +66,13 @@ async def shutdown_event():
         email_processor = get_email_queue_processor()
         email_processor.stop_processing()
         print("邮件队列处理器已停止")
+        
+        # 停止节点测速监控 - 已删除
+        # node_monitor = get_node_speed_monitor()
+        # node_monitor.stop()
+        # print("节点测速监控已停止")
     except Exception as e:
-        print(f"停止邮件队列处理器失败: {e}")
+        print(f"停止服务失败: {e}")
 
 @app.get("/")
 async def root():
@@ -76,6 +87,6 @@ if __name__ == "__main__":
         "app.main:app",
         host="0.0.0.0",
         port=8000,
-        reload=True,
+        reload=False,  # 禁用自动重载，避免订阅更新时服务器重启
         log_level="info"
     ) 

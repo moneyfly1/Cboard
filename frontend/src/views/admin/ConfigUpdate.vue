@@ -56,6 +56,19 @@
       </el-col>
     </el-row>
 
+    <!-- 功能状态提示 -->
+    <el-alert
+      title="节点采集功能已暂时关闭"
+      type="warning"
+      :closable="false"
+      style="margin-bottom: 20px;"
+    >
+      <template #default>
+        <p>节点采集功能已暂时关闭，等待后期开发。</p>
+        <p>如需使用此功能，请联系开发人员。</p>
+      </template>
+    </el-alert>
+
     <!-- 操作按钮 -->
     <el-card style="margin-bottom: 20px;">
       <template #header>
@@ -226,6 +239,10 @@
               <el-icon><VideoPause /></el-icon>
               停止自动清理
             </el-button>
+            <el-button type="info" size="small" @click="showCleanupIntervalDialog">
+              <el-icon><Setting /></el-icon>
+              设置清理间隔
+            </el-button>
           </div>
         </div>
       </template>
@@ -246,11 +263,43 @@
         </div>
       </div>
     </el-card>
+
+    <!-- 清理间隔设置对话框 -->
+    <el-dialog
+      v-model="cleanupIntervalDialogVisible"
+      title="设置日志清理间隔"
+      width="400px"
+      :before-close="handleCleanupIntervalDialogClose"
+    >
+      <el-form :model="cleanupIntervalForm" label-width="120px">
+        <el-form-item label="清理间隔（分钟）">
+          <el-input-number
+            v-model="cleanupIntervalForm.interval_minutes"
+            :min="1"
+            :max="1440"
+            placeholder="请输入清理间隔"
+            style="width: 100%"
+          />
+          <div class="form-tip">
+            建议设置范围：1-1440分钟（1分钟到24小时）
+          </div>
+        </el-form-item>
+      </el-form>
+      
+      <template #footer>
+        <div class="dialog-footer">
+          <el-button @click="cleanupIntervalDialogVisible = false">取消</el-button>
+          <el-button type="primary" @click="saveCleanupInterval" :loading="loading.cleanupInterval">
+            保存设置
+          </el-button>
+        </div>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, onUnmounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { 
   VideoPlay, VideoPause, Timer, Document, Clock, Refresh, 
@@ -297,8 +346,64 @@ export default {
       stop: false,
       test: false,
       refresh: false,
-      save: false
+      save: false,
+      cleanupInterval: false
     })
+    
+    // 清理间隔设置相关
+    const cleanupIntervalDialogVisible = ref(false)
+    const cleanupIntervalForm = reactive({
+      interval_minutes: 10
+    })
+    
+    // 轮询相关
+    let statusPollingInterval = null
+    let refreshInterval = null
+    
+    // 启动状态轮询
+    const startStatusPolling = () => {
+      if (statusPollingInterval) {
+        clearInterval(statusPollingInterval)
+      }
+      
+      statusPollingInterval = setInterval(async () => {
+        await getStatus()
+        // 如果任务停止，停止轮询
+        if (!status.value.is_running) {
+          stopStatusPolling()
+          stopRefreshInterval()
+        }
+      }, 2000) // 每2秒检查一次
+    }
+    
+    // 停止状态轮询
+    const stopStatusPolling = () => {
+      if (statusPollingInterval) {
+        clearInterval(statusPollingInterval)
+        statusPollingInterval = null
+      }
+    }
+    
+    // 启动定时刷新（仅在任务运行时）
+    const startRefreshInterval = () => {
+      if (refreshInterval) {
+        clearInterval(refreshInterval)
+      }
+      
+      refreshInterval = setInterval(() => {
+        if (!loading.refresh && status.value.is_running) {
+          getStatus()
+        }
+      }, 10000) // 每10秒刷新一次，减少请求频率
+    }
+    
+    // 停止定时刷新
+    const stopRefreshInterval = () => {
+      if (refreshInterval) {
+        clearInterval(refreshInterval)
+        refreshInterval = null
+      }
+    }
     
     // 获取状态
     const getStatus = async () => {
@@ -407,7 +512,11 @@ export default {
         
         if (response.data.success) {
           ElMessage.success('更新任务已启动')
+          // 立即刷新状态
           await getStatus()
+          // 启动轮询检查状态
+          startStatusPolling()
+          startRefreshInterval()
         } else {
           ElMessage.error(response.data.message || '启动失败')
         }
@@ -432,6 +541,8 @@ export default {
         
         if (response.data.success) {
           ElMessage.success('更新任务已停止')
+          stopStatusPolling() // 停止轮询
+          stopRefreshInterval() // 停止定时刷新
           await getStatus()
         } else {
           ElMessage.error(response.data.message || '停止失败')
@@ -549,7 +660,7 @@ export default {
         }
         
         if (response.data.success) {
-          ElMessage.success('日志自动清理已启动，每10分钟清理一次')
+          ElMessage.success(response.data.message || '日志自动清理已启动')
         } else {
           ElMessage.error(response.data.message || '启动失败')
         }
@@ -576,6 +687,46 @@ export default {
       } catch (error) {
         ElMessage.error('停止失败: ' + (error.response?.data?.message || error.message))
       }
+    }
+    
+    // 显示清理间隔设置对话框
+    const showCleanupIntervalDialog = async () => {
+      try {
+        // 先获取当前的清理间隔
+        const response = await api.get('/admin/config-update/logs/cleanup/interval')
+        if (response.data.success) {
+          cleanupIntervalForm.interval_minutes = response.data.data.interval_minutes
+        }
+        cleanupIntervalDialogVisible.value = true
+      } catch (error) {
+        ElMessage.error('获取当前清理间隔失败: ' + (error.response?.data?.message || error.message))
+      }
+    }
+    
+    // 保存清理间隔设置
+    const saveCleanupInterval = async () => {
+      try {
+        loading.cleanupInterval = true
+        const response = await api.put('/admin/config-update/logs/cleanup/interval', {
+          interval_minutes: cleanupIntervalForm.interval_minutes
+        })
+        
+        if (response.data.success) {
+          ElMessage.success(`清理间隔已设置为${cleanupIntervalForm.interval_minutes}分钟`)
+          cleanupIntervalDialogVisible.value = false
+        } else {
+          ElMessage.error(response.data.message || '设置失败')
+        }
+      } catch (error) {
+        ElMessage.error('设置失败: ' + (error.response?.data?.message || error.message))
+      } finally {
+        loading.cleanupInterval = false
+      }
+    }
+    
+    // 处理清理间隔对话框关闭
+    const handleCleanupIntervalDialogClose = (done) => {
+      done()
     }
     
     // 添加URL
@@ -629,12 +780,13 @@ export default {
       
       await Promise.all([getStatus(), getConfig(), getFiles(), getLogs()])
       
-      // 定时刷新状态
-      setInterval(() => {
-        if (!loading.refresh) {
-          getStatus()
-        }
-      }, 5000)
+      // 不再自动启动定时刷新，只在任务运行时才刷新
+    })
+    
+    onUnmounted(() => {
+      // 清理轮询
+      stopStatusPolling()
+      stopRefreshInterval()
     })
     
     return {
@@ -643,6 +795,8 @@ export default {
       fileList,
       logs,
       loading,
+      cleanupIntervalDialogVisible,
+      cleanupIntervalForm,
       startUpdate,
       stopUpdate,
       testUpdate,
@@ -652,6 +806,9 @@ export default {
       clearLogs,
       startLogCleanup,
       stopLogCleanup,
+      showCleanupIntervalDialog,
+      saveCleanupInterval,
+      handleCleanupIntervalDialogClose,
       addUrl,
       removeUrl,
       addKeyword,
@@ -809,5 +966,15 @@ export default {
   text-align: center;
   color: #999;
   padding: 20px;
+}
+
+.form-tip {
+  color: #999;
+  font-size: 12px;
+  margin-top: 5px;
+}
+
+.dialog-footer {
+  text-align: right;
 }
 </style>

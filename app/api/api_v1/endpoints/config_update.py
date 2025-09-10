@@ -105,6 +105,60 @@ def update_config(
     except Exception as e:
         return ResponseBase(success=False, message=f"更新配置失败: {str(e)}")
 
+@router.get("/node-sources", response_model=ResponseBase)
+def get_node_sources(
+    db: Session = Depends(get_db),
+    current_admin = Depends(get_current_admin_user)
+) -> Any:
+    """获取节点源配置"""
+    try:
+        service = ConfigUpdateService(db)
+        sources = service.get_node_sources()
+        return ResponseBase(data=sources)
+    except Exception as e:
+        return ResponseBase(success=False, message=f"获取节点源配置失败: {str(e)}")
+
+@router.put("/node-sources", response_model=ResponseBase)
+def update_node_sources(
+    sources_data: dict,
+    db: Session = Depends(get_db),
+    current_admin = Depends(get_current_admin_user)
+) -> Any:
+    """更新节点源配置"""
+    try:
+        service = ConfigUpdateService(db)
+        service.update_node_sources(sources_data)
+        return ResponseBase(message="节点源配置已更新")
+    except Exception as e:
+        return ResponseBase(success=False, message=f"更新节点源配置失败: {str(e)}")
+
+@router.get("/filter-keywords", response_model=ResponseBase)
+def get_filter_keywords(
+    db: Session = Depends(get_db),
+    current_admin = Depends(get_current_admin_user)
+) -> Any:
+    """获取过滤关键词配置"""
+    try:
+        service = ConfigUpdateService(db)
+        keywords = service.get_filter_keywords()
+        return ResponseBase(data=keywords)
+    except Exception as e:
+        return ResponseBase(success=False, message=f"获取过滤关键词配置失败: {str(e)}")
+
+@router.put("/filter-keywords", response_model=ResponseBase)
+def update_filter_keywords(
+    keywords_data: dict,
+    db: Session = Depends(get_db),
+    current_admin = Depends(get_current_admin_user)
+) -> Any:
+    """更新过滤关键词配置"""
+    try:
+        service = ConfigUpdateService(db)
+        service.update_filter_keywords(keywords_data)
+        return ResponseBase(message="过滤关键词配置已更新")
+    except Exception as e:
+        return ResponseBase(success=False, message=f"更新过滤关键词配置失败: {str(e)}")
+
 @router.get("/files", response_model=ResponseBase)
 def get_generated_files(
     db: Session = Depends(get_db),
@@ -207,14 +261,23 @@ def clear_logs(
 
 @router.post("/logs/cleanup/start", response_model=ResponseBase)
 def start_log_cleanup_timer(
+    interval_data: dict = None,
     db: Session = Depends(get_db),
     current_admin = Depends(get_current_admin_user)
 ) -> Any:
     """启动日志清理定时器"""
     try:
         service = ConfigUpdateService(db)
+        
+        # 如果提供了间隔时间，先设置间隔
+        if interval_data and "interval_minutes" in interval_data:
+            interval_minutes = interval_data["interval_minutes"]
+            if isinstance(interval_minutes, int) and interval_minutes > 0:
+                service.set_cleanup_interval(interval_minutes)
+        
         service._start_log_cleanup_timer()
-        return ResponseBase(message="日志清理定时器已启动")
+        interval = service.get_cleanup_interval()
+        return ResponseBase(message=f"日志清理定时器已启动，间隔{interval}分钟")
     except Exception as e:
         return ResponseBase(success=False, message=f"启动日志清理定时器失败: {str(e)}")
 
@@ -230,3 +293,34 @@ def stop_log_cleanup_timer(
         return ResponseBase(message="日志清理定时器已停止")
     except Exception as e:
         return ResponseBase(success=False, message=f"停止日志清理定时器失败: {str(e)}")
+
+@router.put("/logs/cleanup/interval", response_model=ResponseBase)
+def set_cleanup_interval(
+    interval_data: dict,
+    db: Session = Depends(get_db),
+    current_admin = Depends(get_current_admin_user)
+) -> Any:
+    """设置日志清理间隔"""
+    try:
+        service = ConfigUpdateService(db)
+        interval_minutes = interval_data.get("interval_minutes")
+        if not interval_minutes or not isinstance(interval_minutes, int):
+            return ResponseBase(success=False, message="请提供有效的间隔时间（分钟）")
+        
+        service.set_cleanup_interval(interval_minutes)
+        return ResponseBase(message=f"日志清理间隔已设置为{interval_minutes}分钟")
+    except Exception as e:
+        return ResponseBase(success=False, message=f"设置清理间隔失败: {str(e)}")
+
+@router.get("/logs/cleanup/interval", response_model=ResponseBase)
+def get_cleanup_interval(
+    db: Session = Depends(get_db),
+    current_admin = Depends(get_current_admin_user)
+) -> Any:
+    """获取日志清理间隔"""
+    try:
+        service = ConfigUpdateService(db)
+        interval = service.get_cleanup_interval()
+        return ResponseBase(data={"interval_minutes": interval})
+    except Exception as e:
+        return ResponseBase(success=False, message=f"获取清理间隔失败: {str(e)}")

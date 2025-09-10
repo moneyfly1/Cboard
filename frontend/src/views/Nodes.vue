@@ -28,6 +28,7 @@
       </div>
     </el-card>
 
+
     <!-- 节点列表 -->
     <el-card class="nodes-card">
       <template #header>
@@ -85,14 +86,6 @@
           </template>
         </el-table-column>
 
-        <el-table-column prop="region" label="地区" width="120">
-          <template #default="{ row }">
-            <el-tag :type="getRegionColor(row.region)">
-              {{ row.region }}
-            </el-tag>
-          </template>
-        </el-table-column>
-
         <el-table-column prop="type" label="类型" width="120">
           <template #default="{ row }">
             <el-tag :type="getTypeColor(row.type)">
@@ -101,7 +94,7 @@
           </template>
         </el-table-column>
 
-        <el-table-column prop="status" label="状态" width="100">
+        <el-table-column prop="status" label="在线状态" width="120">
           <template #default="{ row }">
             <el-tag :type="row.status === 'online' ? 'success' : 'danger'">
               {{ row.status === 'online' ? '在线' : '离线' }}
@@ -123,31 +116,6 @@
             </div>
           </template>
         </el-table-column>
-
-        <el-table-column prop="speed" label="速度" width="120">
-          <template #default="{ row }">
-            <span class="speed-text">{{ formatSpeed(row.speed) }}</span>
-          </template>
-        </el-table-column>
-
-        <el-table-column prop="uptime" label="在线时间" width="150">
-          <template #default="{ row }">
-            <span>{{ formatUptime(row.uptime) }}</span>
-          </template>
-        </el-table-column>
-
-        <el-table-column label="操作" width="120" fixed="right">
-          <template #default="{ row }">
-            <el-button 
-              type="primary" 
-              size="small" 
-              @click="testNode(row)"
-              :loading="row.testing"
-            >
-              测试
-            </el-button>
-          </template>
-        </el-table-column>
       </el-table>
 
       <!-- 空状态 -->
@@ -160,6 +128,7 @@
         </el-button>
       </el-empty>
     </el-card>
+
 
     <!-- 节点详情对话框 -->
     <el-dialog
@@ -260,16 +229,30 @@ export default {
       return [...new Set(nodes.value.map(node => node.type))]
     })
 
-    // 获取节点列表
+    // 获取节点列表 - 从数据库Clash配置获取真实数据
     const fetchNodes = async () => {
       loading.value = true
       try {
         const response = await nodeAPI.getNodes()
-        nodes.value = response.data.nodes || []
+        console.log('节点API响应:', response)
+        
+        // 处理API响应数据
+        if (response.data && response.data.data && response.data.data.nodes) {
+          nodes.value = response.data.data.nodes
+        } else if (response.data && response.data.nodes) {
+          nodes.value = response.data.nodes
+        } else if (response.data && Array.isArray(response.data)) {
+          nodes.value = response.data
+        } else {
+          nodes.value = []
+        }
+        
+        console.log('处理后的节点数据:', nodes.value)
         
         // 计算统计数据
         updateNodeStats()
       } catch (error) {
+        console.error('获取节点列表失败:', error)
         ElMessage.error('获取节点列表失败')
       } finally {
         loading.value = false
@@ -289,26 +272,46 @@ export default {
       fetchNodes()
     }
 
-    // 测试节点
-    const testNode = async (node) => {
-      node.testing = true
+    // 获取测速监控状态
+    const fetchSpeedMonitorStatus = async () => {
       try {
-        const response = await nodeAPI.testNode(node.id)
-        ElMessage.success(`节点 ${node.name} 测试完成，延迟: ${response.data.latency}ms`)
+        // 这个API需要管理员权限，普通用户可能无法访问
+        // 暂时注释掉，避免403错误
+        // const response = await nodeAPI.getSpeedMonitorStatus()
+        // console.log('测速状态API响应:', response)
+        
+        // 处理API响应数据
+        // if (response.data && response.data.data) {
+        //   speedMonitorStatus.value = response.data.data
+        // } else if (response.data) {
+        //   speedMonitorStatus.value = response.data
+        // }
+        
+        // console.log('处理后的测速状态:', speedMonitorStatus.value)
       } catch (error) {
-        ElMessage.error(`节点 ${node.name} 测试失败`)
-      } finally {
-        node.testing = false
+        console.error('获取测速状态失败:', error)
       }
     }
+
+    // 查看节点详情
+    const viewNodeDetail = (node) => {
+      selectedNode.value = node
+      detailDialogVisible.value = true
+    }
+
 
     // 获取节点图标
     const getNodeIcon = (type) => {
       const icons = {
         ssr: 'el-icon-connection',
+        ss: 'el-icon-connection',
         v2ray: 'el-icon-connection',
+        vmess: 'el-icon-connection',
         trojan: 'el-icon-connection',
-        vmess: 'el-icon-connection'
+        vless: 'el-icon-connection',
+        hysteria: 'el-icon-connection',
+        hysteria2: 'el-icon-connection',
+        tuic: 'el-icon-connection'
       }
       return icons[type] || 'el-icon-connection'
     }
@@ -329,9 +332,14 @@ export default {
     const getTypeColor = (type) => {
       const colors = {
         ssr: 'success',
+        ss: 'success',
         v2ray: 'primary',
+        vmess: 'primary',
         trojan: 'warning',
-        vmess: 'info'
+        vless: 'info',
+        hysteria: 'danger',
+        hysteria2: 'danger',
+        tuic: 'warning'
       }
       return colors[type] || 'info'
     }
@@ -361,6 +369,25 @@ export default {
       return `${minutes}分钟`
     }
 
+    // 格式化最后测速时间
+    const formatLastTestTime = (lastTestTime) => {
+      if (!lastTestTime) return '从未测速'
+      
+      const now = new Date()
+      const testTime = new Date(lastTestTime)
+      const diffMs = now - testTime
+      const diffMinutes = Math.floor(diffMs / 60000)
+      
+      if (diffMinutes < 1) return '刚刚'
+      if (diffMinutes < 60) return `${diffMinutes}分钟前`
+      
+      const diffHours = Math.floor(diffMinutes / 60)
+      if (diffHours < 24) return `${diffHours}小时前`
+      
+      const diffDays = Math.floor(diffHours / 24)
+      return `${diffDays}天前`
+    }
+
     onMounted(() => {
       fetchNodes()
     })
@@ -378,13 +405,14 @@ export default {
       nodeTypes,
       fetchNodes,
       refreshNodes,
-      testNode,
+      viewNodeDetail,
       getNodeIcon,
       getRegionColor,
       getTypeColor,
       getLoadClass,
       formatSpeed,
-      formatUptime
+      formatUptime,
+      formatLastTestTime
     }
   }
 }
@@ -417,6 +445,41 @@ export default {
   margin-bottom: 2rem;
   border-radius: 12px;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+}
+
+.speed-status-card {
+  margin-bottom: 2rem;
+  border-radius: 12px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+}
+
+.speed-status-content {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+  padding: 1rem 0;
+}
+
+.status-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.status-item:last-child {
+  border-bottom: none;
+}
+
+.status-item .label {
+  font-weight: 500;
+  color: #666;
+}
+
+.status-item .value {
+  color: #333;
+  font-weight: 600;
 }
 
 .stats-content {

@@ -121,7 +121,10 @@ export const nodeAPI = {
   getNodes: () => api.get('/nodes/'),
   getNode: (nodeId) => api.get(`/nodes/${nodeId}`),
   testNode: (nodeId) => api.post(`/nodes/${nodeId}/test`),
-  getNodesStats: () => api.get('/nodes/stats/overview')
+  batchTestNodes: (nodeIds) => api.post('/nodes/batch-test', nodeIds),
+  importFromClash: (clashConfig) => api.post('/nodes/import-from-clash', { clash_config: clashConfig }),
+  getNodesStats: () => api.get('/admin/nodes/stats'),
+  getSpeedMonitorStatus: () => api.get('/admin/node-speed-monitor/status')
 }
 
 // 管理端API
@@ -154,6 +157,13 @@ export const adminAPI = {
   
   // 用户批量操作
   batchDeleteUsers: (userIds) => api.post('/admin/users/batch-delete', { user_ids: userIds }),
+  
+  // 节点测速监控
+  getNodeSpeedMonitorStatus: () => api.get('/admin/node-speed-monitor/status'),
+  startNodeSpeedMonitor: () => api.post('/admin/node-speed-monitor/start'),
+  stopNodeSpeedMonitor: () => api.post('/admin/node-speed-monitor/stop'),
+  forceTestAllNodes: () => api.post('/admin/node-speed-monitor/force-test'),
+  getNodesStats: () => api.get('/admin/nodes/stats'),
   batchEnableUsers: (userIds) => api.post('/admin/users/batch-enable', { user_ids: userIds }),
   batchDisableUsers: (userIds) => api.post('/admin/users/batch-disable', { user_ids: userIds }),
   batchVerifyUsers: (userIds) => api.post('/admin/users/batch-verify', { user_ids: userIds }),
