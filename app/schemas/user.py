@@ -65,6 +65,13 @@ class UserUpdate(BaseModel):
     is_verified: Optional[bool] = None
     is_admin: Optional[bool] = None
     avatar: Optional[str] = None
+    theme: Optional[str] = None
+    language: Optional[str] = None
+    timezone: Optional[str] = None
+    email_notifications: Optional[bool] = None
+    notification_types: Optional[str] = None
+    sms_notifications: Optional[bool] = None
+    push_notifications: Optional[bool] = None
 
 class UserInDB(UserBase):
     id: int
@@ -73,12 +80,20 @@ class UserInDB(UserBase):
     is_verified: bool
     is_admin: bool
     avatar: Optional[str] = None
+    theme: Optional[str] = 'light'
+    language: Optional[str] = 'zh-CN'
+    timezone: Optional[str] = 'Asia/Shanghai'
+    email_notifications: Optional[bool] = True
+    notification_types: Optional[str] = '["subscription", "payment", "system"]'
+    sms_notifications: Optional[bool] = False
+    push_notifications: Optional[bool] = True
     created_at: datetime
     updated_at: Optional[datetime] = None
     last_login: Optional[datetime] = None
 
     class Config:
         from_attributes = True
+        orm_mode = True
 
 class User(UserInDB):
     pass
@@ -116,10 +131,31 @@ class PasswordReset(BaseModel):
             raise ValueError('密码必须包含字母和数字')
         return v
 
+class ThemeUpdate(BaseModel):
+    theme: str
+    
+    @validator('theme')
+    def validate_theme(cls, v):
+        """验证主题设置"""
+        allowed_themes = ['light', 'dark', 'auto']
+        if v not in allowed_themes:
+            raise ValueError(f'主题必须是以下之一: {", ".join(allowed_themes)}')
+        return v
+
+class PreferenceSettings(BaseModel):
+    language: Optional[str] = 'zh-CN'
+    timezone: Optional[str] = 'Asia/Shanghai'
+
+class NotificationSettings(BaseModel):
+    email_notifications: bool = True
+    notification_types: list = ["subscription", "payment", "system"]
+    sms_notifications: bool = False
+    push_notifications: bool = True
+
 # 导出允许的邮箱域名列表
 __all__ = [
     'UserBase', 'UserCreate', 'UserUpdate', 'UserInDB', 'User',
     'UserLogin', 'UserPasswordChange', 'EmailVerificationRequest',
     'EmailVerification', 'PasswordResetRequest', 'PasswordReset',
-    'ALLOWED_EMAIL_DOMAINS'
+    'ThemeUpdate', 'PreferenceSettings', 'NotificationSettings', 'ALLOWED_EMAIL_DOMAINS'
 ]

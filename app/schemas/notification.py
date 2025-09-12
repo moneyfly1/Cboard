@@ -104,10 +104,6 @@ class EmailTemplatePreview(BaseModel):
 # 邮件模板数据库模型别名
 EmailTemplateInDB = EmailTemplatePreview
 
-class EmailTemplateTest(BaseModel):
-    template_name: str
-    test_email: str = Field(..., pattern=r'^[^@]+@[^@]+\.[^@]+$')
-    variables: Dict[str, Any] = Field(default_factory=dict)
 
 class EmailTemplateDuplicate(BaseModel):
     template_id: int

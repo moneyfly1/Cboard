@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
 
 from app.core.database import get_db
-from app.schemas.user import User, UserUpdate, UserPasswordChange
+from app.schemas.user import User, UserUpdate, UserPasswordChange, ThemeUpdate, PreferenceSettings
 from app.schemas.common import ResponseBase
 from app.services.user import UserService
 from app.services.subscription import SubscriptionService
@@ -172,17 +172,31 @@ def get_user_notification_settings(
     db: Session = Depends(get_db)
 ) -> Any:
     """获取用户通知设置"""
-    # 这里应该从数据库获取用户的个人通知设置
-    # 暂时返回默认设置
-    default_settings = {
-        "email_notifications": True,
-        "sms_notifications": False,
-        "push_notifications": True,
-        "marketing_emails": False,
-        "security_alerts": True
-    }
-    
-    return ResponseBase(data=default_settings)
+    try:
+        # 从数据库获取用户的个人通知设置
+        user = db.query(User).filter(User.id == current_user.id).first()
+        if not user:
+            return ResponseBase(success=False, message="用户不存在")
+        
+        # 解析通知类型
+        notification_types = []
+        if user.notification_types:
+            try:
+                import json
+                notification_types = json.loads(user.notification_types)
+            except:
+                notification_types = ["subscription", "payment", "system"]
+        
+        settings = {
+            "email_notifications": user.email_notifications if user.email_notifications is not None else True,
+            "sms_notifications": user.sms_notifications if user.sms_notifications is not None else False,
+            "push_notifications": user.push_notifications if user.push_notifications is not None else True,
+            "notification_types": notification_types
+        }
+        
+        return ResponseBase(data=settings)
+    except Exception as e:
+        return ResponseBase(success=False, message=f"获取通知设置失败: {str(e)}")
 
 @router.put("/notification-settings", response_model=ResponseBase)
 def update_user_notification_settings(
@@ -191,9 +205,33 @@ def update_user_notification_settings(
     db: Session = Depends(get_db)
 ) -> Any:
     """更新用户通知设置"""
-    # 这里应该将设置保存到数据库
-    # 暂时返回成功
-    return ResponseBase(message="通知设置更新成功")
+    try:
+        # 获取用户
+        user = db.query(User).filter(User.id == current_user.id).first()
+        if not user:
+            return ResponseBase(success=False, message="用户不存在")
+        
+        # 更新通知设置
+        if 'email_notifications' in settings:
+            user.email_notifications = settings['email_notifications']
+        
+        if 'sms_notifications' in settings:
+            user.sms_notifications = settings['sms_notifications']
+        
+        if 'push_notifications' in settings:
+            user.push_notifications = settings['push_notifications']
+        
+        if 'notification_types' in settings:
+            import json
+            user.notification_types = json.dumps(settings['notification_types'])
+        
+        # 保存更改
+        db.commit()
+        
+        return ResponseBase(message="通知设置更新成功")
+    except Exception as e:
+        db.rollback()
+        return ResponseBase(success=False, message=f"更新通知设置失败: {str(e)}")
 
 @router.get("/privacy-settings", response_model=ResponseBase)
 def get_user_privacy_settings(
@@ -460,4 +498,75 @@ def daily_checkin(
             detail=f"签到失败: {str(e)}"
         )
 
-# 删除重复的验证邮件发送功能，统一使用 auth.py 中的 resend_verification 端点 
+# 删除重复的验证邮件发送功能，统一使用 auth.py 中的 resend_verification 端点
+
+@router.get("/theme", response_model=dict)
+def get_user_theme(
+    current_user = Depends(get_current_user),
+    db: Session = Depends(get_db)
+) -> Any:
+    """获取用户主题设置"""
+    user_service = UserService(db)
+    user = user_service.get(current_user.id)
+    
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="用户不存在"
+        )
+    
+    return {"theme": user.theme or "light"}
+
+@router.put("/theme", response_model=ResponseBase)
+def update_user_theme(
+    theme_update: ThemeUpdate,
+    current_user = Depends(get_current_user),
+    db: Session = Depends(get_db)
+) -> Any:
+    """更新用户主题设置"""
+    user_service = UserService(db)
+    user = user_service.get(current_user.id)
+    
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="用户不存在"
+        )
+    
+    # 更新主题设置
+    user.theme = theme_update.theme
+    user.updated_at = datetime.utcnow()
+    
+    db.commit()
+    db.refresh(user)
+    
+    return ResponseBase(message="主题设置更新成功")
+
+@router.put("/preference-settings", response_model=ResponseBase)
+def update_preference_settings(
+    settings: PreferenceSettings,
+    current_user = Depends(get_current_user),
+    db: Session = Depends(get_db)
+) -> Any:
+    """更新用户偏好设置"""
+    user_service = UserService(db)
+    user = user_service.get(current_user.id)
+    
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="用户不存在"
+        )
+    
+    # 更新偏好设置
+    if settings.language is not None:
+        user.language = settings.language
+    if settings.timezone is not None:
+        user.timezone = settings.timezone
+    
+    user.updated_at = datetime.utcnow()
+    
+    db.commit()
+    db.refresh(user)
+    
+    return ResponseBase(message="偏好设置更新成功") 

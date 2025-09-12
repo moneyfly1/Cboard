@@ -182,26 +182,6 @@ def get_generated_files(
     except Exception as e:
         return ResponseBase(success=False, message=f"获取文件信息失败: {str(e)}")
 
-@router.post("/test", response_model=ResponseBase)
-def test_config_update(
-    background_tasks: BackgroundTasks,
-    db: Session = Depends(get_db),
-    current_admin = Depends(get_current_admin_user)
-) -> Any:
-    """测试配置更新（不保存文件）"""
-    try:
-        service = get_config_update_service(db)
-        
-        # 检查是否已经在运行
-        if service.is_running():
-            return ResponseBase(success=False, message="配置更新任务已在运行中")
-        
-        # 启动测试任务
-        background_tasks.add_task(service.run_test_task)
-        
-        return ResponseBase(message="测试任务已启动")
-    except Exception as e:
-        return ResponseBase(success=False, message=f"启动测试失败: {str(e)}")
 
 @router.get("/schedule", response_model=ResponseBase)
 def get_schedule_config(

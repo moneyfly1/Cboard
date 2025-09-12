@@ -526,7 +526,7 @@ const handleMessage = (event) => {
   left: 0;
   width: var(--sidebar-width);
   height: calc(100vh - var(--header-height));
-  background: white;
+  background: var(--sidebar-bg-color, white);
   border-right: 1px solid var(--theme-border);
   transition: all 0.3s ease;
   z-index: 999;
@@ -550,18 +550,18 @@ const handleMessage = (event) => {
       display: flex;
       align-items: center;
       padding: 12px 20px;
-      color: var(--theme-text);
+      color: var(--sidebar-text-color, var(--theme-text));
       text-decoration: none;
       transition: all 0.3s ease;
       position: relative;
       
       &:hover {
-        background-color: #f5f7fa;
+        background-color: var(--sidebar-hover-bg, #f5f7fa);
         color: var(--theme-primary);
       }
       
       &.active {
-        background-color: var(--theme-primary);
+        background-color: var(--sidebar-active-bg, var(--theme-primary));
         color: white;
         
         &::before {

@@ -627,44 +627,10 @@ def get_ssr_subscription(
         if not access_result['allowed']:
             print(f"订阅访问被拒绝: {access_result['message']}")
             
-            # 根据拒绝原因返回不同的错误响应
-            if access_result['access_type'] == 'blocked_expired':
-                # 订阅过期 - 返回HTML错误页面
-                from fastapi.responses import HTMLResponse
-                from jinja2 import Template
-                
-                with open('templates/error_expired.html', 'r', encoding='utf-8') as f:
-                    template = Template(f.read())
-                
-                html_content = template.render(
-                    expire_time=access_result.get('expire_time', '未知'),
-                    current_time=datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                    expired_days=access_result.get('expired_days', 0)
-                )
-                return HTMLResponse(content=html_content, status_code=403)
-                
-            elif access_result['access_type'] == 'blocked_device_limit':
-                # 设备数量限制 - 返回HTML错误页面
-                from fastapi.responses import HTMLResponse
-                from jinja2 import Template
-                
-                with open('templates/error_device_limit.html', 'r', encoding='utf-8') as f:
-                    template = Template(f.read())
-                
-                device_info = access_result.get('device_info', {})
-                html_content = template.render(
-                    software_name=device_info.get('software_name', 'Unknown'),
-                    device_model=device_info.get('device_model', 'Unknown'),
-                    os_name=device_info.get('os_name', 'Unknown'),
-                    os_version=device_info.get('os_version', ''),
-                    access_time=datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-                )
-                return HTMLResponse(content=html_content, status_code=403)
-                
-            else:
-                # 其他错误 - 返回无效配置
-                invalid_config = subscription_service.get_invalid_v2ray_config()
-                return Response(content=invalid_config, media_type="text/plain", status_code=403)
+            # 所有失效情况都返回失效的V2Ray配置文件
+            # 软件订阅应该返回配置文件而不是HTML页面
+            invalid_config = subscription_service.get_invalid_v2ray_config()
+            return Response(content=invalid_config, media_type="text/plain", status_code=403)
         
         print(f"订阅访问允许: {subscription_key}")
         
@@ -708,44 +674,10 @@ def get_clash_subscription(
         if not access_result['allowed']:
             print(f"订阅访问被拒绝: {access_result['message']}")
             
-            # 根据拒绝原因返回不同的错误响应
-            if access_result['access_type'] == 'blocked_expired':
-                # 订阅过期 - 返回HTML错误页面
-                from fastapi.responses import HTMLResponse
-                from jinja2 import Template
-                
-                with open('templates/error_expired.html', 'r', encoding='utf-8') as f:
-                    template = Template(f.read())
-                
-                html_content = template.render(
-                    expire_time=access_result.get('expire_time', '未知'),
-                    current_time=datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                    expired_days=access_result.get('expired_days', 0)
-                )
-                return HTMLResponse(content=html_content, status_code=403)
-                
-            elif access_result['access_type'] == 'blocked_device_limit':
-                # 设备数量限制 - 返回HTML错误页面
-                from fastapi.responses import HTMLResponse
-                from jinja2 import Template
-                
-                with open('templates/error_device_limit.html', 'r', encoding='utf-8') as f:
-                    template = Template(f.read())
-                
-                device_info = access_result.get('device_info', {})
-                html_content = template.render(
-                    software_name=device_info.get('software_name', 'Unknown'),
-                    device_model=device_info.get('device_model', 'Unknown'),
-                    os_name=device_info.get('os_name', 'Unknown'),
-                    os_version=device_info.get('os_version', ''),
-                    access_time=datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-                )
-                return HTMLResponse(content=html_content, status_code=403)
-                
-            else:
-                # 其他错误 - 返回无效配置
-                invalid_config = subscription_service.get_invalid_clash_config()
-                return Response(content=invalid_config, media_type="text/plain", status_code=403)
+            # 所有失效情况都返回失效的Clash配置文件
+            # 软件订阅应该返回配置文件而不是HTML页面
+            invalid_config = subscription_service.get_invalid_clash_config()
+            return Response(content=invalid_config, media_type="text/plain", status_code=403)
         
         print(f"订阅访问允许: {subscription_key}")
         

@@ -33,44 +33,64 @@ class UserService:
 
     def create(self, user_in: UserCreate) -> User:
         """创建用户"""
-        # 对密码进行哈希处理
-        hashed_password = get_password_hash(user_in.password)
-        
-        user = User(
-            username=user_in.username,
-            email=user_in.email,
-            hashed_password=hashed_password,
-            is_active=True,
-            is_verified=False,  # 新用户需要邮箱验证
-            is_admin=False
-        )
-        
-        self.db.add(user)
-        self.db.commit()
-        self.db.refresh(user)
-        
-        # 自动创建默认订阅
         try:
-            from app.services.subscription import SubscriptionService
-            from app.schemas.subscription import SubscriptionCreate
-            from datetime import datetime, timedelta
+            # 对密码进行哈希处理
+            hashed_password = get_password_hash(user_in.password)
             
-            subscription_service = SubscriptionService(self.db)
-            
-            # 创建默认订阅（30天试用期）
-            default_subscription = SubscriptionCreate(
-                user_id=user.id,
-                device_limit=3,
-                expire_time=datetime.utcnow() + timedelta(days=30)
+            user = User(
+                username=user_in.username,
+                email=user_in.email,
+                hashed_password=hashed_password,
+                is_active=True,
+                is_verified=True,  # 注册后直接激活，无需邮箱验证
+                is_admin=False
             )
             
-            subscription_service.create(default_subscription)
+            self.db.add(user)
+            self.db.flush()  # 刷新但不提交，获取用户ID
+            
+            # 自动创建默认订阅
+            try:
+                from app.services.subscription import SubscriptionService
+                from app.schemas.subscription import SubscriptionCreate
+                from datetime import datetime, timedelta
+                
+                subscription_service = SubscriptionService(self.db)
+                
+                # 创建默认订阅（30天试用期，0个设备限制）
+                default_subscription = SubscriptionCreate(
+                    user_id=user.id,
+                    device_limit=0,  # 用户自己注册默认为0个设备
+                    expire_time=datetime.utcnow() + timedelta(days=30)
+                )
+                
+                subscription_service.create(default_subscription)
+                
+            except Exception as e:
+                # 如果创建订阅失败，回滚整个事务
+                self.db.rollback()
+                print(f"创建默认订阅失败: {e}")
+                raise Exception(f"创建用户失败: 无法创建默认订阅 - {str(e)}")
+            
+            # 所有操作成功后才提交事务
+            self.db.commit()
+            self.db.refresh(user)
+            
+            # 发送欢迎通知
+            try:
+                from app.services.notification_service import NotificationService
+                notification_service = NotificationService(self.db)
+                notification_service.send_new_user_welcome_notification(user)
+            except Exception as e:
+                print(f"发送欢迎通知失败: {e}")
+                # 不影响用户创建流程
+            
+            return user
             
         except Exception as e:
-            # 如果创建订阅失败，记录错误但不影响用户创建
-            print(f"创建默认订阅失败: {e}")
-        
-        return user
+            # 发生任何错误都回滚事务
+            self.db.rollback()
+            raise e
 
     def update(self, user_id: int, user_in: UserUpdate) -> Optional[User]:
         """更新用户"""

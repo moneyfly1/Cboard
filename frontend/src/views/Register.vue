@@ -97,9 +97,11 @@ import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { authAPI } from '@/utils/api'
 import { useSettingsStore } from '@/store/settings'
+import { useAuthStore } from '@/store/auth'
 
 const router = useRouter()
 const settingsStore = useSettingsStore()
+const authStore = useAuthStore()
 
 // 响应式数据
 const loading = ref(false)
@@ -107,7 +109,7 @@ const registerFormRef = ref()
 
 const registerForm = reactive({
   emailPrefix: '',
-  emailDomain: '',
+  emailDomain: 'qq.com', // 默认选择qq.com
   email: '', // 计算属性，由前缀和域名组成
   username: '',
   password: '',
@@ -116,8 +118,8 @@ const registerForm = reactive({
 
 // 允许的邮箱域名
 const allowedEmailDomains = [
-  'gmail.com',
-  'qq.com', 
+  'qq.com',
+  'gmail.com', 
   '126.com',
   '163.com',
   'hotmail.com',
@@ -187,17 +189,46 @@ const handleRegister = async () => {
       password: registerForm.password
     })
     
-    ElMessage.success('注册成功！')
+    console.log('注册响应:', response.data)
     
-    // 如果需要邮箱验证，跳转到验证页面
-    if (settingsStore.needsEmailVerification) {
-      router.push('/verify-email')
+    // 注册成功，自动登录
+    if (response.data && response.data.access_token) {
+      // 检查用户数据是否存在
+      if (!response.data.user) {
+        console.error('响应中缺少用户数据:', response.data)
+        ElMessage.error('注册成功但用户数据异常，请重新登录')
+        return
+      }
+      
+      // 保存token到localStorage
+      localStorage.setItem('token', response.data.access_token)
+      localStorage.setItem('user', JSON.stringify({
+        id: response.data.user.id,
+        username: response.data.user.username,
+        email: response.data.user.email,
+        is_admin: response.data.user.is_admin
+      }))
+      
+      // 更新store状态
+      authStore.setToken(response.data.access_token)
+      authStore.setUser({
+        id: response.data.user.id,
+        username: response.data.user.username,
+        email: response.data.user.email,
+        is_admin: response.data.user.is_admin
+      })
+      
+      ElMessage.success('注册成功！正在为您登录...')
+      
+      // 跳转到首页
+      router.push('/')
     } else {
-      // 直接跳转到登录页面
-      router.push('/login')
+      console.error('注册响应格式异常:', response.data)
+      ElMessage.error('注册失败，请重试')
     }
     
   } catch (error) {
+    console.error('注册错误:', error)
     if (error.response?.data?.detail) {
       ElMessage.error(error.response.data.detail)
     } else {
@@ -259,6 +290,38 @@ const handleRegister = async () => {
     font-size: 16px;
     font-weight: 500;
   }
+  
+  /* 移除所有输入框的圆角和阴影效果，设置为简单长方形 */
+  :deep(.el-input__wrapper) {
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    border: 1px solid #dcdfe6 !important;
+    background-color: #ffffff !important;
+  }
+  
+  :deep(.el-select .el-input__wrapper) {
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    border: 1px solid #dcdfe6 !important;
+    background-color: #ffffff !important;
+  }
+  
+  :deep(.el-input__inner) {
+    border-radius: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+    background-color: transparent !important;
+  }
+  
+  :deep(.el-input__wrapper:hover) {
+    border-color: #c0c4cc !important;
+    box-shadow: none !important;
+  }
+  
+  :deep(.el-input__wrapper.is-focus) {
+    border-color: #1677ff !important;
+    box-shadow: none !important;
+  }
 }
 
 .email-input-group {
@@ -267,7 +330,7 @@ const handleRegister = async () => {
   gap: 8px;
   
   .email-prefix {
-    flex: 1;
+    flex: 2; /* 邮箱前缀输入框占更多空间 */
   }
   
   .email-separator {
@@ -279,8 +342,8 @@ const handleRegister = async () => {
   }
   
   .email-domain {
-    flex: 1;
-    min-width: 120px;
+    flex: 1; /* 域名选择框占较少空间 */
+    min-width: 100px;
   }
 }
 

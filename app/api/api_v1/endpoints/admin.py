@@ -18,13 +18,6 @@ from app.services.node_service import NodeService
 
 router = APIRouter()
 
-@router.get("/test", response_model=ResponseBase)
-def test_admin_api(current_admin = Depends(get_current_admin_user)) -> Any:
-    """测试管理员API是否正常工作"""
-    return ResponseBase(
-        message="管理员API正常工作",
-        data={"admin_user": {"id": current_admin.id, "username": current_admin.username}}
-    )
 
 @router.get("/users", response_model=ResponseBase)
 def get_users(
@@ -257,10 +250,10 @@ def create_user(
             
             subscription_service = SubscriptionService(db)
             
-            # 创建默认订阅（30天试用期）
+            # 创建默认订阅（30天试用期，5个设备限制）
             default_subscription = SubscriptionCreate(
                 user_id=user_id,
-                device_limit=3,
+                device_limit=5,  # 管理员创建用户默认为5个设备
                 expire_time=datetime.utcnow() + timedelta(days=30)
             )
             
@@ -2025,114 +2018,7 @@ def get_v2ray_config_invalid(
     except Exception as e:
         return ResponseBase(success=False, message=f"获取V2Ray失效配置失败: {str(e)}")
 
-@router.post("/test-email", response_model=ResponseBase)
-def test_email(
-    db: Session = Depends(get_db),
-    current_admin = Depends(get_current_admin_user)
-) -> Any:
-    """测试邮件发送"""
-    try:
-        from sqlalchemy import text
-        
-        # 从数据库获取邮件配置
-        query = text('SELECT "key", value FROM system_configs WHERE type = \'email\'')
-        result = db.execute(query)
-        
-        email_config = {}
-        for row in result:
-            email_config[row.key] = row.value
-        
-        # 检查必要的邮件配置
-        required_fields = ['smtp_host', 'smtp_port', 'email_username', 'email_password']
-        missing_fields = [field for field in required_fields if not email_config.get(field)]
-        
-        if missing_fields:
-            return ResponseBase(success=False, message=f"邮件配置不完整，缺少: {', '.join(missing_fields)}")
-        
-        # 发送测试邮件
-        from app.services.email import EmailService
-        email_service = EmailService(db)
-        test_subject = "XBoard 邮件配置测试"
-        test_content = f"""
-        <h2>邮件配置测试</h2>
-        <p>这是一封来自 XBoard 系统的测试邮件。</p>
-        <p>如果您收到这封邮件，说明邮件配置已成功！</p>
-        <p>测试时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
-        <p>管理员: {current_admin.username}</p>
-        """
-        
-        # 创建测试邮件队列
-        from app.schemas.email import EmailQueueCreate
-        email_data = EmailQueueCreate(
-            to_email=email_config.get('from_email', email_config.get('email_username', '')),
-            subject=test_subject,
-            content=test_content,
-            content_type='html',
-            email_type='test'
-        )
-        
-        email_queue = email_service.create_email_queue(email_data)
-        success = email_service.send_email(email_queue)
-        
-        if success:
-            return ResponseBase(message="测试邮件发送成功")
-        else:
-            return ResponseBase(success=False, message="测试邮件发送失败")
-        
-    except Exception as e:
-        return ResponseBase(success=False, message=f"邮件配置测试失败: {str(e)}")
 
-@router.post("/test-email-to-user", response_model=ResponseBase)
-def test_email_to_user(
-    email_data: dict,
-    db: Session = Depends(get_db),
-    current_admin = Depends(get_current_admin_user)
-) -> Any:
-    """发送测试邮件给指定用户"""
-    try:
-        from app.services.email import EmailService
-        
-        target_email = email_data.get('email')
-        if not target_email:
-            return ResponseBase(success=False, message="请提供目标邮箱地址")
-        
-        # 发送测试邮件
-        email_service = EmailService(db)
-        test_subject = "XBoard 订阅地址测试邮件"
-        test_content = f"""
-        <h2>订阅地址测试邮件</h2>
-        <p>尊敬的 {target_email}，</p>
-        <p>这是一封来自 XBoard 系统的订阅地址测试邮件。</p>
-        <p>如果您收到这封邮件，说明邮件发送功能正常工作！</p>
-        <p>测试时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
-        <p>管理员: {current_admin.username}</p>
-        <hr>
-        <p><strong>订阅地址信息：</strong></p>
-        <p>通用配置地址: http://localhost:8000/api/v1/subscriptions/ssr/test</p>
-        <p>移动端配置地址: http://localhost:8000/api/v1/subscriptions/clash/test</p>
-        <p>请使用相应的客户端软件导入订阅地址。</p>
-        """
-        
-        # 创建测试邮件队列
-        from app.schemas.email import EmailQueueCreate
-        email_queue_data = EmailQueueCreate(
-            to_email=target_email,
-            subject=test_subject,
-            content=test_content,
-            content_type='html',
-            email_type='subscription_test'
-        )
-        
-        email_queue = email_service.create_email_queue(email_queue_data)
-        success = email_service.send_email(email_queue)
-        
-        if success:
-            return ResponseBase(message=f"测试邮件已发送给 {target_email}")
-        else:
-            return ResponseBase(success=False, message="测试邮件发送失败")
-        
-    except Exception as e:
-        return ResponseBase(success=False, message=f"发送测试邮件失败: {str(e)}")
 
 @router.get("/export-config", response_model=ResponseBase)
 def export_config(
@@ -2192,6 +2078,11 @@ def get_all_settings(
                 "device_fingerprint_enabled": True,
                 "ip_whitelist_enabled": False,
                 "ip_whitelist": ""
+            },
+            "theme": {
+                "default_theme": "light",
+                "allow_user_theme": True,
+                "available_themes": ["light", "dark", "auto"]
             }
         }
         return ResponseBase(data=all_settings)
@@ -2286,6 +2177,56 @@ def update_security_settings(
             return ResponseBase(message="安全设置保存成功")
     except Exception as e:
         return ResponseBase(success=False, message=f"保存安全设置失败: {str(e)}")
+
+@router.put("/settings/theme", response_model=ResponseBase)
+def update_theme_settings(
+    settings: dict,
+    db: Session = Depends(get_db),
+    current_admin = Depends(get_current_admin_user)
+) -> Any:
+    """更新主题设置"""
+    try:
+        from sqlalchemy import text
+        from datetime import datetime
+        
+        # 保存主题设置到数据库
+        current_time = datetime.now()
+        
+        for key, value in settings.items():
+            # 检查配置是否已存在
+            check_query = text("SELECT id FROM system_configs WHERE key = :key AND type = 'theme'")
+            existing = db.execute(check_query, {"key": key}).first()
+            
+            if existing:
+                # 更新现有配置
+                update_query = text("""
+                    UPDATE system_configs 
+                    SET value = :value, updated_at = :updated_at
+                    WHERE key = :key AND type = 'theme'
+                """)
+                db.execute(update_query, {
+                    "value": str(value),
+                    "updated_at": current_time,
+                    "key": key
+                })
+            else:
+                # 插入新配置
+                insert_query = text("""
+                    INSERT INTO system_configs (key, value, type, category, display_name, description, created_at, updated_at)
+                    VALUES (:key, :value, 'theme', 'system', :key, :key, :created_at, :updated_at)
+                """)
+                db.execute(insert_query, {
+                    "key": key,
+                    "value": str(value),
+                    "created_at": current_time,
+                    "updated_at": current_time
+                })
+        
+        db.commit()
+        return ResponseBase(message="主题设置保存成功")
+    except Exception as e:
+        db.rollback()
+        return ResponseBase(success=False, message=f"保存主题设置失败: {str(e)}")
 
 @router.get("/statistics/user-trend", response_model=ResponseBase)
 def get_user_trend_statistics(current_admin = Depends(get_current_admin_user)) -> Any:
@@ -3150,22 +3091,6 @@ def update_email_configs(
     except Exception as e:
         return ResponseBase(success=False, message=f"更新邮件配置失败: {str(e)}")
 
-@router.post("/email-configs/test", response_model=ResponseBase)
-def test_email_config(
-    email_config: dict,
-    db: Session = Depends(get_db),
-    current_admin = Depends(get_current_admin_user)
-) -> Any:
-    """测试邮件配置"""
-    try:
-        settings_service = SettingsService(db)
-        success = settings_service.test_smtp_connection(email_config)
-        if success:
-            return ResponseBase(message="邮件配置测试成功")
-        else:
-            return ResponseBase(success=False, message="邮件配置测试失败")
-    except Exception as e:
-        return ResponseBase(success=False, message=f"邮件配置测试失败: {str(e)}")
 
 # ==================== 邮件队列管理（配置管理部分） ====================
 
@@ -3439,21 +3364,6 @@ def update_payment_configs(
         db.rollback()
         return ResponseBase(success=False, message=f"更新支付配置失败: {str(e)}")
 
-@router.post("/payment-configs/test", response_model=ResponseBase)
-def test_payment_config(
-    payment_config: dict,
-    db: Session = Depends(get_db),
-    current_admin = Depends(get_current_admin_user)
-) -> Any:
-    """测试支付配置"""
-    try:
-        # 这里可以添加实际的支付配置测试逻辑
-        # 例如测试API密钥、连接支付网关等
-        
-        # 暂时返回成功（模拟测试通过）
-            return ResponseBase(message="支付配置测试成功")
-    except Exception as e:
-        return ResponseBase(success=False, message=f"支付配置测试失败: {str(e)}")
 
 # ==================== 节点管理 ====================
 

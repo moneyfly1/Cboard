@@ -609,3 +609,134 @@ class EmailTemplateEnhanced:
         '''
         
         return EmailTemplateEnhanced.get_base_template(title, content, '请及时更新您的客户端配置')
+    
+    @staticmethod
+    def get_payment_success_template(username: str, order_id: str, amount: str, package_name: str) -> str:
+        """支付成功通知邮件模板"""
+        title = "支付成功通知"
+        content = f'''
+            <h2>🎉 支付成功！</h2>
+            <p>亲爱的 {username}，</p>
+            <p>您的支付已成功处理，感谢您的购买！</p>
+            
+            <div class="info-box">
+                <h3>📋 订单信息</h3>
+                <table class="info-table">
+                    <tr>
+                        <th>订单号</th>
+                        <td>{order_id}</td>
+                    </tr>
+                    <tr>
+                        <th>套餐名称</th>
+                        <td>{package_name}</td>
+                    </tr>
+                    <tr>
+                        <th>支付金额</th>
+                        <td style="color: #27ae60; font-weight: bold;">¥{amount}</td>
+                    </tr>
+                    <tr>
+                        <th>支付时间</th>
+                        <td>{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</td>
+                    </tr>
+                </table>
+            </div>
+            
+            <div class="success-box">
+                <p><strong>✅ 服务状态：</strong></p>
+                <ul>
+                    <li>您的订阅已激活</li>
+                    <li>配置地址已更新</li>
+                    <li>可以立即使用服务</li>
+                </ul>
+            </div>
+            
+            <div style="text-align: center; margin: 30px 0;">
+                <a href="http://localhost:5173/" class="btn">查看订阅详情</a>
+            </div>
+            
+            <p>如有任何问题，请随时联系我们的客服团队。</p>
+        '''
+        
+        return EmailTemplateEnhanced.get_base_template(title, content, '感谢您的信任')
+    
+    @staticmethod
+    def get_welcome_template(username: str, login_url: str) -> str:
+        """新用户欢迎邮件模板"""
+        title = "欢迎加入我们！"
+        content = f'''
+            <h2>🎉 欢迎注册成功！</h2>
+            <p>亲爱的 {username}，</p>
+            <p>欢迎加入我们的网络服务平台！您的账户已成功创建。</p>
+            
+            <div class="info-box">
+                <h3>📋 账户信息</h3>
+                <table class="info-table">
+                    <tr>
+                        <th>用户名</th>
+                        <td>{username}</td>
+                    </tr>
+                    <tr>
+                        <th>注册时间</th>
+                        <td>{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</td>
+                    </tr>
+                </table>
+            </div>
+            
+            <div class="success-box">
+                <p><strong>🚀 开始使用：</strong></p>
+                <ul>
+                    <li>登录您的账户</li>
+                    <li>选择合适的套餐</li>
+                    <li>获取订阅地址</li>
+                    <li>配置您的客户端</li>
+                </ul>
+            </div>
+            
+            <div style="text-align: center; margin: 30px 0;">
+                <a href="{login_url}" class="btn">立即登录</a>
+            </div>
+            
+            <p>如有任何问题，请随时联系我们的客服团队。</p>
+        '''
+        
+        return EmailTemplateEnhanced.get_base_template(title, content, '期待为您提供优质服务')
+    
+    @staticmethod
+    def get_subscription_created_template(username: str, subscription_url: str, expire_time: str) -> str:
+        """订阅创建成功邮件模板"""
+        title = "订阅创建成功"
+        content = f'''
+            <h2>🎉 订阅创建成功！</h2>
+            <p>亲爱的 {username}，</p>
+            <p>您的订阅已成功创建，现在可以开始使用我们的服务了！</p>
+            
+            <div class="info-box">
+                <h3>📋 订阅信息</h3>
+                <table class="info-table">
+                    <tr>
+                        <th>订阅地址</th>
+                        <td class="url-box">{subscription_url}</td>
+                    </tr>
+                    <tr>
+                        <th>到期时间</th>
+                        <td>{expire_time}</td>
+                    </tr>
+                </table>
+            </div>
+            
+            <div class="success-box">
+                <p><strong>🔗 配置地址：</strong></p>
+                <ul>
+                    <li><strong>V2Ray/SSR:</strong> <code>http://localhost:8000/api/v1/subscriptions/ssr/{subscription_url}</code></li>
+                    <li><strong>Clash:</strong> <code>http://localhost:8000/api/v1/subscriptions/clash/{subscription_url}</code></li>
+                </ul>
+            </div>
+            
+            <div style="text-align: center; margin: 30px 0;">
+                <a href="http://localhost:5173/" class="btn">查看订阅详情</a>
+            </div>
+            
+            <p>如有任何问题，请随时联系我们的客服团队。</p>
+        '''
+        
+        return EmailTemplateEnhanced.get_base_template(title, content, '祝您使用愉快')

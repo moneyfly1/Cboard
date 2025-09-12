@@ -155,20 +155,6 @@ def get_payment_config_config(
 
     return {"config": config}
 
-@router.post("/{payment_config_id}/test")
-def test_payment_config(
-    payment_config_id: int,
-    db: Session = Depends(get_db),
-    current_user = Depends(get_current_admin_user)
-):
-    """测试支付配置"""
-    service = PaymentConfigService(db)
-    result = service.test_payment_config(payment_config_id)
-
-    if not result["success"]:
-        raise HTTPException(status_code=400, detail=result["message"])
-
-    return result
 
 @router.post("/bulk-enable")
 def bulk_enable_payment_configs(

@@ -289,11 +289,14 @@
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useAuthStore } from '@/store/auth'
+import { useThemeStore } from '@/store/theme'
+import { api } from '@/utils/api'
 
 export default {
   name: 'UserSettings',
   setup() {
     const authStore = useAuthStore()
+    const themeStore = useThemeStore()
     const activeSetting = ref('profile')
     
     // 表单引用
@@ -339,7 +342,7 @@ export default {
     })
     
     const preferenceForm = reactive({
-      theme: 'light',
+      theme: themeStore.currentTheme,
       language: 'zh-CN',
       timezone: 'Asia/Shanghai'
     })
@@ -487,12 +490,22 @@ export default {
       try {
         preferenceSaving.value = true
         
-        // 调用API保存偏好设置
-        await api.put('/users/preference-settings', preferenceForm)
+        // 保存主题设置
+        const themeResult = await themeStore.setTheme(preferenceForm.theme)
+        if (!themeResult.success) {
+          ElMessage.error(themeResult.message || '主题设置失败')
+          return
+        }
+        
+        // 保存其他偏好设置
+        await api.put('/users/preference-settings', {
+          language: preferenceForm.language,
+          timezone: preferenceForm.timezone
+        })
         
         ElMessage.success('偏好设置保存成功')
       } catch (error) {
-        ElMessage.error('保存失败：' + error.message)
+        ElMessage.error('保存失败：' + (error.response?.data?.detail || error.message))
       } finally {
         preferenceSaving.value = false
       }
@@ -561,6 +574,10 @@ export default {
     
     onMounted(() => {
       loadUserInfo()
+      // 初始化主题
+      themeStore.initTheme()
+      // 加载用户主题设置
+      themeStore.loadUserTheme()
     })
     
     return {

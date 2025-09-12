@@ -29,28 +29,115 @@
   --font-size-xxl: 24px;
 }
 
-// 深色主题
+// 深色主题 - 使用浅灰色调，提高可读性
 .theme-dark {
-  --theme-background: #1a1a1a;
-  --theme-text: #ffffff;
-  --theme-border: #4c4c4c;
+  --theme-background: #f5f5f5;
+  --theme-text: #2c2c2c;
+  --theme-border: #d0d0d0;
   
   .el-card {
-    background-color: #2a2a2a;
-    border-color: #4c4c4c;
-    color: #ffffff;
+    background-color: #f8f8f8;
+    border-color: #d0d0d0;
+    color: #2c2c2c;
   }
   
   .el-table {
-    background-color: #2a2a2a;
-    color: #ffffff;
+    background-color: #f8f8f8;
+    color: #2c2c2c;
     
     th, td {
-      background-color: #2a2a2a;
-      border-color: #4c4c4c;
-      color: #ffffff;
+      background-color: #f8f8f8;
+      border-color: #d0d0d0;
+      color: #2c2c2c;
+    }
+    
+    .el-table__row:hover {
+      background-color: #e8e8e8;
     }
   }
+  
+  // 侧边栏样式
+  .sidebar {
+    background-color: var(--sidebar-bg-color, #f0f0f0);
+    color: var(--sidebar-text-color, #2c2c2c);
+    
+    .sidebar-item {
+      color: var(--sidebar-text-color, #2c2c2c);
+      
+      &:hover {
+        background-color: var(--sidebar-hover-bg, #e8e8e8);
+      }
+      
+      &.active {
+        background-color: var(--sidebar-active-bg, #409eff);
+        color: white;
+      }
+    }
+  }
+  
+  // 滚动条样式
+  ::-webkit-scrollbar-thumb {
+    background: rgba(0, 0, 0, 0.2);
+    
+    &:hover {
+      background: rgba(0, 0, 0, 0.3);
+    }
+  }
+}
+
+// 浅色主题
+.theme-light {
+  --theme-background: #ffffff;
+  --theme-text: #303133;
+  --theme-border: #dcdfe6;
+  
+  .el-card {
+    background-color: #ffffff;
+    border-color: #dcdfe6;
+    color: #303133;
+  }
+  
+  .el-table {
+    background-color: #ffffff;
+    color: #303133;
+    
+    th, td {
+      background-color: #ffffff;
+      border-color: #dcdfe6;
+      color: #303133;
+    }
+    
+    .el-table__row:hover {
+      background-color: #f5f7fa;
+    }
+  }
+  
+  // 侧边栏样式
+  .sidebar {
+    background-color: var(--sidebar-bg-color, #f8f9fa);
+    color: var(--sidebar-text-color, #303133);
+    
+    .sidebar-item {
+      color: var(--sidebar-text-color, #303133);
+      
+      &:hover {
+        background-color: var(--sidebar-hover-bg, #e9ecef);
+      }
+      
+      &.active {
+        background-color: var(--sidebar-active-bg, #409eff);
+        color: white;
+      }
+    }
+  }
+}
+
+// 自动主题（跟随系统）
+.theme-auto {
+  // 自动主题会根据系统设置自动切换
+  // 具体样式由JavaScript动态设置
+  // 默认使用浅色主题样式
+  @extend .theme-light;
 }
 
 // 蓝色主题

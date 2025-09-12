@@ -29,9 +29,9 @@
             </el-form-item>
             <el-form-item label="默认主题" prop="default_theme">
               <el-select v-model="generalSettings.default_theme">
-                <el-option label="默认主题" value="default" />
-                <el-option label="暗色主题" value="dark" />
-                <el-option label="蓝色主题" value="blue" />
+                <el-option label="浅色主题" value="light" />
+                <el-option label="深色主题" value="dark" />
+                <el-option label="跟随系统" value="auto" />
               </el-select>
             </el-form-item>
             <el-form-item>
@@ -85,6 +85,32 @@
           </el-form>
         </el-tab-pane>
 
+        <!-- 主题设置 -->
+        <el-tab-pane label="主题设置" name="theme">
+          <el-form :model="themeSettings" label-width="120px">
+            <el-form-item label="默认主题" prop="default_theme">
+              <el-select v-model="themeSettings.default_theme">
+                <el-option label="浅色主题" value="light" />
+                <el-option label="深色主题" value="dark" />
+                <el-option label="跟随系统" value="auto" />
+              </el-select>
+            </el-form-item>
+            <el-form-item label="允许用户自定义主题">
+              <el-switch v-model="themeSettings.allow_user_theme" />
+            </el-form-item>
+            <el-form-item label="可用主题">
+              <el-checkbox-group v-model="themeSettings.available_themes">
+                <el-checkbox label="light">浅色主题</el-checkbox>
+                <el-checkbox label="dark">深色主题</el-checkbox>
+                <el-checkbox label="auto">跟随系统</el-checkbox>
+              </el-checkbox-group>
+            </el-form-item>
+            <el-form-item>
+              <el-button type="primary" @click="saveThemeSettings">保存主题设置</el-button>
+            </el-form-item>
+          </el-form>
+        </el-tab-pane>
+
         <!-- 安全设置 -->
         <el-tab-pane label="安全设置" name="security">
           <el-form :model="securitySettings" label-width="120px">
@@ -121,6 +147,7 @@ import { ref, reactive, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'
 import { useApi } from '@/utils/api'
+import { useThemeStore } from '@/store/theme'
 
 export default {
   name: 'AdminSettings',
@@ -129,6 +156,7 @@ export default {
   },
   setup() {
     const api = useApi()
+    const themeStore = useThemeStore()
     const activeTab = ref('general')
     const generalFormRef = ref()
     const uploadUrl = '/api/v1/admin/upload'
@@ -174,6 +202,13 @@ export default {
       ip_whitelist: ''
     })
 
+    // 主题设置
+    const themeSettings = reactive({
+      default_theme: 'light',
+      allow_user_theme: true,
+      available_themes: ['light', 'dark', 'auto']
+    })
+
     const loadSettings = async () => {
       try {
         const response = await api.get('/admin/settings')
@@ -184,6 +219,7 @@ export default {
         Object.assign(registrationSettings, settings.registration || {})
         Object.assign(notificationSettings, settings.notification || {})
         Object.assign(securitySettings, settings.security || {})
+        Object.assign(themeSettings, settings.theme || {})
       } catch (error) {
         ElMessage.error('加载设置失败')
       }
@@ -226,6 +262,21 @@ export default {
       }
     }
 
+    const saveThemeSettings = async () => {
+      try {
+        await api.put('/admin/settings/theme', themeSettings)
+        
+        // 立即应用主题设置
+        if (themeSettings.default_theme) {
+          await themeStore.setTheme(themeSettings.default_theme)
+        }
+        
+        ElMessage.success('主题设置保存成功')
+      } catch (error) {
+        ElMessage.error('保存失败')
+      }
+    }
+
     const handleLogoSuccess = (response) => {
       generalSettings.site_logo = response.url
       ElMessage.success('Logo上传成功')
@@ -257,12 +308,14 @@ export default {
       registrationSettings,
       notificationSettings,
       securitySettings,
+      themeSettings,
       generalFormRef,
       uploadUrl,
       saveGeneralSettings,
       saveRegistrationSettings,
       saveNotificationSettings,
       saveSecuritySettings,
+      saveThemeSettings,
       handleLogoSuccess,
       beforeLogoUpload
     }
@@ -305,5 +358,37 @@ export default {
   height: 100px;
   text-align: center;
   line-height: 100px;
+}
+
+/* 移除所有输入框的圆角和阴影效果，设置为简单长方形 */
+:deep(.el-input__wrapper) {
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  border: 1px solid #dcdfe6 !important;
+  background-color: #ffffff !important;
+}
+
+:deep(.el-select .el-input__wrapper) {
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  border: 1px solid #dcdfe6 !important;
+  background-color: #ffffff !important;
+}
+
+:deep(.el-input__inner) {
+  border-radius: 0 !important;
+  border: none !important;
+  box-shadow: none !important;
+  background-color: transparent !important;
+}
+
+:deep(.el-input__wrapper:hover) {
+  border-color: #c0c4cc !important;
+  box-shadow: none !important;
+}
+
+:deep(.el-input__wrapper.is-focus) {
+  border-color: #1677ff !important;
+  box-shadow: none !important;
 }
 </style> 

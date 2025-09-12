@@ -66,61 +66,7 @@ def get_node(
         }
     )
 
-@router.post("/{node_id}/test", response_model=ResponseBase)
-def test_node(
-    node_id: int,
-    current_user = Depends(get_current_user),
-    db: Session = Depends(get_db)
-) -> Any:
-    """测试节点连接"""
-    node_service = NodeService(db)
-    
-    # 检查节点是否存在
-    node = node_service.get(node_id)
-    if not node:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="节点不存在"
-        )
-    
-    # 测试节点连接
-    test_result = node_service.test_node_connection(node_id)
-    
-    return ResponseBase(
-        data={
-            "node_id": node_id,
-            "latency": test_result.get("latency", 0),
-            "status": test_result.get("status", "failed"),
-            "message": test_result.get("message", "测试失败")
-        }
-    )
 
-@router.post("/batch-test", response_model=ResponseBase)
-def batch_test_nodes(
-    node_ids: List[int],
-    current_user = Depends(get_current_user),
-    db: Session = Depends(get_db)
-) -> Any:
-    """批量测试节点"""
-    node_service = NodeService(db)
-    
-    if not node_ids:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="请选择要测试的节点"
-        )
-    
-    # 执行批量测速
-    results = node_service.batch_test_nodes(node_ids)
-    
-    return ResponseBase(
-        data={
-            "results": results,
-            "total_tested": len(results),
-            "success_count": len([r for r in results if r["status"] == "success"]),
-            "failed_count": len([r for r in results if r["status"] == "failed"])
-        }
-    )
 
 @router.post("/import-from-clash", response_model=ResponseBase)
 def import_nodes_from_clash(

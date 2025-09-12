@@ -50,7 +50,7 @@ class PaymentService:
     def get_active_payment_configs(self) -> List[PaymentConfig]:
         """获取所有活跃的支付配置"""
         return self.db.query(PaymentConfig).filter(
-            PaymentConfig.is_active == True
+            PaymentConfig.status == 1
         ).order_by(PaymentConfig.sort_order, PaymentConfig.id).all()
 
     def get_default_payment_config(self) -> Optional[PaymentConfig]:
@@ -58,17 +58,72 @@ class PaymentService:
         default_method = self.get_default_payment_method()
         if default_method:
             return self.get_payment_config_by_name(default_method)
+        # 返回第一个启用的支付配置作为默认配置
         return self.db.query(PaymentConfig).filter(
-            PaymentConfig.is_active == True,
-            PaymentConfig.is_default == True
-        ).first()
+            PaymentConfig.status == 1
+        ).order_by(PaymentConfig.sort_order, PaymentConfig.id).first()
+
+    def get_available_payment_methods(self) -> List[Dict[str, Any]]:
+        """获取可用的支付方式列表"""
+        # 首先尝试从PaymentMethod表获取
+        from app.models.payment import PaymentMethod
+        methods = self.db.query(PaymentMethod).filter(
+            PaymentMethod.status == "active"
+        ).order_by(PaymentMethod.sort_order, PaymentMethod.id).all()
+        
+        if methods:
+            return [
+                {
+                    "key": method.type,
+                    "name": method.name,
+                    "description": method.description or f"使用{method.name}支付",
+                    "icon": method.icon or f"/icons/{method.type}.png",
+                    "enabled": True
+                }
+                for method in methods
+            ]
+        
+        # 如果没有PaymentMethod记录，从PaymentConfig表获取
+        configs = self.get_active_payment_configs()
+        if configs:
+            return [
+                {
+                    "key": config.pay_type,
+                    "name": config.name,
+                    "description": config.description or f"使用{config.name}支付",
+                    "icon": f"/icons/{config.pay_type}.png",
+                    "enabled": True
+                }
+                for config in configs
+            ]
+        
+        # 如果都没有，返回默认的支付方式
+        return [
+            {
+                "key": "alipay",
+                "name": "支付宝",
+                "description": "使用支付宝扫码支付",
+                "icon": "/icons/alipay.png",
+                "enabled": True
+            },
+            {
+                "key": "wechat",
+                "name": "微信支付",
+                "description": "使用微信扫码支付",
+                "icon": "/icons/wechat.png",
+                "enabled": True
+            },
+            {
+                "key": "bank_transfer",
+                "name": "银行转账",
+                "description": "通过银行转账支付",
+                "icon": "/icons/bank.png",
+                "enabled": True
+            }
+        ]
 
     def create_payment_config(self, config_in: PaymentConfigCreate) -> PaymentConfig:
         """创建支付配置"""
-        # 如果设置为默认，先取消其他默认配置
-        if config_in.is_default:
-            self.db.query(PaymentConfig).update({"is_default": False})
-        
         config = PaymentConfig(**config_in.dict())
         self.db.add(config)
         self.db.commit()
@@ -80,10 +135,6 @@ class PaymentService:
         config = self.get_payment_config(config_id)
         if not config:
             return None
-        
-        # 如果设置为默认，先取消其他默认配置
-        if config_in.is_default:
-            self.db.query(PaymentConfig).update({"is_default": False})
         
         update_data = config_in.dict(exclude_unset=True)
         for field, value in update_data.items():

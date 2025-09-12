@@ -9,6 +9,7 @@ import App from './App.vue'
 import router from './router'
 import { useSettingsStore } from './store/settings'
 import { useAuthStore } from './store/auth'
+import { useThemeStore } from './store/theme'
 
 // 导入全局样式
 import './styles/global.scss'
@@ -52,7 +53,6 @@ async function initializeApp() {
     try {
       const settingsStore = useSettingsStore()
       await settingsStore.loadSettings()
-      settingsStore.initTheme()
       app.config.globalProperties.$settings = settingsStore
       if (import.meta.env.DEV) {
         console.log('设置加载完成')
@@ -60,6 +60,20 @@ async function initializeApp() {
     } catch (settingsError) {
       if (import.meta.env.DEV) {
         console.warn('设置加载失败，使用默认设置:', settingsError)
+      }
+    }
+    
+    // 初始化主题系统
+    try {
+      const themeStore = useThemeStore()
+      themeStore.initTheme()
+      await themeStore.loadUserTheme()
+      if (import.meta.env.DEV) {
+        console.log('主题系统初始化完成')
+      }
+    } catch (themeError) {
+      if (import.meta.env.DEV) {
+        console.warn('主题系统初始化失败，使用默认主题:', themeError)
       }
     }
     

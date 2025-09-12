@@ -13,6 +13,7 @@ from .models import (
     ThemeConfig, UserActivity, SubscriptionReset, LoginHistory
 )
 from .services.email_queue_processor import get_email_queue_processor
+from .tasks.notification_tasks import start_notification_scheduler, stop_notification_scheduler
 # from .services.node_speed_monitor import get_node_speed_monitor  # 已删除
 
 app = FastAPI(
@@ -50,6 +51,10 @@ async def startup_event():
         email_processor.start_processing()
         print("邮件队列处理器已启动")
         
+        # 启动通知调度器
+        start_notification_scheduler()
+        print("通知调度器已启动")
+        
         # 启动节点测速监控 - 已删除
         # node_monitor = get_node_speed_monitor()
         # node_monitor.start()
@@ -66,6 +71,10 @@ async def shutdown_event():
         email_processor = get_email_queue_processor()
         email_processor.stop_processing()
         print("邮件队列处理器已停止")
+        
+        # 停止通知调度器
+        stop_notification_scheduler()
+        print("通知调度器已停止")
         
         # 停止节点测速监控 - 已删除
         # node_monitor = get_node_speed_monitor()

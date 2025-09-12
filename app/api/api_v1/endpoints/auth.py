@@ -38,12 +38,12 @@ def extract_username(email: str) -> str:
     """从邮箱中提取用户名"""
     return email.split('@')[0]
 
-@router.post("/register", response_model=ResponseBase)
+@router.post("/register", response_model=Token)
 def register(
     user_in: UserCreate,
     db: Session = Depends(get_db)
 ) -> Any:
-    """用户注册 - 需要邮箱验证"""
+    """用户注册 - 直接激活并返回登录token"""
     from app.core.auth import validate_password_strength
     
     # 验证密码强度
@@ -55,7 +55,6 @@ def register(
         )
     
     user_service = UserService(db)
-    email_service = EmailService(db)
     
     # 检查用户是否已存在
     if user_service.get_by_username(user_in.username):
@@ -70,36 +69,30 @@ def register(
             detail="该邮箱已被注册"
         )
     
-    # 创建用户（未验证状态）
+    # 创建用户（直接激活状态）
     user = user_service.create(user_in)
     
-    # 生成邮箱验证令牌（JWT格式）
-    from app.utils.security import create_access_token
-    verification_token = create_access_token(
-        data={"user_id": str(user.id), "type": "email_verification"},
-        expires_delta=timedelta(hours=24)
+    # 记录用户注册活动
+    user_service.log_user_activity(
+        user_id=user.id,
+        activity_type="user_registered",
+        description="用户注册成功"
     )
     
-    # 保存验证令牌到数据库
-    user.verification_token = verification_token
-    user.verification_expires = datetime.utcnow() + timedelta(hours=24)
-    db.commit()
+    # 生成登录token
+    from app.utils.security import create_access_token
+    access_token = create_access_token(
+        data={"sub": str(user.id), "username": user.username}
+    )
     
-    # 发送验证邮件
-    try:
-        verification_url = f"{settings.BASE_URL}/verify-email?token={verification_token}"
-        success = email_service.send_verification_email(user.email, verification_token, user.username)
-        if not success:
-            print(f"发送验证邮件失败: 邮件服务返回失败")
-        else:
-            print(f"验证邮件发送成功: {user.email}")
-    except Exception as e:
-        # 如果邮件发送失败，记录日志但不影响注册流程
-        print(f"发送验证邮件失败: {e}")
+    # 更新最后登录时间
+    user_service.update_last_login(user.id)
     
-    return ResponseBase(
-        message="注册成功，请查收邮箱验证邮件",
-        data={"user_id": user.id, "username": user.username}
+    return Token(
+        access_token=access_token,
+        token_type="bearer",
+        expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        user=user
     )
 
 @router.post("/login", response_model=Token)
@@ -147,12 +140,7 @@ def login(
             detail="账户已被禁用"
         )
     
-    # 检查邮箱是否已验证
-    if not user.is_verified:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="请先验证邮箱，请查收注册时发送的验证邮件"
-        )
+    # 移除邮箱验证检查，注册后直接激活
     
     # 记录成功的登录
     if request:
@@ -191,7 +179,7 @@ def login(
         token_type="bearer",
         expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
         refresh_token=refresh_token,
-        user=user.__dict__ if hasattr(user, '__dict__') else None
+        user=user
     )
 
 @router.post("/login-json", response_model=Token)
@@ -283,7 +271,7 @@ def login_json(
         token_type="bearer",
         expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
         refresh_token=refresh_token,
-        user=user.__dict__ if hasattr(user, '__dict__') else None
+        user=user
     )
 
 @router.post("/refresh", response_model=Token)

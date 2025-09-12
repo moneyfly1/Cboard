@@ -81,6 +81,16 @@ class SubscriptionManager:
             order.payment_time = datetime.now()
             
             self.db.commit()
+            
+            # 发送支付成功通知
+            try:
+                from app.services.notification_service import NotificationService
+                notification_service = NotificationService(self.db)
+                notification_service.send_payment_success_notification(order)
+            except Exception as e:
+                print(f"发送支付成功通知失败: {e}")
+                # 不影响支付处理流程
+            
             return True
             
         except Exception as e:
@@ -157,6 +167,16 @@ class SubscriptionManager:
             expire_time=expire_time
         )
         self.db.add(subscription)
+        self.db.flush()  # 刷新以获取订阅ID
+        
+        # 发送订阅创建通知
+        try:
+            from app.services.notification_service import NotificationService
+            notification_service = NotificationService(self.db)
+            notification_service.send_subscription_created_notification(subscription)
+        except Exception as e:
+            print(f"发送订阅创建通知失败: {e}")
+            # 不影响订阅创建流程
     
     def _reactivate_expired_subscription(
         self,

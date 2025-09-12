@@ -5,7 +5,16 @@ import { api } from '@/utils/api'
 export const useAuthStore = defineStore('auth', () => {
   // 状态
   const token = ref(localStorage.getItem('token') || '')
-  const user = ref(JSON.parse(localStorage.getItem('user') || 'null'))
+  const user = ref((() => {
+    try {
+      const userData = localStorage.getItem('user')
+      return userData ? JSON.parse(userData) : null
+    } catch (error) {
+      console.error('解析用户数据失败:', error)
+      localStorage.removeItem('user')
+      return null
+    }
+  })())
   const loading = ref(false)
 
   // 计算属性
@@ -57,8 +66,12 @@ export const useAuthStore = defineStore('auth', () => {
   const register = async (userData) => {
     loading.value = true
     try {
-      await api.post('/auth/register', userData)
-      return { success: true, message: '注册成功，请查收邮箱验证邮件' }
+      const response = await api.post('/auth/register', userData)
+      return { 
+        success: true, 
+        message: '注册成功',
+        data: response.data
+      }
     } catch (error) {
       return { 
         success: false, 
@@ -172,6 +185,16 @@ export const useAuthStore = defineStore('auth', () => {
     localStorage.setItem('user', JSON.stringify(newUser))
   }
 
+  const setToken = (newToken) => {
+    token.value = newToken
+    localStorage.setItem('token', newToken)
+  }
+
+  const setUser = (newUser) => {
+    user.value = newUser
+    localStorage.setItem('user', JSON.stringify(newUser))
+  }
+
   const getCurrentState = () => {
     return {
       token: token.value,
@@ -204,6 +227,8 @@ export const useAuthStore = defineStore('auth', () => {
     updateUser,
     changePassword,
     setAuth,
+    setToken,
+    setUser,
     getCurrentState
   }
 }) 

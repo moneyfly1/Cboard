@@ -32,6 +32,17 @@ class User(Base):
     phone_number = Column(String(20), nullable=True)
     backup_codes = Column(Text, nullable=True)  # JSON格式存储备用验证码
     
+    # 用户偏好设置
+    theme = Column(String(20), default='light')  # 主题设置: light, dark, auto
+    language = Column(String(10), default='zh-CN')  # 语言设置
+    timezone = Column(String(50), default='Asia/Shanghai')  # 时区设置
+    
+    # 通知设置
+    email_notifications = Column(Boolean, default=True)  # 是否启用邮件通知
+    notification_types = Column(Text, nullable=True)  # 通知类型设置，JSON格式存储
+    sms_notifications = Column(Boolean, default=False)  # 是否启用短信通知
+    push_notifications = Column(Boolean, default=True)  # 是否启用推送通知
+    
     # 关系将在 __init__.py 中定义
     # subscriptions, orders, payments, notifications, activities, subscription_resets, login_history
     

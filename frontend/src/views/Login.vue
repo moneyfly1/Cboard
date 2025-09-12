@@ -284,10 +284,37 @@ export default {
   height: 44px;
   padding: 0 16px;
   border: 1px solid #dcdfe6;
-  border-radius: 6px;
+  border-radius: 0; /* 移除圆角，设置为长方形 */
   font-size: 16px;
   outline: none;
   transition: border-color 0.3s;
+  box-shadow: none !important;
+  background-color: #ffffff !important;
+}
+
+/* 移除Element Plus输入框的阴影效果 */
+:deep(.el-input__wrapper) {
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  border: 1px solid #dcdfe6 !important;
+  background-color: #ffffff !important;
+}
+
+:deep(.el-input__inner) {
+  border-radius: 0 !important;
+  border: none !important;
+  box-shadow: none !important;
+  background-color: transparent !important;
+}
+
+:deep(.el-input__wrapper:hover) {
+  border-color: #c0c4cc !important;
+  box-shadow: none !important;
+}
+
+:deep(.el-input__wrapper.is-focus) {
+  border-color: #1677ff !important;
+  box-shadow: none !important;
 }
 
 .login-input:focus {

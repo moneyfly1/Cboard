@@ -5,7 +5,7 @@ from typing import List, Dict, Any
 from app.core.database import get_db
 from app.schemas.notification import (
     EmailTemplateCreate, EmailTemplateUpdate, EmailTemplate, 
-    EmailTemplateList, EmailTemplatePreview, EmailTemplateTest, EmailTemplateDuplicate
+    EmailTemplateList, EmailTemplatePreview, EmailTemplateDuplicate
 )
 from app.services.email_template import EmailTemplateService
 from app.services.email import EmailService
@@ -162,43 +162,6 @@ def preview_email_template(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"预览模板失败: {str(e)}")
 
-@router.post("/test")
-def test_email_template(
-    test_data: EmailTemplateTest,
-    db: Session = Depends(get_db),
-    current_user = Depends(get_current_admin_user)
-):
-    """测试邮件模板"""
-    service = EmailTemplateService(db)
-    email_service = EmailService(db)
-    
-    try:
-        # 验证模板变量
-        validation = service.validate_template(test_data.template_name, test_data.variables)
-        if not validation["valid"]:
-            missing_vars = validation["missing_variables"]
-            raise HTTPException(
-                status_code=400, 
-                detail=f"模板变量不完整，缺少: {', '.join(missing_vars)}"
-            )
-        
-        # 发送测试邮件
-        success = email_service.send_template_email(
-            test_data.template_name,
-            test_data.test_email,
-            test_data.variables,
-            "test"
-        )
-        
-        if success:
-            return ResponseBase(message="测试邮件发送成功")
-        else:
-            raise HTTPException(status_code=500, detail="测试邮件发送失败")
-            
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"测试模板失败: {str(e)}")
 
 @router.get("/{template_name}/variables")
 def get_template_variables(

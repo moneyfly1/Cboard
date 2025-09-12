@@ -48,7 +48,7 @@ class SubscriptionService:
         )
         
         self.db.add(subscription)
-        self.db.commit()
+        self.db.flush()  # 刷新但不提交，让调用者控制事务
         self.db.refresh(subscription)
         return subscription
 
@@ -524,37 +524,29 @@ class SubscriptionService:
         
         return config
     
-    def get_invalid_clash_config(self) -> dict:
+    def get_invalid_clash_config(self) -> str:
         """获取失效的Clash配置"""
         from sqlalchemy import text
         query = text('SELECT value FROM system_configs WHERE "key" = \'clash_config_invalid\' AND type = \'clash_invalid\'')
         result = self.db.execute(query).first()
         
         if result:
-            import yaml
-            try:
-                return yaml.safe_load(result.value)
-            except:
-                pass
+            return result.value
         
         # 返回默认失效配置
-        return self._get_default_invalid_clash_config()
+        return self._get_default_invalid_clash_config_str()
     
-    def get_invalid_v2ray_config(self) -> dict:
+    def get_invalid_v2ray_config(self) -> str:
         """获取失效的V2Ray配置"""
         from sqlalchemy import text
         query = text('SELECT value FROM system_configs WHERE "key" = \'v2ray_config_invalid\' AND type = \'v2ray_invalid\'')
         result = self.db.execute(query).first()
         
         if result:
-            import json
-            try:
-                return json.loads(result.value)
-            except:
-                pass
+            return result.value
         
         # 返回默认失效配置
-        return self._get_default_invalid_v2ray_config()
+        return self._get_default_invalid_v2ray_config_str()
     
     def _generate_v2ray_inbound_config(self, node: Node, subscription: Subscription) -> dict:
         """生成V2Ray入站配置"""
@@ -628,6 +620,53 @@ class SubscriptionService:
             "inbounds": [],
             "outbounds": []
         }
+    
+    def _get_default_invalid_clash_config_str(self) -> str:
+        """获取默认失效Clash配置字符串"""
+        return """# Clash失效配置文件
+# 此配置用于无效用户（订阅过期、用户禁用、设备超限等）
+
+port: 7890
+socks-port: 7891
+allow-lan: true
+mode: Rule
+log-level: info
+external-controller: :9090
+
+proxies: []
+
+proxy-groups:
+  - name: "Proxy"
+    type: select
+    proxies: []
+
+rules:
+  - MATCH,DIRECT
+"""
+    
+    def _get_default_invalid_v2ray_config_str(self) -> str:
+        """获取默认失效V2Ray配置字符串"""
+        return """{
+  "log": {
+    "loglevel": "warning"
+  },
+  "inbounds": [],
+  "outbounds": [
+    {
+      "protocol": "direct",
+      "settings": {}
+    }
+  ],
+  "routing": {
+    "rules": [
+      {
+        "type": "field",
+        "outboundTag": "direct",
+        "network": "tcp,udp"
+      }
+    ]
+  }
+}"""
     
     def get_v2ray_config(self) -> str:
         """获取数据库中的V2Ray配置文件内容"""
