@@ -162,14 +162,78 @@ class UserService:
         return send_password_reset_email(email, user.username)
 
     def delete(self, user_id: int) -> bool:
-        """删除用户"""
+        """删除用户及其所有相关数据"""
         user = self.get(user_id)
         if not user:
             return False
         
-        self.db.delete(user)
-        self.db.commit()
-        return True
+        try:
+            # 1. 删除用户的所有设备
+            from app.models.subscription import Device
+            devices = self.db.query(Device).filter(Device.user_id == user_id).all()
+            for device in devices:
+                self.db.delete(device)
+            
+            # 2. 删除用户的所有订阅（这会级联删除订阅下的设备）
+            from app.models.subscription import Subscription
+            subscriptions = self.db.query(Subscription).filter(Subscription.user_id == user_id).all()
+            for subscription in subscriptions:
+                # 删除订阅下的所有设备
+                subscription_devices = self.db.query(Device).filter(Device.subscription_id == subscription.id).all()
+                for device in subscription_devices:
+                    self.db.delete(device)
+                # 删除订阅
+                self.db.delete(subscription)
+            
+            # 3. 删除用户的所有订单
+            from app.models.order import Order
+            orders = self.db.query(Order).filter(Order.user_id == user_id).all()
+            for order in orders:
+                self.db.delete(order)
+            
+            # 4. 删除用户的所有支付交易
+            from app.models.payment import PaymentTransaction
+            payments = self.db.query(PaymentTransaction).filter(PaymentTransaction.user_id == user_id).all()
+            for payment in payments:
+                self.db.delete(payment)
+            
+            # 5. 删除用户的所有通知
+            from app.models.notification import Notification
+            notifications = self.db.query(Notification).filter(Notification.user_id == user_id).all()
+            for notification in notifications:
+                self.db.delete(notification)
+            
+            # 6. 删除用户的所有活动记录
+            activities = self.db.query(UserActivity).filter(UserActivity.user_id == user_id).all()
+            for activity in activities:
+                self.db.delete(activity)
+            
+            # 7. 删除用户的所有登录历史
+            from app.models.user_activity import LoginHistory
+            login_history = self.db.query(LoginHistory).filter(LoginHistory.user_id == user_id).all()
+            for login in login_history:
+                self.db.delete(login)
+            
+            # 8. 删除用户的所有订阅重置记录
+            from app.models.user_activity import SubscriptionReset
+            subscription_resets = self.db.query(SubscriptionReset).filter(SubscriptionReset.user_id == user_id).all()
+            for reset in subscription_resets:
+                self.db.delete(reset)
+            
+            # 9. 删除用户的邮件队列记录
+            from app.models.email import EmailQueue
+            email_queue = self.db.query(EmailQueue).filter(EmailQueue.to_email == user.email).all()
+            for email in email_queue:
+                self.db.delete(email)
+            
+            # 10. 最后删除用户本身
+            self.db.delete(user)
+            # 不在这里commit，让调用者控制事务
+            return True
+            
+        except Exception as e:
+            print(f"删除用户失败: {e}")
+            return False
 
     def count(self) -> int:
         """统计用户总数"""

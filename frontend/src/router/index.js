@@ -34,7 +34,7 @@ const routes = [
   },
   {
     path: '/verify-email',
-    name: 'VerifyEmail',
+    name: 'EmailVerification',
     component: () => import('@/views/EmailVerification.vue'),
     meta: { requiresGuest: true }
   },

@@ -14,23 +14,14 @@ from app.models.user import User
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/v1/auth/login")
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    """验证密码 - 使用简单的SHA256哈希"""
-    # 从哈希值中提取盐值
-    if ':' not in hashed_password:
-        return False
-    salt, hash_value = hashed_password.split(':', 1)
-    # 使用相同的盐值重新计算哈希
-    computed_hash = hashlib.sha256((salt + plain_password).encode()).hexdigest()
-    return computed_hash == hash_value
+    """验证密码 - 统一使用bcrypt哈希"""
+    from app.core.auth import verify_password as bcrypt_verify
+    return bcrypt_verify(plain_password, hashed_password)
 
 def get_password_hash(password: str) -> str:
-    """获取密码哈希值 - 使用简单的SHA256哈希"""
-    # 生成随机盐值
-    salt = os.urandom(16).hex()
-    # 计算哈希值
-    hash_value = hashlib.sha256((salt + password).encode()).hexdigest()
-    # 返回 盐值:哈希值 的格式
-    return f"{salt}:{hash_value}"
+    """获取密码哈希值 - 统一使用bcrypt哈希"""
+    from app.core.auth import get_password_hash as bcrypt_hash
+    return bcrypt_hash(password)
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
     """创建访问令牌"""

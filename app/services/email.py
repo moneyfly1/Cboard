@@ -34,11 +34,15 @@ class EmailService:
         if not self.is_email_enabled():
             raise Exception("邮件服务未配置或未启用")
         
-        email_queue = EmailQueue(**email_data.dict())
-        self.db.add(email_queue)
-        self.db.commit()
-        self.db.refresh(email_queue)
-        return email_queue
+        try:
+            email_queue = EmailQueue(**email_data.dict())
+            self.db.add(email_queue)
+            self.db.commit()
+            self.db.refresh(email_queue)
+            return email_queue
+        except Exception as e:
+            print(f"创建邮件队列失败: {e}")
+            raise
 
     def get_pending_emails(self, limit: int = 10) -> List[EmailQueue]:
         """获取待发送邮件"""
@@ -104,6 +108,7 @@ class EmailService:
             
         except Exception as e:
             # 更新邮件状态为失败
+            print(f"邮件发送失败: {email_queue.to_email}, 错误: {str(e)}")
             email_queue.status = 'failed'
             email_queue.error_message = str(e)
             self.db.commit()
@@ -137,11 +142,13 @@ class EmailService:
     def send_verification_email(self, user_email: str, token: str, username: str = None) -> bool:
         """发送验证邮件"""
         if not self.is_email_enabled():
+            print(f"邮件服务未启用，无法发送验证邮件到: {user_email}")
             return False
         
         try:
-            # 使用增强版模板发送验证邮件
-            verification_url = f"http://localhost:5173/verify-email?token={token}"
+            # 使用动态BASE_URL构建验证链接
+            from app.core.config import settings
+            verification_url = f"{settings.BASE_URL}/verify-email?token={token}"
             html_content = EmailTemplateEnhanced.get_activation_template(username or "用户", verification_url)
             
             # 创建邮件队列
@@ -154,12 +161,22 @@ class EmailService:
             )
             
             email_queue = self.create_email_queue(email_data)
-            return self.send_email(email_queue)
+            success = self.send_email(email_queue)
+            if success:
+                print(f"验证邮件发送成功: {user_email}")
+                return True
+            else:
+                print(f"验证邮件发送失败: {user_email}")
+                return False
             
         except Exception as e:
             # 如果增强模板失败，使用默认内容
             print(f"使用增强模板发送验证邮件失败，使用默认内容: {e}")
-            return self._send_default_verification_email(user_email, token)
+            try:
+                return self._send_default_verification_email(user_email, token)
+            except Exception as e2:
+                print(f"默认验证邮件发送也失败: {e2}")
+                return False
 
     def send_reset_password_email(self, user_email: str, token: str, username: str = None) -> bool:
         """发送重置密码邮件"""
@@ -322,17 +339,15 @@ class EmailService:
         verification_url = f"http://localhost:3000/verify-email?token={token}"
         
         subject = f"验证您的 {site_name} 账户"
-        content = f"""
-        <html>
-        <body>
-            <h2>欢迎使用 {site_name}</h2>
-            <p>请点击下面的链接验证您的邮箱地址：</p>
-            <p><a href="{verification_url}">验证邮箱</a></p>
-            <p>如果您没有注册 {site_name} 账户，请忽略此邮件。</p>
-            <p>此链接将在24小时后失效。</p>
-        </body>
-        </html>
-        """
+        content = f"""<html>
+<body>
+    <h2>欢迎使用 {site_name}</h2>
+    <p>请点击下面的链接验证您的邮箱地址：</p>
+    <p><a href="{verification_url}">验证邮箱</a></p>
+    <p>如果您没有注册 {site_name} 账户，请忽略此邮件。</p>
+    <p>此链接将在24小时后失效。</p>
+</body>
+</html>"""
         
         email_data = EmailQueueCreate(
             to_email=user_email,

@@ -21,12 +21,67 @@ class DeviceManager:
         self.db = db
     
     def generate_device_hash(self, user_agent: str, ip_address: str) -> str:
-        """生成设备唯一标识"""
-        device_string = f"{user_agent}|{ip_address}"
-        return hashlib.md5(device_string.encode('utf-8')).hexdigest()
+        """生成设备唯一标识 - 改进版本，解决同设备不同IP问题"""
+        # 解析设备信息
+        device_info = self.parse_user_agent(user_agent)
+        
+        # 提取关键设备特征，不依赖IP地址
+        device_features = []
+        
+        # 1. 软件名称和版本
+        if device_info.get('software_name') and device_info['software_name'] != 'Unknown':
+            device_features.append(f"software:{device_info['software_name']}")
+            if device_info.get('software_version'):
+                device_features.append(f"version:{device_info['software_version']}")
+        
+        # 2. 操作系统信息
+        if device_info.get('os_name') and device_info['os_name'] != 'Unknown':
+            device_features.append(f"os:{device_info['os_name']}")
+            if device_info.get('os_version'):
+                device_features.append(f"os_version:{device_info['os_version']}")
+        
+        # 3. 设备型号和品牌
+        if device_info.get('device_model'):
+            device_features.append(f"model:{device_info['device_model']}")
+        if device_info.get('device_brand'):
+            device_features.append(f"brand:{device_info['device_brand']}")
+        
+        # 4. 从User-Agent中提取设备唯一标识符
+        ua_lower = user_agent.lower()
+        
+        # iPhone设备标识
+        iphone_match = re.search(r'iphone(\d+,\d+)', user_agent, re.IGNORECASE)
+        if iphone_match:
+            device_features.append(f"iphone:{iphone_match.group(1)}")
+        
+        # iPad设备标识
+        ipad_match = re.search(r'ipad(\d+,\d+)', user_agent, re.IGNORECASE)
+        if ipad_match:
+            device_features.append(f"ipad:{ipad_match.group(1)}")
+        
+        # Android设备标识
+        android_match = re.search(r';\s*([^;]+)\s*build', user_agent, re.IGNORECASE)
+        if android_match:
+            device_features.append(f"android:{android_match.group(1).strip()}")
+        
+        # 5. 如果无法提取足够特征，使用原始方法但排除IP
+        if len(device_features) < 2:
+            # 提取User-Agent中的关键部分
+            ua_parts = []
+            for part in user_agent.split():
+                if any(keyword in part.lower() for keyword in ['clash', 'v2ray', 'shadowrocket', 'quantumult', 'surge']):
+                    ua_parts.append(part)
+            if ua_parts:
+                device_string = '|'.join(ua_parts)
+            else:
+                device_string = user_agent
+        else:
+            device_string = '|'.join(sorted(device_features))
+        
+        return hashlib.sha256(device_string.encode('utf-8')).hexdigest()
     
     def parse_user_agent(self, user_agent: str) -> Dict[str, str]:
-        """解析User-Agent，识别软件、操作系统、设备信息"""
+        """解析User-Agent，识别软件、操作系统、设备信息 - 改进版本"""
         result = {
             'software_name': 'Unknown',
             'software_version': '',
@@ -34,7 +89,8 @@ class DeviceManager:
             'os_version': '',
             'device_model': '',
             'device_brand': '',
-            'software_category': 'unknown'
+            'software_category': 'unknown',
+            'device_name': 'Unknown Device'
         }
         
         # 获取软件识别规则
@@ -43,12 +99,18 @@ class DeviceManager:
         # 转换为小写进行匹配
         ua_lower = user_agent.lower()
         
-        # 匹配软件规则
+        # 匹配软件规则 - 改进的匹配逻辑
+        matched_rule = None
         for rule in rules:
-            if rule['user_agent_pattern'].lower() in ua_lower:
-                result['software_name'] = rule['software_name']
-                result['software_category'] = rule['software_category']
-                break
+            pattern = rule['user_agent_pattern'].lower()
+            if pattern in ua_lower:
+                # 检查是否有更精确的匹配
+                if not matched_rule or len(pattern) > len(matched_rule['user_agent_pattern']):
+                    matched_rule = rule
+        
+        if matched_rule:
+            result['software_name'] = matched_rule['software_name']
+            result['software_category'] = matched_rule['software_category']
         
         # 解析操作系统信息
         os_info = self._parse_os_info(user_agent)
@@ -61,6 +123,10 @@ class DeviceManager:
         # 解析软件版本
         version_info = self._parse_version_info(user_agent)
         result.update(version_info)
+        
+        # 生成设备名称
+        device_name = self._generate_device_name(result)
+        result['device_name'] = device_name
         
         return result
     
@@ -182,6 +248,99 @@ class DeviceManager:
         
         return result
     
+    def _generate_device_name(self, device_info: Dict[str, str]) -> str:
+        """生成设备名称"""
+        parts = []
+        
+        # 添加软件名称
+        if device_info.get('software_name') and device_info['software_name'] != 'Unknown':
+            parts.append(device_info['software_name'])
+        
+        # 添加设备型号
+        if device_info.get('device_model'):
+            parts.append(device_info['device_model'])
+        elif device_info.get('device_brand'):
+            parts.append(device_info['device_brand'])
+        
+        # 添加操作系统
+        if device_info.get('os_name') and device_info['os_name'] != 'Unknown':
+            os_name = device_info['os_name']
+            if device_info.get('os_version'):
+                os_name += f" {device_info['os_version']}"
+            parts.append(os_name)
+        
+        # 添加软件版本
+        if device_info.get('software_version'):
+            parts.append(f"v{device_info['software_version']}")
+        
+        if parts:
+            return " - ".join(parts)
+        else:
+            return "Unknown Device"
+    
+    def _find_similar_device(self, subscription_id: int, device_info: Dict[str, str], user_agent: str) -> Optional[Any]:
+        """查找相似设备 - 解决同设备不同IP问题"""
+        try:
+            # 构建查询条件
+            conditions = []
+            params = {'subscription_id': subscription_id}
+            
+            # 1. 通过软件名称查找
+            if device_info.get('software_name') and device_info['software_name'] != 'Unknown':
+                conditions.append("software_name = :software_name")
+                params['software_name'] = device_info['software_name']
+            
+            # 2. 通过设备型号查找
+            if device_info.get('device_model'):
+                conditions.append("device_model = :device_model")
+                params['device_model'] = device_info['device_model']
+            
+            # 3. 通过操作系统和版本查找
+            if device_info.get('os_name') and device_info['os_name'] != 'Unknown':
+                conditions.append("os_name = :os_name")
+                params['os_name'] = device_info['os_name']
+                if device_info.get('os_version'):
+                    conditions.append("os_version = :os_version")
+                    params['os_version'] = device_info['os_version']
+            
+            # 4. 通过User-Agent中的关键特征查找
+            ua_lower = user_agent.lower()
+            if 'iphone' in ua_lower:
+                iphone_match = re.search(r'iphone(\d+,\d+)', user_agent, re.IGNORECASE)
+                if iphone_match:
+                    conditions.append("device_model LIKE :iphone_model")
+                    params['iphone_model'] = f"iPhone {iphone_match.group(1).replace(',', '.')}%"
+            
+            if 'ipad' in ua_lower:
+                ipad_match = re.search(r'ipad(\d+,\d+)', user_agent, re.IGNORECASE)
+                if ipad_match:
+                    conditions.append("device_model LIKE :ipad_model")
+                    params['ipad_model'] = f"iPad {ipad_match.group(1).replace(',', '.')}%"
+            
+            # 5. 通过软件版本查找
+            if device_info.get('software_version'):
+                conditions.append("software_version = :software_version")
+                params['software_version'] = device_info['software_version']
+            
+            if not conditions:
+                return None
+            
+            # 执行查询
+            query = f"""
+                SELECT id, is_allowed, access_count, first_seen, last_seen, ip_address
+                FROM devices
+                WHERE subscription_id = :subscription_id AND ({' AND '.join(conditions)})
+                ORDER BY last_seen DESC
+                LIMIT 1
+            """
+            
+            result = self.db.execute(text(query), params).fetchone()
+            return result
+            
+        except Exception as e:
+            print(f"查找相似设备失败: {e}")
+            return None
+    
     def get_software_rules(self) -> List[Dict[str, str]]:
         """获取软件识别规则"""
         try:
@@ -257,12 +416,12 @@ class DeviceManager:
             device_info = self.parse_user_agent(user_agent)
             result['device_info'] = device_info
             
-            # 生成设备哈希
+            # 生成设备哈希（不依赖IP地址）
             device_hash = self.generate_device_hash(user_agent, ip_address)
             
-            # 检查设备是否已存在
+            # 检查设备是否已存在 - 改进的检查逻辑
             existing_device = self.db.execute(text("""
-                SELECT id, is_allowed, access_count, first_seen, last_seen
+                SELECT id, is_allowed, access_count, first_seen, last_seen, ip_address
                 FROM devices
                 WHERE device_hash = :device_hash AND subscription_id = :subscription_id
             """), {
@@ -270,13 +429,24 @@ class DeviceManager:
                 'subscription_id': subscription.id
             }).fetchone()
             
+            # 如果设备不存在，尝试通过软件特征查找相似设备
+            if not existing_device:
+                existing_device = self._find_similar_device(
+                    subscription.id, device_info, user_agent
+                )
+            
             if existing_device:
                 # 设备已存在，更新访问信息
                 self.db.execute(text("""
                     UPDATE devices 
-                    SET last_seen = CURRENT_TIMESTAMP, access_count = access_count + 1
+                    SET last_seen = CURRENT_TIMESTAMP, access_count = access_count + 1,
+                        ip_address = :ip_address, user_agent = :user_agent
                     WHERE id = :device_id
-                """), {'device_id': existing_device.id})
+                """), {
+                    'device_id': existing_device.id,
+                    'ip_address': ip_address,
+                    'user_agent': user_agent
+                })
                 
                 if existing_device.is_allowed:
                     result['allowed'] = True

@@ -5,6 +5,7 @@
 from typing import Any, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
+from sqlalchemy import text
 from app.core.database import get_db
 from app.utils.security import get_current_admin_user
 from app.schemas.common import ResponseBase
@@ -470,4 +471,94 @@ def get_access_logs(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"获取访问日志失败: {str(e)}"
+        )
+
+@router.post("/devices/{device_id}/allow", response_model=ResponseBase)
+def allow_device(
+    device_id: int,
+    db: Session = Depends(get_db),
+    current_admin = Depends(get_current_admin_user)
+) -> Any:
+    """允许设备访问"""
+    try:
+        device_manager = DeviceManager(db)
+        
+        # 获取设备信息
+        device = db.execute(text("""
+            SELECT d.*, s.device_limit
+            FROM devices d
+            JOIN subscriptions s ON d.subscription_id = s.id
+            WHERE d.id = :device_id
+        """), {'device_id': device_id}).fetchone()
+        
+        if not device:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="设备不存在"
+            )
+        
+        # 检查是否已达设备限制
+        allowed_count = db.execute(text("""
+            SELECT COUNT(*) FROM devices 
+            WHERE subscription_id = :subscription_id AND is_allowed = 1
+        """), {'subscription_id': device.subscription_id}).scalar()
+        
+        if allowed_count >= device.device_limit:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"订阅设备数量已达上限（{device.device_limit}个）"
+            )
+        
+        # 允许设备
+        success = device_manager.update_device_status(device_id, {'is_allowed': True})
+        
+        if not success:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="允许设备失败"
+            )
+        
+        return ResponseBase(
+            message="设备已允许访问",
+            data={'device_id': device_id}
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"允许设备失败: {str(e)}"
+        )
+
+@router.post("/devices/{device_id}/block", response_model=ResponseBase)
+def block_device(
+    device_id: int,
+    db: Session = Depends(get_db),
+    current_admin = Depends(get_current_admin_user)
+) -> Any:
+    """禁止设备访问"""
+    try:
+        device_manager = DeviceManager(db)
+        
+        # 禁止设备
+        success = device_manager.update_device_status(device_id, {'is_allowed': False})
+        
+        if not success:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="禁止设备失败"
+            )
+        
+        return ResponseBase(
+            message="设备已禁止访问",
+            data={'device_id': device_id}
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"禁止设备失败: {str(e)}"
         )

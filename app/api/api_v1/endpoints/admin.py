@@ -285,45 +285,39 @@ def batch_delete_users(
     try:
         user_service = UserService(db)
         deleted_count = 0
+        failed_count = 0
         
         user_id_list = user_ids.get("user_ids", [])
         
-        for user_id in user_id_list:
-            user = user_service.get(user_id)
-            if user and not user.is_admin:  # 不允许删除管理员
-                # 删除用户的所有订阅和设备
-                from app.models.subscription import Subscription, Device
-                
-                # 获取用户的所有订阅
-                user_subscriptions = db.query(Subscription).filter(Subscription.user_id == user.id).all()
-                for subscription in user_subscriptions:
-                    # 删除订阅下的所有设备
-                    devices = db.query(Device).filter(Device.subscription_id == subscription.id).all()
-                    for device in devices:
-                        db.delete(device)
-                    # 删除订阅
-                    db.delete(subscription)
-                
-                # 删除用户活动记录
-                from app.models.user_activity import UserActivity
-                activities = db.query(UserActivity).filter(UserActivity.user_id == user.id).all()
-                for activity in activities:
-                    db.delete(activity)
-                
-                # 删除用户订单记录
-                from app.models.order import Order
-                orders = db.query(Order).filter(Order.user_id == user.id).all()
-                for order in orders:
-                    db.delete(order)
-                
-                # 删除用户
-                db.delete(user)
-                deleted_count += 1
+        # 使用单个事务处理批量删除
+        try:
+            for user_id in user_id_list:
+                user = user_service.get(user_id)
+                if user and not user.is_admin:  # 不允许删除管理员
+                    # 使用UserService的delete方法，它会删除所有相关数据
+                    success = user_service.delete(user_id)
+                    if success:
+                        deleted_count += 1
+                    else:
+                        failed_count += 1
+                else:
+                    failed_count += 1
+            
+            # 如果所有删除都成功，提交事务
+            if failed_count == 0:
+                db.commit()
+            
+        except Exception as e:
+            # 如果出现错误，回滚事务
+            db.rollback()
+            raise e
         
-        db.commit()
-        return ResponseBase(message=f"成功删除 {deleted_count} 个用户及其所有相关数据")
+        message = f"成功删除 {deleted_count} 个用户及其所有相关数据"
+        if failed_count > 0:
+            message += f"，{failed_count} 个用户删除失败"
+            
+        return ResponseBase(message=message)
     except Exception as e:
-        db.rollback()
         return ResponseBase(success=False, message=f"批量删除用户失败: {str(e)}")
 
 # ==================== 节点管理 API ====================
@@ -516,16 +510,44 @@ def update_user(
     except Exception as e:
         return ResponseBase(success=False, message=f"更新用户信息失败: {str(e)}")
 
+@router.put("/users/{user_id}/toggle-status", response_model=ResponseBase)
+def toggle_user_status(
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_admin = Depends(get_current_admin_user)
+) -> Any:
+    """切换用户状态（启用/禁用）"""
+    try:
+        user_service = UserService(db)
+        
+        user = user_service.get(user_id)
+        if not user:
+            raise HTTPException(status_code=404, detail="用户不存在")
+        
+        if user.is_admin:
+            raise HTTPException(status_code=400, detail="不能修改管理员用户状态")
+        
+        # 切换用户状态
+        user.is_active = not user.is_active
+        db.commit()
+        
+        status_text = "启用" if user.is_active else "禁用"
+        return ResponseBase(message=f"用户状态已{status_text}")
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        return ResponseBase(success=False, message=f"切换用户状态失败: {str(e)}")
+
 @router.delete("/users/{user_id}", response_model=ResponseBase)
 def delete_user(
     user_id: int,
     db: Session = Depends(get_db),
     current_admin = Depends(get_current_admin_user)
 ) -> Any:
-    """删除用户"""
+    """删除用户及其所有相关数据"""
     try:
         user_service = UserService(db)
-        subscription_service = SubscriptionService(db)
         
         user = user_service.get(user_id)
         if not user:
@@ -534,30 +556,16 @@ def delete_user(
         if user.is_admin:
             raise HTTPException(status_code=400, detail="不能删除管理员用户")
         
-        # 删除用户的所有订阅和设备
-        from app.models.subscription import Subscription, Device
+        # 使用UserService的delete方法，它会删除所有相关数据
+        success = user_service.delete(user_id)
         
-        # 获取用户的所有订阅
-        user_subscriptions = db.query(Subscription).filter(Subscription.user_id == user.id).all()
-        for subscription in user_subscriptions:
-            # 删除订阅下的所有设备
-            devices = db.query(Device).filter(Device.subscription_id == subscription.id).all()
-            for device in devices:
-                db.delete(device)
-            # 删除订阅
-            db.delete(subscription)
-        
-        # 删除用户活动记录
-        from app.models.user_activity import UserActivity
-        activities = db.query(UserActivity).filter(UserActivity.user_id == user.id).all()
-        for activity in activities:
-            db.delete(activity)
-        
-        # 删除用户
-        db.delete(user)
-        db.commit()
-        
-        return ResponseBase(message="用户删除成功")
+        if success:
+            db.commit()  # 提交事务
+            return ResponseBase(message="用户及其所有相关数据删除成功")
+        else:
+            db.rollback()  # 回滚事务
+            return ResponseBase(success=False, message="删除用户失败")
+            
     except HTTPException:
         raise
     except Exception as e:
@@ -818,33 +826,6 @@ def reset_user_subscription(
     except Exception as e:
         return ResponseBase(success=False, message=f"重置订阅失败: {str(e)}")
 
-@router.post("/users/{user_id}/clear-devices", response_model=ResponseBase)
-def clear_user_devices(
-    user_id: int,
-    db: Session = Depends(get_db),
-    current_admin = Depends(get_current_admin_user)
-) -> Any:
-    """清理用户设备"""
-    try:
-        subscription_service = SubscriptionService(db)
-        
-        subscription = subscription_service.get_by_user_id(user_id)
-        if not subscription:
-            raise HTTPException(status_code=404, detail="用户没有订阅")
-        
-        # 清理所有设备
-        devices = subscription_service.get_devices_by_subscription_id(subscription.id)
-        for device in devices:
-            subscription_service.db.delete(device)
-        
-        subscription.current_devices = 0
-        subscription_service.db.commit()
-        
-        return ResponseBase(message="设备清理成功")
-    except HTTPException:
-        raise
-    except Exception as e:
-        return ResponseBase(success=False, message=f"清理设备失败: {str(e)}")
 
 @router.post("/users/{user_id}/reset-password", response_model=ResponseBase)
 def reset_user_password(
@@ -2872,11 +2853,6 @@ def delete_user_all_data(
 ) -> Any:
     """删除用户的所有数据（订阅、设备等）"""
     try:
-        from app.models.subscription import Subscription, Device
-        from app.models.user_activity import UserActivity
-        from app.models.order import Order
-        
-        subscription_service = SubscriptionService(db)
         user_service = UserService(db)
         
         # 获取用户信息
@@ -2884,18 +2860,18 @@ def delete_user_all_data(
         if not user:
             return ResponseBase(success=False, message="用户不存在")
         
-        # 删除用户的所有订阅
-        user_subscriptions = db.query(Subscription).filter(Subscription.user_id == user_id).all()
-        for subscription in user_subscriptions:
-            subscription_service.delete(subscription.id)
+        if user.is_admin:
+            return ResponseBase(success=False, message="不能删除管理员用户")
         
-        # 删除用户
-        db.delete(user)
-        db.commit()
+        # 使用UserService的delete方法，它会删除所有相关数据
+        success = user_service.delete(user_id)
         
-        return ResponseBase(message="用户及其所有数据删除成功")
+        if success:
+            return ResponseBase(message="用户及其所有数据删除成功")
+        else:
+            return ResponseBase(success=False, message="删除用户失败")
+            
     except Exception as e:
-        db.rollback()
         return ResponseBase(success=False, message=f"删除用户失败: {str(e)}")
 
 # ==================== 系统设置管理 ====================
@@ -3999,8 +3975,10 @@ def change_admin_password(
             return ResponseBase(success=False, message="当前密码错误")
         
         # 验证新密码强度
-        if len(new_password) < 8:
-            return ResponseBase(success=False, message="新密码长度至少8位")
+        from app.core.auth import validate_password_strength
+        is_valid, message = validate_password_strength(new_password)
+        if not is_valid:
+            return ResponseBase(success=False, message=f"新密码不符合安全要求: {message}")
         
         # 更新密码
         from app.utils.security import get_password_hash

@@ -10,8 +10,14 @@ from app.core.config import settings
 from app.core.database import get_db
 from app.models.user import User
 
-# 密码加密上下文
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+# 密码加密上下文 - 增强安全性配置
+pwd_context = CryptContext(
+    schemes=["bcrypt"], 
+    deprecated="auto",
+    bcrypt__rounds=12,  # 增加计算成本，提高安全性
+    bcrypt__min_rounds=10,  # 最小轮数
+    bcrypt__max_rounds=15   # 最大轮数
+)
 
 # HTTP Bearer 认证
 security = HTTPBearer()
@@ -23,6 +29,46 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 def get_password_hash(password: str) -> str:
     """获取密码哈希"""
     return pwd_context.hash(password)
+
+def validate_password_strength(password: str) -> tuple[bool, str]:
+    """验证密码强度"""
+    if len(password) < 8:
+        return False, "密码长度至少8位"
+    
+    if len(password) < 12:
+        return False, "建议密码长度至少12位以提高安全性"
+    
+    # 检查是否包含大写字母
+    if not any(c.isupper() for c in password):
+        return False, "密码必须包含至少一个大写字母"
+    
+    # 检查是否包含小写字母
+    if not any(c.islower() for c in password):
+        return False, "密码必须包含至少一个小写字母"
+    
+    # 检查是否包含数字
+    if not any(c.isdigit() for c in password):
+        return False, "密码必须包含至少一个数字"
+    
+    # 检查是否包含特殊字符
+    special_chars = "!@#$%^&*()_+-=[]{}|;:,.<>?"
+    if not any(c in special_chars for c in password):
+        return False, "密码必须包含至少一个特殊字符 (!@#$%^&*()_+-=[]{}|;:,.<>?)"
+    
+    # 检查常见弱密码
+    weak_passwords = [
+        "password", "123456", "123456789", "qwerty", "abc123",
+        "password123", "admin", "root", "user", "test"
+    ]
+    if password.lower() in weak_passwords:
+        return False, "密码过于简单，请使用更复杂的密码"
+    
+    return True, "密码强度符合要求"
+
+def is_password_strong_enough(password: str) -> bool:
+    """检查密码是否足够强"""
+    is_valid, _ = validate_password_strength(password)
+    return is_valid
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
     """创建访问令牌"""

@@ -44,6 +44,16 @@ def register(
     db: Session = Depends(get_db)
 ) -> Any:
     """用户注册 - 需要邮箱验证"""
+    from app.core.auth import validate_password_strength
+    
+    # 验证密码强度
+    is_valid, message = validate_password_strength(user_in.password)
+    if not is_valid:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"密码不符合安全要求: {message}"
+        )
+    
     user_service = UserService(db)
     email_service = EmailService(db)
     
@@ -78,7 +88,11 @@ def register(
     # 发送验证邮件
     try:
         verification_url = f"{settings.BASE_URL}/verify-email?token={verification_token}"
-        email_service.send_verification_email(user.email, user.username, verification_url)
+        success = email_service.send_verification_email(user.email, verification_token, user.username)
+        if not success:
+            print(f"发送验证邮件失败: 邮件服务返回失败")
+        else:
+            print(f"验证邮件发送成功: {user.email}")
     except Exception as e:
         # 如果邮件发送失败，记录日志但不影响注册流程
         print(f"发送验证邮件失败: {e}")
@@ -321,10 +335,16 @@ def refresh_token(
 
 @router.post("/verify-email", response_model=ResponseBase)
 def verify_email_post(
-    token: str,
+    request_data: dict,
     db: Session = Depends(get_db)
 ) -> Any:
-    """验证QQ邮箱 - POST请求"""
+    """验证邮箱 - POST请求"""
+    token = request_data.get("token")
+    if not token:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="缺少验证令牌"
+        )
     return verify_email_logic(token, db)
 
 @router.get("/verify-email", response_model=ResponseBase)
@@ -332,7 +352,7 @@ def verify_email_get(
     token: str,
     db: Session = Depends(get_db)
 ) -> Any:
-    """验证QQ邮箱 - GET请求"""
+    """验证邮箱 - GET请求（用于邮件链接）"""
     return verify_email_logic(token, db)
 
 def verify_email_logic(token: str, db: Session) -> Any:
@@ -347,7 +367,7 @@ def verify_email_logic(token: str, db: Session) -> Any:
             detail="无效的验证令牌"
         )
     
-    user_id = payload.get("user_id")
+    user_id = payload.get("user_id") or payload.get("sub")
     if not user_id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -432,37 +452,7 @@ def reset_password(
     
     return ResponseBase(message="密码重置成功")
 
-@router.post("/verify-email", response_model=ResponseBase)
-def verify_email(
-    verification_data: EmailVerification,
-    db: Session = Depends(get_db)
-) -> Any:
-    """验证邮箱"""
-    user_service = UserService(db)
-    
-    # 查找用户（这里需要根据验证令牌查找用户）
-    # 暂时使用简单的查找方式，实际应该创建专门的验证令牌表
-    user = db.query(User).filter(
-        User.verification_token == verification_data.token,
-        User.verification_expires > datetime.utcnow()
-    ).first()
-    
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="验证令牌无效或已过期"
-        )
-    
-    # 更新用户验证状态
-    user.is_verified = True
-    user.verification_token = None
-    user.verification_expires = None
-    db.commit()
-    
-    return ResponseBase(
-        message="邮箱验证成功，现在可以登录了",
-        data={"user_id": user.id, "username": user.username}
-    )
+# 删除重复的验证端点，使用上面的统一验证逻辑
 
 @router.post("/resend-verification", response_model=ResponseBase)
 def resend_verification(
@@ -486,8 +476,12 @@ def resend_verification(
             detail="邮箱已验证，无需重复验证"
         )
     
-    # 生成新的验证令牌
-    verification_token = secrets.token_urlsafe(32)
+    # 生成新的验证令牌（使用JWT格式保持一致性）
+    from app.utils.security import create_access_token
+    verification_token = create_access_token(
+        data={"user_id": str(user.id), "type": "email_verification"},
+        expires_delta=timedelta(hours=24)
+    )
     user.verification_token = verification_token
     user.verification_expires = datetime.utcnow() + timedelta(hours=24)
     db.commit()
@@ -495,7 +489,17 @@ def resend_verification(
     # 发送验证邮件
     try:
         verification_url = f"{settings.BASE_URL}/verify-email?token={verification_token}"
-        email_service.send_verification_email(user.email, user.username, verification_url)
+        success = email_service.send_verification_email(user.email, verification_token, user.username)
+        if not success:
+            print(f"发送验证邮件失败: 邮件服务返回失败")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="发送验证邮件失败，请稍后重试"
+            )
+        else:
+            print(f"验证邮件发送成功: {user.email}")
+    except HTTPException:
+        raise
     except Exception as e:
         print(f"发送验证邮件失败: {e}")
         raise HTTPException(
