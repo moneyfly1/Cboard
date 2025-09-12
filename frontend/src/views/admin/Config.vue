@@ -338,147 +338,6 @@
           </el-form>
         </el-tab-pane>
 
-        <!-- 邮件队列管理 -->
-        <el-tab-pane label="邮件队列管理" name="email-queue">
-          <div class="email-queue-section">
-            <div class="section-header">
-              <h3>邮件队列状态</h3>
-              <div class="header-actions">
-                <el-button @click="refreshEmailQueue" :loading="emailQueueLoading">
-                  <el-icon><Refresh /></el-icon>
-                  刷新
-                </el-button>
-                <el-button type="warning" @click="clearFailedEmails">
-                  <el-icon><Delete /></el-icon>
-                  清空失败邮件
-                </el-button>
-              </div>
-            </div>
-
-            <!-- 队列统计 -->
-            <el-row :gutter="20" class="queue-stats">
-              <el-col :span="6">
-                <el-card class="stat-card">
-                  <div class="stat-content">
-                    <div class="stat-number">{{ emailQueueStats.total || 0 }}</div>
-                    <div class="stat-label">总邮件数</div>
-                  </div>
-                </el-card>
-              </el-col>
-              <el-col :span="6">
-                <el-card class="stat-card">
-                  <div class="stat-content">
-                    <div class="stat-number success">{{ emailQueueStats.pending || 0 }}</div>
-                    <div class="stat-label">待发送</div>
-                  </div>
-                </el-card>
-              </el-col>
-              <el-col :span="6">
-                <el-card class="stat-card">
-                  <div class="stat-content">
-                    <div class="stat-number warning">{{ emailQueueStats.sent || 0 }}</div>
-                    <div class="stat-label">已发送</div>
-                  </div>
-                </el-card>
-              </el-col>
-              <el-col :span="6">
-                <el-card class="stat-card">
-                  <div class="stat-content">
-                    <div class="stat-number danger">{{ emailQueueStats.failed || 0 }}</div>
-                    <div class="stat-label">发送失败</div>
-                  </div>
-                </el-card>
-              </el-col>
-            </el-row>
-
-            <!-- 队列筛选 -->
-            <el-form :inline="true" :model="emailQueueFilter" class="queue-filter">
-              <el-form-item label="状态">
-                <el-select v-model="emailQueueFilter.status" placeholder="选择状态" clearable>
-                  <el-option label="待发送" value="pending" />
-                  <el-option label="发送中" value="sending" />
-                  <el-option label="已发送" value="sent" />
-                  <el-option label="发送失败" value="failed" />
-                </el-select>
-              </el-form-item>
-              <el-form-item label="邮箱">
-                <el-input v-model="emailQueueFilter.email" placeholder="搜索邮箱地址" clearable />
-              </el-form-item>
-              <el-form-item>
-                <el-button type="primary" @click="applyEmailQueueFilter">
-                  <el-icon><Search /></el-icon>
-                  筛选
-                </el-button>
-                <el-button @click="resetEmailQueueFilter">重置</el-button>
-              </el-form-item>
-            </el-form>
-
-            <!-- 队列列表 -->
-            <el-table :data="emailQueueList" v-loading="emailQueueLoading" stripe>
-              <el-table-column prop="id" label="ID" width="80" />
-              <el-table-column prop="to_email" label="收件人" min-width="200" />
-              <el-table-column prop="subject" label="主题" min-width="250" />
-              <el-table-column prop="template_name" label="模板" width="120" />
-              <el-table-column prop="status" label="状态" width="100">
-                <template #default="{ row }">
-                  <el-tag :type="getEmailStatusTagType(row.status)">
-                    {{ getEmailStatusText(row.status) }}
-                  </el-tag>
-                </template>
-              </el-table-column>
-              <el-table-column prop="retry_count" label="重试次数" width="100">
-                <template #default="{ row }">
-                  <span :class="{ 'text-danger': row.retry_count > 0 }">
-                    {{ row.retry_count }}/{{ row.max_retries || 3 }}
-                  </span>
-                </template>
-              </el-table-column>
-              <el-table-column prop="created_at" label="创建时间" width="180">
-                <template #default="{ row }">
-                  {{ formatDate(row.created_at) }}
-                </template>
-              </el-table-column>
-              <el-table-column label="操作" width="200" fixed="right">
-                <template #default="{ row }">
-                  <el-button size="small" @click="viewEmailDetail(row)">
-                    <el-icon><View /></el-icon>
-                    详情
-                  </el-button>
-                  <el-button 
-                    v-if="row.status === 'failed'" 
-                    size="small" 
-                    type="warning" 
-                    @click="retryEmail(row)"
-                  >
-                    <el-icon><Refresh /></el-icon>
-                    重试
-                  </el-button>
-                  <el-button 
-                    size="small" 
-                    type="danger" 
-                    @click="deleteEmail(row)"
-                  >
-                    <el-icon><Delete /></el-icon>
-                    删除
-                  </el-button>
-                </template>
-              </el-table-column>
-            </el-table>
-
-            <!-- 分页 -->
-            <div class="pagination-wrapper">
-              <el-pagination
-                v-model:current-page="emailQueuePagination.page"
-                v-model:page-size="emailQueuePagination.size"
-                :page-sizes="[10, 20, 50, 100]"
-                :total="emailQueuePagination.total"
-                layout="total, sizes, prev, pager, next, jumper"
-                @size-change="handleEmailQueueSizeChange"
-                @current-change="handleEmailQueueCurrentChange"
-              />
-            </div>
-          </div>
-        </el-tab-pane>
 
         <!-- 支付设置 -->
         <el-tab-pane label="支付设置" name="payment">
@@ -673,7 +532,7 @@
 <script>
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Plus, Refresh, Delete, Search, View } from '@element-plus/icons-vue'
+import { Plus } from '@element-plus/icons-vue'
 import { configAPI, softwareConfigAPI } from '@/utils/api'
 import { adminAPI } from '@/utils/api'
 import { useRouter } from 'vue-router'
@@ -681,7 +540,7 @@ import { useRouter } from 'vue-router'
 export default {
   name: 'AdminConfig',
   components: {
-    Plus, Refresh, Delete, Search, View
+    Plus
   },
   setup() {
     const activeTab = ref('system')
@@ -697,7 +556,6 @@ export default {
     const emailLoading = ref(false)
     const testLoading = ref(false)
     const testUserLoading = ref(false)
-    const emailQueueLoading = ref(false)
     const paymentLoading = ref(false)
     const testPaymentLoading = ref(false)
     const softwareLoading = ref(false)
@@ -729,7 +587,7 @@ export default {
     })
 
     const paymentForm = reactive({
-      payment_enabled: true,
+      payment_enabled: false,
       default_payment_method: 'alipay',
       currency: 'CNY',
       // 支付宝配置
@@ -784,24 +642,6 @@ export default {
       shadowrocket_url: ''
     })
 
-    const emailQueueStats = reactive({
-      total: 0,
-      pending: 0,
-      sent: 0,
-      failed: 0
-    })
-
-    const emailQueueFilter = reactive({
-      status: null,
-      email: null
-    })
-
-    const emailQueueList = ref([])
-    const emailQueuePagination = reactive({
-      page: 1,
-      size: 10,
-      total: 0
-    })
 
     const router = useRouter()
 
@@ -1115,129 +955,6 @@ export default {
       }
     }
 
-    // 加载邮件队列统计
-    const loadEmailQueueStats = async () => {
-      emailQueueLoading.value = true
-      try {
-        const response = await adminAPI.getEmailQueueStatistics()
-        Object.assign(emailQueueStats, response.data)
-      } catch (error) {
-        console.error('加载邮件队列统计失败:', error)
-      } finally {
-        emailQueueLoading.value = false
-      }
-    }
-
-    // 加载邮件队列列表
-    const loadEmailQueueList = async () => {
-      emailQueueLoading.value = true
-      try {
-        const params = {
-          page: emailQueuePagination.page,
-          size: emailQueuePagination.size,
-          status: emailQueueFilter.status,
-          email: emailQueueFilter.email
-        }
-        const response = await adminAPI.getEmailQueue(params)
-        emailQueueList.value = response.data.emails
-        emailQueuePagination.total = response.data.total
-      } catch (error) {
-        console.error('加载邮件队列列表失败:', error)
-      } finally {
-        emailQueueLoading.value = false
-      }
-    }
-
-    // 刷新邮件队列
-    const refreshEmailQueue = async () => {
-      await loadEmailQueueList()
-      await loadEmailQueueStats()
-      ElMessage.success('邮件队列刷新成功')
-    }
-
-    // 清空失败邮件
-    const clearFailedEmails = async () => {
-      if (confirm('确定要清空所有发送失败的邮件吗？这将删除所有失败邮件的记录。')) {
-        emailQueueLoading.value = true
-        try {
-          await adminAPI.clearEmailQueue('failed')
-          await loadEmailQueueList()
-          await loadEmailQueueStats()
-          ElMessage.success('失败邮件已清空')
-        } catch (error) {
-          ElMessage.error('清空失败邮件失败')
-        } finally {
-          emailQueueLoading.value = false
-        }
-      }
-    }
-
-    // 重试邮件
-    const retryEmail = async (email) => {
-      if (confirm(`确定要重试发送邮件 "${email.subject}" 吗？`)) {
-        emailQueueLoading.value = true
-        try {
-          await adminAPI.retryEmail(email.id)
-          await loadEmailQueueList()
-          await loadEmailQueueStats()
-          ElMessage.success('邮件重试发送成功')
-        } catch (error) {
-          ElMessage.error('邮件重试发送失败')
-        } finally {
-          emailQueueLoading.value = false
-        }
-      }
-    }
-
-    // 删除邮件
-    const deleteEmail = async (email) => {
-      if (confirm(`确定要删除邮件 "${email.subject}" 吗？`)) {
-        emailQueueLoading.value = true
-        try {
-          await adminAPI.deleteEmailFromQueue(email.id)
-          await loadEmailQueueList()
-          await loadEmailQueueStats()
-          ElMessage.success('邮件删除成功')
-        } catch (error) {
-          ElMessage.error('邮件删除失败')
-        } finally {
-          emailQueueLoading.value = false
-        }
-      }
-    }
-
-    // 应用邮件队列筛选
-    const applyEmailQueueFilter = async () => {
-      emailQueuePagination.page = 1 // 重置页码
-      await loadEmailQueueList()
-      await loadEmailQueueStats()
-    }
-
-    // 重置邮件队列筛选
-    const resetEmailQueueFilter = () => {
-      emailQueueFilter.status = null
-      emailQueueFilter.email = null
-      emailQueuePagination.page = 1
-      loadEmailQueueList()
-      loadEmailQueueStats()
-    }
-
-    // 查看邮件详情
-    const viewEmailDetail = (email) => {
-      // 跳转到邮件详情页面
-      router.push(`/admin/email-detail/${email.id}`)
-    }
-
-    // 处理邮件队列分页变化
-    const handleEmailQueueSizeChange = (newSize) => {
-      emailQueuePagination.size = newSize
-      loadEmailQueueList()
-    }
-
-    const handleEmailQueueCurrentChange = (newPage) => {
-      emailQueuePagination.page = newPage
-      loadEmailQueueList()
-    }
 
     // 格式化日期
     const formatDate = (timestamp) => {
@@ -1286,7 +1003,35 @@ export default {
     const savePaymentSettings = async () => {
       paymentLoading.value = true
       try {
-        await configAPI.savePaymentSettings(paymentForm)
+        // 将前端字段名映射到后端配置键名
+        const configData = {
+          enable_payment: paymentForm.payment_enabled, // 映射到后端使用的键名
+          default_payment_method: paymentForm.default_payment_method,
+          currency: paymentForm.currency,
+          alipay_app_id: paymentForm.alipay_app_id,
+          alipay_private_key: paymentForm.alipay_private_key,
+          alipay_public_key: paymentForm.alipay_public_key,
+          alipay_gateway: paymentForm.alipay_gateway,
+          wechat_app_id: paymentForm.wechat_app_id,
+          wechat_mch_id: paymentForm.wechat_mch_id,
+          wechat_api_key: paymentForm.wechat_api_key,
+          wechat_cert_path: paymentForm.wechat_cert_path,
+          wechat_key_path: paymentForm.wechat_key_path,
+          paypal_client_id: paymentForm.paypal_client_id,
+          paypal_secret: paymentForm.paypal_secret,
+          paypal_mode: paymentForm.paypal_mode,
+          stripe_publishable_key: paymentForm.stripe_publishable_key,
+          stripe_secret_key: paymentForm.stripe_secret_key,
+          stripe_webhook_secret: paymentForm.stripe_webhook_secret,
+          bank_name: paymentForm.bank_name,
+          bank_account: paymentForm.bank_account,
+          bank_branch: paymentForm.bank_branch,
+          account_holder: paymentForm.account_holder,
+          return_url: paymentForm.return_url,
+          notify_url: paymentForm.notify_url
+        }
+        
+        await configAPI.savePaymentSettings(configData)
         ElMessage.success('支付设置保存成功')
         // 重新加载配置以确保数据同步
         await loadPaymentSettings()
@@ -1323,7 +1068,7 @@ export default {
             if (config.key && config.value !== undefined) {
               // 映射配置键名到表单字段
               const fieldMapping = {
-                'payment_enabled': 'payment_enabled',
+                'enable_payment': 'payment_enabled',
                 'default_payment_method': 'default_payment_method',
                 'currency': 'currency',
                 'alipay_app_id': 'alipay_app_id',
@@ -1353,7 +1098,8 @@ export default {
                 const fieldName = fieldMapping[config.key]
                 // 根据字段名判断类型，而不是config.type
                 if (fieldName === 'payment_enabled') {
-                  paymentForm[fieldName] = config.value === 'true' || config.value === true
+                  // 确保布尔值正确处理，支持多种格式
+                  paymentForm[fieldName] = config.value === 'true' || config.value === 'True' || config.value === true || config.value === 1
                 } else if (fieldName === 'currency' || fieldName === 'default_payment_method') {
                   paymentForm[fieldName] = config.value
                 } else {
@@ -1377,8 +1123,6 @@ export default {
       loadV2rayConfig()
       loadClashConfigInvalid()
       loadV2rayConfigInvalid()
-      loadEmailQueueStats()
-      loadEmailQueueList()
       loadPaymentSettings()
       loadSoftwareConfig()
     })
@@ -1395,7 +1139,6 @@ export default {
       emailLoading,
       testLoading,
       testUserLoading,
-      emailQueueLoading,
       paymentLoading,
       testPaymentLoading,
       softwareLoading,
@@ -1428,22 +1171,7 @@ export default {
       beforeLogoUpload,
       handleConfigImport,
       beforeConfigUpload,
-      emailQueueStats,
-      emailQueueFilter,
-      emailQueueList,
-      emailQueuePagination,
-      refreshEmailQueue,
-      clearFailedEmails,
-      retryEmail,
-      deleteEmail,
-      applyEmailQueueFilter,
-      resetEmailQueueFilter,
-      viewEmailDetail,
-      handleEmailQueueSizeChange,
-      handleEmailQueueCurrentChange,
       formatDate,
-      getEmailStatusTagType,
-      getEmailStatusText,
       savePaymentSettings,
       testPaymentConfig,
       loadPaymentSettings

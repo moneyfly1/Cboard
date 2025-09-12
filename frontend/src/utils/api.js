@@ -237,6 +237,7 @@ export const adminAPI = {
   getDeviceDetail: (deviceId) => api.get(`/admin/devices/devices/${deviceId}`),
   updateDeviceStatus: (deviceId, data) => api.put(`/admin/devices/devices/${deviceId}`, data),
   removeDevice: (deviceId) => api.delete(`/admin/devices/${deviceId}`),
+  deleteUserDevice: (userId, deviceId) => api.delete(`/admin/users/${userId}/devices/${deviceId}`),
   clearUserDevices: (userId) => api.post(`/admin/users/${userId}/clear-devices`)
 }
 
@@ -308,7 +309,7 @@ export const statisticsAPI = {
 // 支付相关API
 export const paymentAPI = {
   // 用户端支付API
-  getPaymentMethods: () => api.get('/payment-methods'),
+  getPaymentMethods: () => api.get('/payment-methods/active'),
   createPayment: (data) => api.post('/create-payment', data),
   getPaymentStatus: (transactionId) => api.get(`/payment-status/${transactionId}`),
   
@@ -339,8 +340,6 @@ export const paymentAPI = {
   startConfigUpdateSchedule: () => api.post('/admin/config-update/schedule/start'),
   stopConfigUpdateSchedule: () => api.post('/admin/config-update/schedule/stop'),
   clearConfigUpdateLogs: () => api.post('/admin/config-update/logs/clear'),
-  startLogCleanupTimer: () => api.post('/admin/config-update/logs/cleanup/start'),
-  stopLogCleanupTimer: () => api.post('/admin/config-update/logs/cleanup/stop')
 }
 
 // 系统设置相关API
@@ -385,6 +384,35 @@ export const settingsAPI = {
 export const softwareConfigAPI = {
   getSoftwareConfig: () => api.get('/software-config/'),
   updateSoftwareConfig: (data) => api.put('/software-config/', data)
+}
+
+// 配置更新API (configUpdateAPI) - NEW
+export const configUpdateAPI = {
+  // 状态管理
+  getStatus: () => api.get('/admin/config-update/status'),
+  startUpdate: () => api.post('/admin/config-update/start'),
+  stopUpdate: () => api.post('/admin/config-update/stop'),
+  testUpdate: () => api.post('/admin/config-update/test'),
+  
+  // 配置管理
+  getConfig: () => api.get('/admin/config-update/config'),
+  updateConfig: (data) => api.put('/admin/config-update/config', data),
+  
+  // 文件管理
+  getFiles: () => api.get('/admin/config-update/files'),
+  
+  // 日志管理
+  getLogs: (params) => api.get('/admin/config-update/logs', { params }),
+  clearLogs: () => api.post('/admin/config-update/logs/clear'),
+  
+  
+  // 节点源管理
+  getNodeSources: () => api.get('/admin/config-update/node-sources'),
+  updateNodeSources: (data) => api.put('/admin/config-update/node-sources', data),
+  
+  // 过滤关键词管理
+  getFilterKeywords: () => api.get('/admin/config-update/filter-keywords'),
+  updateFilterKeywords: (data) => api.put('/admin/config-update/filter-keywords', data)
 }
 
 export default api 

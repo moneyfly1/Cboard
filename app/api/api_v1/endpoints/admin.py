@@ -665,6 +665,68 @@ def delete_device_admin(
             detail=f"删除设备失败: {str(e)}"
         )
 
+@router.delete("/users/{user_id}/devices/{device_id}", response_model=ResponseBase)
+def delete_user_device_admin(
+    user_id: int,
+    device_id: int,
+    db: Session = Depends(get_db),
+    current_admin = Depends(get_current_admin_user)
+) -> Any:
+    """管理员删除用户指定设备"""
+    try:
+        from sqlalchemy import text
+        
+        # 验证用户是否存在
+        user_query = text("SELECT id FROM users WHERE id = :user_id")
+        user = db.execute(user_query, {'user_id': user_id}).fetchone()
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="用户不存在"
+            )
+        
+        # 验证设备是否存在且属于该用户
+        device_query = text("""
+            SELECT d.id, d.subscription_id, s.user_id 
+            FROM devices d
+            JOIN subscriptions s ON d.subscription_id = s.id
+            WHERE d.id = :device_id AND s.user_id = :user_id
+        """)
+        device = db.execute(device_query, {'device_id': device_id, 'user_id': user_id}).fetchone()
+        
+        if not device:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="设备不存在或不属于该用户"
+            )
+        
+        # 删除设备
+        result = db.execute(text("""
+            DELETE FROM devices WHERE id = :device_id
+        """), {'device_id': device_id})
+        
+        if result.rowcount > 0:
+            # 更新订阅的设备计数
+            db.execute(text("""
+                UPDATE subscriptions 
+                SET current_devices = current_devices - 1 
+                WHERE id = :subscription_id AND current_devices > 0
+            """), {'subscription_id': device.subscription_id})
+            db.commit()
+            return ResponseBase(message="设备删除成功")
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="设备不存在"
+            )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"删除设备失败: {str(e)}"
+        )
+
 @router.post("/users/{user_id}/clear-devices", response_model=ResponseBase)
 def clear_user_devices_admin(
     user_id: int,

@@ -29,7 +29,10 @@ for (const [key, component] of Object.entries(ElementPlusIconsVue)) {
 
 // 全局错误处理
 app.config.errorHandler = (err, vm, info) => {
-  console.error('全局错误:', err, info)
+  // 只在开发环境输出详细错误信息
+  if (import.meta.env.DEV) {
+    console.error('全局错误:', err, info)
+  }
 }
 
 // 全局属性
@@ -51,14 +54,22 @@ async function initializeApp() {
       await settingsStore.loadSettings()
       settingsStore.initTheme()
       app.config.globalProperties.$settings = settingsStore
-      console.log('设置加载完成')
+      if (import.meta.env.DEV) {
+        console.log('设置加载完成')
+      }
     } catch (settingsError) {
-      console.warn('设置加载失败，使用默认设置:', settingsError)
+      if (import.meta.env.DEV) {
+        console.warn('设置加载失败，使用默认设置:', settingsError)
+      }
     }
     
-    console.log('应用初始化完成')
+    if (import.meta.env.DEV) {
+      console.log('应用初始化完成')
+    }
   } catch (error) {
-    console.error('应用初始化失败:', error)
+    if (import.meta.env.DEV) {
+      console.error('应用初始化失败:', error)
+    }
     // 最后的兜底方案
     app.mount('#app')
   }

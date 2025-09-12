@@ -25,27 +25,16 @@ class AlipayPayment(PaymentInterface):
     def pay(self, request: PaymentRequest) -> PaymentResponse:
         """创建支付宝支付订单"""
         try:
-            # 为了测试，生成一个模拟的二维码URL
-            # 在实际生产环境中，这里应该调用真实的支付宝API
+            # 检查必要的配置
             if not self.app_id or not self.private_key:
-                # 生成测试支付信息
-                payment_info = f"支付宝支付\\n订单号: {request.trade_no}\\n金额: ¥{request.total_amount/100}\\n商品: {request.subject}"
-                # 使用在线二维码生成服务
-                import urllib.parse
-                encoded_data = urllib.parse.quote(payment_info)
-                test_qr_url = f"https://api.qrserver.com/v1/create-qr-code/?size=200x200&data={encoded_data}"
-                return PaymentResponse(
-                    type=0,  # 二维码
-                    data=test_qr_url,
-                    trade_no=request.trade_no
-                )
+                raise Exception("支付宝配置不完整：缺少APPID或私钥")
             
             # 构建请求参数
             biz_content = {
                 'out_trade_no': request.trade_no,
                 'total_amount': str(request.total_amount / 100),  # 转换为元
                 'subject': request.subject,
-                'body': request.body,
+                'body': request.body or request.subject,
                 'product_code': 'FAST_INSTANT_TRADE_PAY'
             }
             
@@ -64,46 +53,62 @@ class AlipayPayment(PaymentInterface):
             sign = self._generate_sign(params)
             params['sign'] = sign
             
+            print(f"支付宝API请求参数: {params}")
+            
             # 发送请求
-            response = requests.post(
-                self.gateway_url,
-                data=params,
-                timeout=30
-            )
+            try:
+                response = requests.post(
+                    self.gateway_url,
+                    data=params,
+                    timeout=10,  # 减少超时时间
+                    headers={'Content-Type': 'application/x-www-form-urlencoded;charset=utf-8'}
+                )
+            except requests.exceptions.Timeout:
+                raise Exception("支付宝API请求超时，请检查网络连接")
+            except requests.exceptions.ConnectionError:
+                raise Exception("无法连接到支付宝服务器，请检查网络连接")
+            except requests.exceptions.RequestException as e:
+                raise Exception(f"支付宝API请求失败: {str(e)}")
+            
+            print(f"支付宝API响应状态码: {response.status_code}")
+            print(f"支付宝API响应内容: {response.text}")
             
             result = response.json()
             alipay_response = result.get('alipay_trade_precreate_response', {})
             
             if alipay_response.get('code') == '10000':
                 qr_code = alipay_response.get('qr_code', '')
-                return PaymentResponse(
-                    type=0,  # 二维码
-                    data=qr_code,
-                    trade_no=request.trade_no
-                )
+                if qr_code:
+                    return PaymentResponse(
+                        type=0,  # 二维码
+                        data=qr_code,
+                        trade_no=request.trade_no
+                    )
+                else:
+                    raise Exception("支付宝返回的二维码为空")
             else:
-                # 如果真实API失败，返回测试二维码
-                payment_info = f"支付宝支付\\n订单号: {request.trade_no}\\n金额: ¥{request.total_amount/100}\\n商品: {request.subject}"
-                import urllib.parse
-                encoded_data = urllib.parse.quote(payment_info)
-                test_qr_url = f"https://api.qrserver.com/v1/create-qr-code/?size=200x200&data={encoded_data}"
-                return PaymentResponse(
-                    type=0,  # 二维码
-                    data=test_qr_url,
-                    trade_no=request.trade_no
-                )
+                error_msg = alipay_response.get('sub_msg', alipay_response.get('msg', '未知错误'))
+                raise Exception(f"支付宝API调用失败: {error_msg}")
                 
         except Exception as e:
-            # 如果出现任何错误，返回测试二维码
-            payment_info = f"支付宝支付\\n订单号: {request.trade_no}\\n金额: ¥{request.total_amount/100}\\n商品: {request.subject}"
-            import urllib.parse
-            encoded_data = urllib.parse.quote(payment_info)
-            test_qr_url = f"https://api.qrserver.com/v1/create-qr-code/?size=200x200&data={encoded_data}"
-            return PaymentResponse(
-                type=0,  # 二维码
-                data=test_qr_url,
-                trade_no=request.trade_no
-            )
+            print(f"支付宝支付创建失败: {str(e)}")
+            
+            # 提供详细的错误信息和解决建议
+            error_msg = str(e)
+            if "ACCESS_FORBIDDEN" in error_msg:
+                raise Exception("支付宝配置错误：请检查APPID、私钥是否正确，或应用是否已激活")
+            elif "超时" in error_msg or "timeout" in error_msg.lower():
+                # 在本地环境下提供更友好的错误信息
+                import socket
+                hostname = socket.gethostname()
+                if hostname == 'localhost' or '127.0.0.1' in str(socket.gethostbyname(hostname)):
+                    raise Exception("本地环境网络限制：支付宝API无法在本地环境正常调用，请部署到VPS环境进行测试")
+                else:
+                    raise Exception("支付宝API请求超时：请检查网络连接或稍后重试")
+            elif "连接" in error_msg or "connection" in error_msg.lower():
+                raise Exception("无法连接支付宝服务器：请检查网络连接")
+            else:
+                raise Exception(f"支付宝支付创建失败: {error_msg}")
     
     def verify_notify(self, params: Dict[str, Any]) -> Optional[PaymentNotify]:
         """验证支付宝支付回调"""
@@ -161,11 +166,13 @@ class AlipayPayment(PaymentInterface):
     def _generate_sign(self, params: Dict[str, Any]) -> str:
         """生成RSA2签名"""
         # 过滤空值并排序
-        filtered_params = {k: v for k, v in params.items() if v}
+        filtered_params = {k: v for k, v in params.items() if v and k != 'sign'}
         sorted_params = sorted(filtered_params.items())
         
         # 构建待签名字符串
         sign_string = '&'.join([f"{k}={v}" for k, v in sorted_params])
+        
+        print(f"待签名字符串: {sign_string}")
         
         # 使用私钥签名
         try:
@@ -173,19 +180,27 @@ class AlipayPayment(PaymentInterface):
             from Crypto.Signature import pkcs1_15
             from Crypto.Hash import SHA256
             
+            # 处理私钥格式
+            private_key_str = self.private_key
+            if not private_key_str.startswith('-----BEGIN'):
+                # 如果没有PEM头，添加它们
+                private_key_str = f"-----BEGIN RSA PRIVATE KEY-----\n{private_key_str}\n-----END RSA PRIVATE KEY-----"
+            
             # 加载私钥
-            private_key = RSA.import_key(self.private_key)
+            private_key = RSA.import_key(private_key_str)
             
             # 创建签名
             h = SHA256.new(sign_string.encode('utf-8'))
             signature = pkcs1_15.new(private_key).sign(h)
             
             # 返回Base64编码的签名
-            return base64.b64encode(signature).decode('utf-8')
+            sign_result = base64.b64encode(signature).decode('utf-8')
+            print(f"生成的签名: {sign_result}")
+            return sign_result
             
-        except ImportError:
-            # 如果没有pycryptodome，使用简化的签名方法（仅用于测试）
-            return hashlib.md5(sign_string.encode('utf-8')).hexdigest()
+        except Exception as e:
+            print(f"RSA签名生成失败: {str(e)}")
+            raise Exception(f"RSA签名生成失败: {str(e)}")
     
     def _verify_sign(self, params: Dict[str, Any]) -> bool:
         """验证RSA2签名"""

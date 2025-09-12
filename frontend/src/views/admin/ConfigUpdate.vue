@@ -58,14 +58,14 @@
 
     <!-- 功能状态提示 -->
     <el-alert
-      title="节点采集功能已暂时关闭"
-      type="warning"
+      title="节点采集功能已启用"
+      type="success"
       :closable="false"
       style="margin-bottom: 20px;"
     >
       <template #default>
-        <p>节点采集功能已暂时关闭，等待后期开发。</p>
-        <p>如需使用此功能，请联系开发人员。</p>
+        <p>节点采集功能已启用，可以正常使用。</p>
+        <p>请确保已正确配置节点源URL和过滤关键词。</p>
       </template>
     </el-alert>
 
@@ -221,7 +221,17 @@
     <el-card>
       <template #header>
         <div class="card-header">
-          <span>更新日志</span>
+          <div class="log-header-left">
+            <span>更新日志</span>
+            <el-tag v-if="isLogPolling" type="success" size="small" class="live-indicator">
+              <el-icon><VideoPlay /></el-icon>
+              实时更新中
+            </el-tag>
+            <el-tag v-if="newLogCount > 0" type="info" size="small" class="new-log-indicator">
+              <el-icon><Bell /></el-icon>
+              {{ newLogCount }} 条新日志
+            </el-tag>
+          </div>
           <div>
             <el-button type="primary" size="small" @click="refreshLogs">
               <el-icon><Refresh /></el-icon>
@@ -230,18 +240,6 @@
             <el-button type="warning" size="small" @click="clearLogs">
               <el-icon><Delete /></el-icon>
               清理日志
-            </el-button>
-            <el-button type="success" size="small" @click="startLogCleanup">
-              <el-icon><Timer /></el-icon>
-              启动自动清理
-            </el-button>
-            <el-button type="danger" size="small" @click="stopLogCleanup">
-              <el-icon><VideoPause /></el-icon>
-              停止自动清理
-            </el-button>
-            <el-button type="info" size="small" @click="showCleanupIntervalDialog">
-              <el-icon><Setting /></el-icon>
-              设置清理间隔
             </el-button>
           </div>
         </div>
@@ -264,37 +262,6 @@
       </div>
     </el-card>
 
-    <!-- 清理间隔设置对话框 -->
-    <el-dialog
-      v-model="cleanupIntervalDialogVisible"
-      title="设置日志清理间隔"
-      width="400px"
-      :before-close="handleCleanupIntervalDialogClose"
-    >
-      <el-form :model="cleanupIntervalForm" label-width="120px">
-        <el-form-item label="清理间隔（分钟）">
-          <el-input-number
-            v-model="cleanupIntervalForm.interval_minutes"
-            :min="1"
-            :max="1440"
-            placeholder="请输入清理间隔"
-            style="width: 100%"
-          />
-          <div class="form-tip">
-            建议设置范围：1-1440分钟（1分钟到24小时）
-          </div>
-        </el-form-item>
-      </el-form>
-      
-      <template #footer>
-        <div class="dialog-footer">
-          <el-button @click="cleanupIntervalDialogVisible = false">取消</el-button>
-          <el-button type="primary" @click="saveCleanupInterval" :loading="loading.cleanupInterval">
-            保存设置
-          </el-button>
-        </div>
-      </template>
-    </el-dialog>
   </div>
 </template>
 
@@ -303,21 +270,18 @@ import { ref, reactive, onMounted, onUnmounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { 
   VideoPlay, VideoPause, Timer, Document, Clock, Refresh, 
-  Check, Delete, Plus, View 
+  Check, Delete, Plus, View, Bell
 } from '@element-plus/icons-vue'
-import { adminAPI } from '@/utils/api'
+import { configUpdateAPI } from '@/utils/api'
 import api from '@/utils/api'
 
-// 调试：直接测试API导入
-console.log('ConfigUpdate.vue - adminAPI导入测试:', adminAPI)
-console.log('ConfigUpdate.vue - startConfigUpdate方法:', adminAPI?.startConfigUpdate)
-console.log('ConfigUpdate.vue - api对象:', api)
+// API导入检查
 
 export default {
   name: 'ConfigUpdate',
   components: {
     VideoPlay, VideoPause, Timer, Document, Clock, Refresh,
-    Check, Delete, Plus, View
+    Check, Delete, Plus, View, Bell
   },
   setup() {
     const status = ref({
@@ -340,6 +304,8 @@ export default {
     
     const fileList = ref([])
     const logs = ref([])
+    const isLogPolling = ref(false)
+    const newLogCount = ref(0)
     
     const loading = reactive({
       start: false,
@@ -347,18 +313,13 @@ export default {
       test: false,
       refresh: false,
       save: false,
-      cleanupInterval: false
     })
     
-    // 清理间隔设置相关
-    const cleanupIntervalDialogVisible = ref(false)
-    const cleanupIntervalForm = reactive({
-      interval_minutes: 10
-    })
     
     // 轮询相关
     let statusPollingInterval = null
     let refreshInterval = null
+    let logPollingInterval = null
     
     // 启动状态轮询
     const startStatusPolling = () => {
@@ -372,8 +333,9 @@ export default {
         if (!status.value.is_running) {
           stopStatusPolling()
           stopRefreshInterval()
+          stopLogPolling()
         }
-      }, 2000) // 每2秒检查一次
+      }, 1000) // 每1秒检查一次，更频繁地检查状态
     }
     
     // 停止状态轮询
@@ -405,52 +367,72 @@ export default {
       }
     }
     
+    // 启动日志轮询
+    const startLogPolling = () => {
+      if (logPollingInterval) {
+        clearInterval(logPollingInterval)
+      }
+      
+      isLogPolling.value = true
+      logPollingInterval = setInterval(async () => {
+        try {
+          if (!loading.refresh && status.value.is_running) {
+            await getLogs()
+          } else if (!status.value.is_running) {
+            // 如果任务停止，停止日志轮询
+            stopLogPolling()
+          }
+        } catch (error) {
+          console.error('日志轮询错误:', error)
+          // 如果连续出错，停止轮询
+          stopLogPolling()
+        }
+      }, 2000) // 每2秒刷新一次日志，更频繁地更新
+    }
+    
+    // 停止日志轮询
+    const stopLogPolling = () => {
+      if (logPollingInterval) {
+        clearInterval(logPollingInterval)
+        logPollingInterval = null
+      }
+      isLogPolling.value = false
+    }
+    
     // 获取状态
     const getStatus = async () => {
       try {
-        let response
-        if (typeof adminAPI.getConfigUpdateStatus === 'function') {
-          response = await adminAPI.getConfigUpdateStatus()
-        } else {
-          response = await api.get('/admin/config-update/status')
-        }
-        
+        const response = await configUpdateAPI.getStatus()
         if (response.data.success) {
           status.value = response.data.data
+        } else {
+          console.error('获取状态失败:', response.data.message)
         }
       } catch (error) {
         console.error('获取状态失败:', error)
+        ElMessage.error('获取状态失败: ' + (error.response?.data?.message || error.message))
       }
     }
     
     // 获取配置
     const getConfig = async () => {
       try {
-        let response
-        if (typeof adminAPI.getConfigUpdateConfig === 'function') {
-          response = await adminAPI.getConfigUpdateConfig()
-        } else {
-          response = await api.get('/admin/config-update/config')
-        }
-        
+        const response = await configUpdateAPI.getConfig()
         if (response.data.success) {
           Object.assign(config, response.data.data)
+        } else {
+          console.error('获取配置失败:', response.data.message)
         }
       } catch (error) {
         console.error('获取配置失败:', error)
+        ElMessage.error('获取配置失败: ' + (error.response?.data?.message || error.message))
       }
     }
     
     // 获取文件列表
     const getFiles = async () => {
       try {
-        let response
-        if (typeof adminAPI.getConfigUpdateFiles === 'function') {
-          response = await adminAPI.getConfigUpdateFiles()
-        } else {
-          response = await api.get('/admin/config-update/files')
-        }
-        
+        const response = await configUpdateAPI.getFiles()
         if (response.data.success) {
           const files = response.data.data
           fileList.value = [
@@ -469,27 +451,43 @@ export default {
               exists: files.clash?.exists || false
             }
           ]
+        } else {
+          console.error('获取文件列表失败:', response.data.message)
         }
       } catch (error) {
         console.error('获取文件列表失败:', error)
+        ElMessage.error('获取文件列表失败: ' + (error.response?.data?.message || error.message))
       }
     }
     
     // 获取日志
     const getLogs = async () => {
       try {
-        let response
-        if (typeof adminAPI.getConfigUpdateLogs === 'function') {
-          response = await adminAPI.getConfigUpdateLogs()
-        } else {
-          response = await api.get('/admin/config-update/logs')
-        }
-        
+        const response = await configUpdateAPI.getLogs()
         if (response.data.success) {
+          const oldLogCount = logs.value.length
           logs.value = response.data.data
+          
+          // 如果日志数量增加，自动滚动到底部并更新新日志计数
+          if (logs.value.length > oldLogCount) {
+            newLogCount.value = logs.value.length - oldLogCount
+            setTimeout(() => {
+              const logContainer = document.querySelector('.log-container')
+              if (logContainer) {
+                logContainer.scrollTop = logContainer.scrollHeight
+              }
+              // 3秒后清除新日志计数提示
+              setTimeout(() => {
+                newLogCount.value = 0
+              }, 3000)
+            }, 100)
+          }
+        } else {
+          console.error('获取日志失败:', response.data.message)
         }
       } catch (error) {
         console.error('获取日志失败:', error)
+        ElMessage.error('获取日志失败: ' + (error.response?.data?.message || error.message))
       }
     }
     
@@ -497,26 +495,16 @@ export default {
     const startUpdate = async () => {
       loading.start = true
       try {
-        // 调试信息
-        console.log('adminAPI对象:', adminAPI)
-        console.log('startConfigUpdate方法:', adminAPI.startConfigUpdate)
-        
-        let response
-        if (typeof adminAPI.startConfigUpdate === 'function') {
-          response = await adminAPI.startConfigUpdate()
-        } else {
-          // 备用方案：直接使用api对象
-          console.log('使用备用API调用方案')
-          response = await api.post('/admin/config-update/start')
-        }
+        const response = await configUpdateAPI.startUpdate()
         
         if (response.data.success) {
           ElMessage.success('更新任务已启动')
-          // 立即刷新状态
-          await getStatus()
-          // 启动轮询检查状态
+          // 立即启动轮询检查状态
           startStatusPolling()
           startRefreshInterval()
+          startLogPolling() // 启动日志轮询
+          // 立即刷新状态和日志
+          await Promise.all([getStatus(), getLogs()])
         } else {
           ElMessage.error(response.data.message || '启动失败')
         }
@@ -532,17 +520,13 @@ export default {
     const stopUpdate = async () => {
       loading.stop = true
       try {
-        let response
-        if (typeof adminAPI.stopConfigUpdate === 'function') {
-          response = await adminAPI.stopConfigUpdate()
-        } else {
-          response = await api.post('/admin/config-update/stop')
-        }
+        const response = await configUpdateAPI.stopUpdate()
         
         if (response.data.success) {
           ElMessage.success('更新任务已停止')
           stopStatusPolling() // 停止轮询
           stopRefreshInterval() // 停止定时刷新
+          stopLogPolling() // 停止日志轮询
           await getStatus()
         } else {
           ElMessage.error(response.data.message || '停止失败')
@@ -558,16 +542,16 @@ export default {
     const testUpdate = async () => {
       loading.test = true
       try {
-        let response
-        if (typeof adminAPI.testConfigUpdate === 'function') {
-          response = await adminAPI.testConfigUpdate()
-        } else {
-          response = await api.post('/admin/config-update/test')
-        }
+        const response = await configUpdateAPI.testUpdate()
         
         if (response.data.success) {
           ElMessage.success('测试任务已启动')
-          await getStatus()
+          // 立即启动轮询检查状态
+          startStatusPolling()
+          startRefreshInterval()
+          startLogPolling() // 启动日志轮询
+          // 立即刷新状态和日志
+          await Promise.all([getStatus(), getLogs()])
         } else {
           ElMessage.error(response.data.message || '启动测试失败')
         }
@@ -595,12 +579,7 @@ export default {
     const saveConfig = async () => {
       loading.save = true
       try {
-        let response
-        if (typeof adminAPI.updateConfigUpdateConfig === 'function') {
-          response = await adminAPI.updateConfigUpdateConfig(config)
-        } else {
-          response = await api.put('/admin/config-update/config', config)
-        }
+        const response = await configUpdateAPI.updateConfig(config)
         
         if (response.data.success) {
           ElMessage.success('配置已保存')
@@ -629,12 +608,7 @@ export default {
           type: 'warning'
         })
         
-        let response
-        if (typeof adminAPI.clearConfigUpdateLogs === 'function') {
-          response = await adminAPI.clearConfigUpdateLogs()
-        } else {
-          response = await api.post('/admin/config-update/logs/clear')
-        }
+        const response = await configUpdateAPI.clearLogs()
         
         if (response.data.success) {
           ElMessage.success('日志已清理')
@@ -649,85 +623,7 @@ export default {
       }
     }
     
-    // 启动日志自动清理
-    const startLogCleanup = async () => {
-      try {
-        let response
-        if (typeof adminAPI.startLogCleanupTimer === 'function') {
-          response = await adminAPI.startLogCleanupTimer()
-        } else {
-          response = await api.post('/admin/config-update/logs/cleanup/start')
-        }
-        
-        if (response.data.success) {
-          ElMessage.success(response.data.message || '日志自动清理已启动')
-        } else {
-          ElMessage.error(response.data.message || '启动失败')
-        }
-      } catch (error) {
-        ElMessage.error('启动失败: ' + (error.response?.data?.message || error.message))
-      }
-    }
     
-    // 停止日志自动清理
-    const stopLogCleanup = async () => {
-      try {
-        let response
-        if (typeof adminAPI.stopLogCleanupTimer === 'function') {
-          response = await adminAPI.stopLogCleanupTimer()
-        } else {
-          response = await api.post('/admin/config-update/logs/cleanup/stop')
-        }
-        
-        if (response.data.success) {
-          ElMessage.success('日志自动清理已停止')
-        } else {
-          ElMessage.error(response.data.message || '停止失败')
-        }
-      } catch (error) {
-        ElMessage.error('停止失败: ' + (error.response?.data?.message || error.message))
-      }
-    }
-    
-    // 显示清理间隔设置对话框
-    const showCleanupIntervalDialog = async () => {
-      try {
-        // 先获取当前的清理间隔
-        const response = await api.get('/admin/config-update/logs/cleanup/interval')
-        if (response.data.success) {
-          cleanupIntervalForm.interval_minutes = response.data.data.interval_minutes
-        }
-        cleanupIntervalDialogVisible.value = true
-      } catch (error) {
-        ElMessage.error('获取当前清理间隔失败: ' + (error.response?.data?.message || error.message))
-      }
-    }
-    
-    // 保存清理间隔设置
-    const saveCleanupInterval = async () => {
-      try {
-        loading.cleanupInterval = true
-        const response = await api.put('/admin/config-update/logs/cleanup/interval', {
-          interval_minutes: cleanupIntervalForm.interval_minutes
-        })
-        
-        if (response.data.success) {
-          ElMessage.success(`清理间隔已设置为${cleanupIntervalForm.interval_minutes}分钟`)
-          cleanupIntervalDialogVisible.value = false
-        } else {
-          ElMessage.error(response.data.message || '设置失败')
-        }
-      } catch (error) {
-        ElMessage.error('设置失败: ' + (error.response?.data?.message || error.message))
-      } finally {
-        loading.cleanupInterval = false
-      }
-    }
-    
-    // 处理清理间隔对话框关闭
-    const handleCleanupIntervalDialogClose = (done) => {
-      done()
-    }
     
     // 添加URL
     const addUrl = () => {
@@ -772,21 +668,19 @@ export default {
     
     // 初始化
     onMounted(async () => {
-      // 调试信息
-      console.log('ConfigUpdate组件已挂载')
-      console.log('adminAPI对象:', adminAPI)
-      console.log('adminAPI.startConfigUpdate:', adminAPI.startConfigUpdate)
-      console.log('typeof adminAPI.startConfigUpdate:', typeof adminAPI.startConfigUpdate)
-      
       await Promise.all([getStatus(), getConfig(), getFiles(), getLogs()])
       
-      // 不再自动启动定时刷新，只在任务运行时才刷新
+      // 如果任务正在运行，启动日志轮询
+      if (status.value.is_running) {
+        startLogPolling()
+      }
     })
     
     onUnmounted(() => {
       // 清理轮询
       stopStatusPolling()
       stopRefreshInterval()
+      stopLogPolling()
     })
     
     return {
@@ -795,8 +689,8 @@ export default {
       fileList,
       logs,
       loading,
-      cleanupIntervalDialogVisible,
-      cleanupIntervalForm,
+      isLogPolling,
+      newLogCount,
       startUpdate,
       stopUpdate,
       testUpdate,
@@ -804,11 +698,6 @@ export default {
       saveConfig,
       refreshLogs,
       clearLogs,
-      startLogCleanup,
-      stopLogCleanup,
-      showCleanupIntervalDialog,
-      saveCleanupInterval,
-      handleCleanupIntervalDialogClose,
       addUrl,
       removeUrl,
       addKeyword,
@@ -900,6 +789,44 @@ export default {
   display: flex;
   justify-content: space-between;
   align-items: center;
+}
+
+.log-header-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.live-indicator {
+  animation: pulse 2s infinite;
+}
+
+.new-log-indicator {
+  animation: bounce 1s ease-in-out;
+}
+
+@keyframes pulse {
+  0% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+@keyframes bounce {
+  0%, 20%, 50%, 80%, 100% {
+    transform: translateY(0);
+  }
+  40% {
+    transform: translateY(-3px);
+  }
+  60% {
+    transform: translateY(-2px);
+  }
 }
 
 .url-item, .keyword-item {

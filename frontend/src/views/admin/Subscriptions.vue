@@ -157,10 +157,10 @@
             <div class="subscription-link">
               <el-link 
                 v-if="scope.row.v2ray_url" 
-                :href="scope.row.v2ray_url" 
-                target="_blank"
+                @click="copyToClipboard(scope.row.v2ray_url)"
                 type="primary"
-                class="link-text"
+                class="link-text copy-link"
+                :title="'点击复制: ' + scope.row.v2ray_url"
               >
                 {{ scope.row.v2ray_url }}
               </el-link>
@@ -179,10 +179,10 @@
             <div class="subscription-link">
               <el-link 
                 v-if="scope.row.clash_url" 
-                :href="scope.row.clash_url" 
-                target="_blank"
+                @click="copyToClipboard(scope.row.clash_url)"
                 type="primary"
-                class="link-text"
+                class="link-text copy-link"
+                :title="'点击复制: ' + scope.row.clash_url"
               >
                 {{ scope.row.clash_url }}
               </el-link>
@@ -400,6 +400,94 @@
           </div>
         </el-card>
 
+        <!-- 设备管理 -->
+        <el-card class="detail-section">
+          <template #header>
+            <div class="device-header">
+              <h4>设备管理</h4>
+              <div class="device-stats">
+                <el-tag type="info">当前设备: {{ selectedUser.current_devices || 0 }}/{{ selectedUser.device_limit || 0 }}</el-tag>
+                <el-button 
+                  type="primary" 
+                  size="small" 
+                  @click="loadUserDevices"
+                  :loading="loadingDevices"
+                >
+                  刷新设备列表
+                </el-button>
+              </div>
+            </div>
+          </template>
+          
+          <el-table 
+            :data="userDevices" 
+            size="small" 
+            v-loading="loadingDevices"
+            empty-text="暂无设备记录"
+          >
+            <el-table-column prop="device_name" label="设备名称" width="150">
+              <template #default="scope">
+                <div class="device-info">
+                  <el-icon><Monitor /></el-icon>
+                  <span>{{ scope.row.device_name || '未知设备' }}</span>
+                </div>
+              </template>
+            </el-table-column>
+            
+            <el-table-column prop="device_type" label="设备类型" width="100">
+              <template #default="scope">
+                <el-tag :type="getDeviceTypeTag(scope.row.device_type)" size="small">
+                  {{ getDeviceTypeText(scope.row.device_type) }}
+                </el-tag>
+              </template>
+            </el-table-column>
+            
+            <el-table-column prop="ip_address" label="IP地址" width="120" />
+            
+            <el-table-column prop="os_name" label="操作系统" width="100">
+              <template #default="scope">
+                <span>{{ scope.row.os_name || '-' }}</span>
+              </template>
+            </el-table-column>
+            
+            <el-table-column prop="last_seen" label="最后在线" width="150">
+              <template #default="scope">
+                <span>{{ formatDate(scope.row.last_seen) || '从未在线' }}</span>
+              </template>
+            </el-table-column>
+            
+            <el-table-column prop="access_count" label="访问次数" width="100">
+              <template #default="scope">
+                <el-tag type="info" size="small">{{ scope.row.access_count || 0 }}</el-tag>
+              </template>
+            </el-table-column>
+            
+            <el-table-column prop="is_active" label="状态" width="80">
+              <template #default="scope">
+                <el-tag :type="scope.row.is_active ? 'success' : 'danger'" size="small">
+                  {{ scope.row.is_active ? '活跃' : '离线' }}
+                </el-tag>
+              </template>
+            </el-table-column>
+            
+            <el-table-column label="操作" width="120" fixed="right">
+              <template #default="scope">
+                <el-button 
+                  type="danger" 
+                  size="small" 
+                  @click="deleteDevice(scope.row)"
+                  :loading="deletingDevice === scope.row.id"
+                >
+                  删除
+                </el-button>
+              </template>
+            </el-table-column>
+          </el-table>
+          
+          <div v-if="userDevices.length === 0 && !loadingDevices" class="empty-devices">
+            <el-empty description="暂无设备记录" />
+          </div>
+        </el-card>
 
         <!-- UA记录 -->
         <el-card class="detail-section">
@@ -504,6 +592,11 @@ export default {
       'created_at', 'apple_count', 'clash_count', 'online_devices', 
       'device_limit', 'actions'
     ])
+    
+    // 设备管理相关
+    const userDevices = ref([])
+    const loadingDevices = ref(false)
+    const deletingDevice = ref(null)
 
     // 计算当前排序文本
     const currentSortText = computed(() => {
@@ -693,28 +786,132 @@ export default {
     // 显示用户详情
     const showUserDetails = async (subscription) => {
       try {
-        // 只加载用户信息
-        const userResponse = await adminAPI.getUser(subscription.user.id)
+        // 使用正确的API端点获取用户详情
+        const userResponse = await adminAPI.getUserDetails(subscription.user.id)
         
-        selectedUser.value = {
-          ...subscription,
-          user: userResponse.data?.data || userResponse.data
+        if (userResponse.data && userResponse.data.success) {
+          selectedUser.value = {
+            ...subscription,
+            user: userResponse.data.data?.user_info || userResponse.data.data
+          }
+          showUserDetailDialog.value = true
+          // 自动加载用户设备列表
+          await loadUserDevices()
+        } else {
+          throw new Error(userResponse.data?.message || '获取用户详情失败')
         }
-        
-        showUserDetailDialog.value = true
       } catch (error) {
-        ElMessage.error('加载用户详情失败')
+        ElMessage.error('加载用户详情失败: ' + (error.response?.data?.message || error.message))
         console.error('加载用户详情失败:', error)
       }
     }
 
+    // 加载用户设备列表
+    const loadUserDevices = async () => {
+      if (!selectedUser.value?.user?.id) return
+      
+      loadingDevices.value = true
+      try {
+        const response = await adminAPI.getUserDevices(selectedUser.value.user.id)
+        console.log('设备列表API响应:', response)
+        
+        if (response.data && response.data.success) {
+          // 根据后端API返回格式，设备列表在 data.devices 中
+          userDevices.value = response.data.data?.devices || []
+          console.log('加载的设备列表:', userDevices.value)
+        } else {
+          userDevices.value = []
+          ElMessage.warning('获取设备列表失败')
+        }
+      } catch (error) {
+        console.error('加载设备列表失败:', error)
+        userDevices.value = []
+        ElMessage.error('加载设备列表失败: ' + (error.response?.data?.message || error.message))
+      } finally {
+        loadingDevices.value = false
+      }
+    }
+
+    // 删除设备
+    const deleteDevice = async (device) => {
+      try {
+        await ElMessageBox.confirm(
+          `确定要删除设备 "${device.device_name}" 吗？此操作不可恢复。`,
+          '确认删除',
+          {
+            confirmButtonText: '确定删除',
+            cancelButtonText: '取消',
+            type: 'warning',
+          }
+        )
+        
+        deletingDevice.value = device.id
+        const response = await adminAPI.deleteUserDevice(selectedUser.value.user.id, device.id)
+        
+        if (response.data && response.data.success) {
+          ElMessage.success('设备删除成功')
+          // 重新加载设备列表
+          await loadUserDevices()
+          // 重新加载订阅列表以更新设备计数
+          await loadSubscriptions()
+        } else {
+          throw new Error(response.data?.message || '删除设备失败')
+        }
+      } catch (error) {
+        if (error !== 'cancel') {
+          console.error('删除设备失败:', error)
+          ElMessage.error('删除设备失败: ' + (error.response?.data?.message || error.message))
+        }
+      } finally {
+        deletingDevice.value = null
+      }
+    }
+
+    // 获取设备类型标签样式
+    const getDeviceTypeTag = (type) => {
+      const typeMap = {
+        'mobile': 'primary',
+        'desktop': 'success',
+        'tablet': 'warning',
+        'server': 'danger'
+      }
+      return typeMap[type] || 'info'
+    }
+
+    // 获取设备类型文本
+    const getDeviceTypeText = (type) => {
+      const typeMap = {
+        'mobile': '手机',
+        'desktop': '电脑',
+        'tablet': '平板',
+        'server': '服务器'
+      }
+      return typeMap[type] || type || '未知'
+    }
+
     // 复制到剪贴板
     const copyToClipboard = async (text) => {
+      if (!text) {
+        ElMessage.warning('没有可复制的内容')
+        return
+      }
+      
       try {
         await navigator.clipboard.writeText(text)
-        ElMessage.success('已复制到剪贴板')
+        ElMessage.success('订阅链接已复制到剪贴板')
       } catch (error) {
-        ElMessage.error('复制失败')
+        // 降级方案：使用传统的复制方法
+        try {
+          const textArea = document.createElement('textarea')
+          textArea.value = text
+          document.body.appendChild(textArea)
+          textArea.select()
+          document.execCommand('copy')
+          document.body.removeChild(textArea)
+          ElMessage.success('订阅链接已复制到剪贴板')
+        } catch (fallbackError) {
+          ElMessage.error('复制失败，请手动复制')
+        }
       }
     }
 
@@ -1032,6 +1229,9 @@ export default {
       selectedUser,
       currentQRCode,
       visibleColumns,
+      userDevices,
+      loadingDevices,
+      deletingDevice,
       loadSubscriptions,
       searchSubscriptions,
       handleSortCommand,
@@ -1044,6 +1244,10 @@ export default {
       showQRCode,
       downloadQRCode,
       showUserDetails,
+      loadUserDevices,
+      deleteDevice,
+      getDeviceTypeTag,
+      getDeviceTypeText,
       copyToClipboard,
       goToUserBackend,
       resetSubscription,
@@ -1179,6 +1383,21 @@ export default {
   font-size: 12px;
 }
 
+.copy-link {
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.copy-link:hover {
+  color: #409eff !important;
+  text-decoration: underline !important;
+  transform: scale(1.02);
+}
+
+.copy-link:active {
+  transform: scale(0.98);
+}
+
 .device-limit-section {
   display: flex;
   flex-direction: column;
@@ -1228,6 +1447,38 @@ export default {
 .user-detail-content {
   max-height: 70vh;
   overflow-y: auto;
+}
+
+/* 设备管理样式 */
+.device-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.device-header h4 {
+  margin: 0;
+}
+
+.device-stats {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.device-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.device-info .el-icon {
+  color: #409eff;
+}
+
+.empty-devices {
+  text-align: center;
+  padding: 20px;
 }
 
 .detail-section {

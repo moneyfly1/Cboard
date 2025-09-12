@@ -16,7 +16,7 @@ from app.schemas.payment import (
     PaymentCallback,
     PaymentMethod
 )
-from app.services.payment_service import PaymentService
+from app.services.payment import PaymentService
 from app.core.auth import get_current_user
 
 router = APIRouter()

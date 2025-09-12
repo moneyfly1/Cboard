@@ -452,9 +452,39 @@ export default {
     const loadOrderStats = async () => {
       try {
         const response = await api.get('/orders/stats')
-        orderStats.value = response.data
+        console.log('订单统计API响应:', response)
+        
+        if (response.data && response.data.success && response.data.data) {
+          const statsData = response.data.data
+          orderStats.value = {
+            total: statsData.total || 0,
+            pending: statsData.pending || 0,
+            paid: statsData.paid || 0,
+            cancelled: statsData.cancelled || 0,
+            totalAmount: statsData.totalAmount || 0
+          }
+          console.log('更新后的统计数据:', orderStats.value)
+        } else {
+          console.warn('订单统计API返回数据格式异常:', response.data)
+          // 设置默认值
+          orderStats.value = {
+            total: 0,
+            pending: 0,
+            paid: 0,
+            cancelled: 0,
+            totalAmount: 0
+          }
+        }
       } catch (error) {
         console.error('加载订单统计失败:', error)
+        // 设置默认值
+        orderStats.value = {
+          total: 0,
+          pending: 0,
+          paid: 0,
+          cancelled: 0,
+          totalAmount: 0
+        }
       }
     }
     
