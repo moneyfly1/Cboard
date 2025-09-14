@@ -111,7 +111,6 @@ def get_user_orders(
                 order_list.append(order_data)
             except Exception as e:
                 # 如果单个订单处理失败，跳过它
-                print(f"处理订单 {order.id} 时出错: {e}")
                 continue
         
         return ResponseBase(
@@ -125,7 +124,6 @@ def get_user_orders(
         )
     except Exception as e:
         # 如果发生错误，返回空订单列表
-        print(f"获取用户订单失败: {e}")
         return ResponseBase(
             data={
                 "orders": [],

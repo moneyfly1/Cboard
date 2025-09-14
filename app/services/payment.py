@@ -27,7 +27,6 @@ try:
     ALIPAY_AVAILABLE = True
 except ImportError:
     ALIPAY_AVAILABLE = False
-    print("支付宝SDK未安装，将使用模拟支付")
 
 
 class PaymentService:
@@ -313,14 +312,11 @@ class PaymentService:
             
             # 检查是否有完整的配置
             if alipay_config['app_id'] and alipay_config['merchant_private_key'] and alipay_config['alipay_public_key']:
-                print(f"从系统配置加载支付宝配置: app_id={alipay_config['app_id']}")
                 return alipay_config
             else:
-                print("支付宝配置不完整，使用演示模式")
                 return {}
                 
         except Exception as e:
-            print(f"读取支付宝配置失败: {e}")
             return {}
 
     def _create_payment_response(self, payment_request: PaymentCreate, payment_url: str, 
@@ -360,7 +356,6 @@ class PaymentService:
                 return self._create_failed_response(request, "支付宝配置不完整，请联系管理员配置真实的支付宝密钥")
                 
         except Exception as e:
-            print(f"支付宝支付创建异常: {e}")
             return self._create_failed_response(request, f"支付宝支付创建失败: {str(e)}")
 
     def _create_real_alipay_payment(self, config: Dict[str, Any], request: PaymentCreate, currency: str, transaction_id: str) -> PaymentResponse:
@@ -395,7 +390,6 @@ class PaymentService:
             return self._create_payment_response(request, payment_url, transaction_id)
             
         except Exception as e:
-            print(f"真实支付宝支付创建失败: {e}")
             import traceback
             traceback.print_exc()
             # 如果真实支付失败，直接返回错误，不再回退到演示模式
@@ -476,7 +470,6 @@ class PaymentService:
             else:
                 return True
         except Exception as e:
-            print(f"支付回调验证失败: {e}")
             return False
 
     def _verify_alipay_notify(self, params: dict) -> bool:

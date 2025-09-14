@@ -44,16 +44,13 @@ async def startup_event():
     """应用启动时初始化数据库和启动邮件队列处理器"""
     try:
         init_database()
-        print("数据库初始化成功")
         
         # 启动邮件队列处理器
         email_processor = get_email_queue_processor()
         email_processor.start_processing()
-        print("邮件队列处理器已启动")
         
         # 启动通知调度器
         start_notification_scheduler()
-        print("通知调度器已启动")
         
         # 启动节点测速监控 - 已删除
         # node_monitor = get_node_speed_monitor()

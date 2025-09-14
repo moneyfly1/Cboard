@@ -29,8 +29,6 @@ async def create_payment(
 ):
     """创建支付订单"""
     try:
-        print(f"Payment API called with data: {payment_data}")
-        print(f"Current user: {current_user}")
         
         # 验证订单
         order = db.query(Order).filter(
@@ -38,7 +36,6 @@ async def create_payment(
             Order.user_id == current_user.id
         ).first()
         
-        print(f"Found order: {order}")
         
         if not order:
             raise HTTPException(
@@ -52,12 +49,9 @@ async def create_payment(
                 detail="订单状态不正确"
             )
         
-        print("Creating payment service...")
         # 使用新的支付服务创建支付
         payment_service = PaymentService(db)
-        print("Calling payment service create_payment...")
         payment_response = payment_service.create_payment(payment_data)
-        print(f"Payment response: {payment_response}")
         
         # 返回前端期望的格式
         result = {
@@ -67,15 +61,12 @@ async def create_payment(
             "payment_method": payment_response.payment_method,
             "status": payment_response.status
         }
-        print(f"Returning result: {result}")
         return result
         
     except Exception as e:
         db.rollback()
         import traceback
         error_detail = f"创建支付订单失败: {str(e)}" if str(e) else "创建支付订单失败: 未知错误"
-        print(f"Payment API Error: {error_detail}")
-        print(f"Traceback: {traceback.format_exc()}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=error_detail

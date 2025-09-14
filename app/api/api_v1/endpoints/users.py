@@ -37,7 +37,6 @@ def get_user_dashboard_info(
 ) -> Any:
     """获取用户仪表盘信息"""
     try:
-        print(f"获取用户仪表盘信息，用户ID: {current_user.id}")
         
         user_service = UserService(db)
         subscription_service = SubscriptionService(db)
@@ -45,20 +44,16 @@ def get_user_dashboard_info(
         # 获取用户基本信息
         user = user_service.get(current_user.id)
         if not user:
-            print(f"用户不存在: {current_user.id}")
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="用户不存在"
             )
         
-        print(f"找到用户: {user.username}, 邮箱: {user.email}")
         
         # 获取用户订阅信息
         subscription = subscription_service.get_by_user_id(current_user.id)
         if subscription:
-            print(f"找到订阅: ID={subscription.id}, URL={subscription.subscription_url}, 到期时间={subscription.expire_time}")
         else:
-            print("用户没有订阅信息")
         
         # 计算剩余天数和到期时间
         remaining_days = 0
@@ -66,17 +61,13 @@ def get_user_dashboard_info(
         if subscription and subscription.expire_time:
             try:
                 expire_date = subscription.expire_time
-                print(f"原始到期时间: {expire_date}, 类型: {type(expire_date)}")
                 
                 # 直接使用datetime对象
                 if isinstance(expire_date, datetime):
                     remaining_days = (expire_date - datetime.now()).days
                     expiry_date = expire_date.strftime('%Y-%m-%d %H:%M:%S')
-                    print(f"解析后的到期时间: {expire_date}, 剩余天数: {remaining_days}")
                 else:
-                    print("到期时间不是datetime对象")
             except Exception as e:
-                print(f"处理到期时间时出错: {e}")
                 import traceback
                 traceback.print_exc()
                 expiry_date = "未设置"
@@ -95,10 +86,6 @@ def get_user_dashboard_info(
             clash_url = f"{base_url}/api/v1/subscriptions/clash/{subscription.subscription_url}"
             v2ray_url = f"{base_url}/api/v1/subscriptions/ssr/{subscription.subscription_url}"  # V2Ray使用SSR端点
             
-            print(f"生成的订阅地址:")
-            print(f"  Clash: {clash_url}")
-            print(f"  Shadowrocket: {mobile_url}")
-            print(f"  V2Ray: {v2ray_url}")
             
             # 生成二维码URL
             import base64
@@ -108,12 +95,9 @@ def get_user_dashboard_info(
                     qrcode_url = f"sub://{base64.b64encode(mobile_url.encode()).decode()}#{quote(expiry_date)}"
                 else:
                     qrcode_url = f"sub://{base64.b64encode(mobile_url.encode()).decode()}"
-                print(f"  二维码: {qrcode_url}")
             except Exception as e:
-                print(f"生成二维码URL时出错: {e}")
                 qrcode_url = f"sub://{base64.b64encode(mobile_url.encode()).decode()}"
         else:
-            print("用户没有订阅URL，无法生成订阅地址")
         
         # 计算订阅状态
         subscription_status = "inactive"
@@ -149,11 +133,9 @@ def get_user_dashboard_info(
             "qrcodeUrl": qrcode_url
         }
         
-        print(f"返回仪表盘信息: {dashboard_info}")
         return ResponseBase(data=dashboard_info)
         
     except Exception as e:
-        print(f"获取仪表盘信息失败: {str(e)}")
         import traceback
         traceback.print_exc()
         raise HTTPException(

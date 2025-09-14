@@ -31,8 +31,6 @@ def get_users(
 ) -> Any:
     """获取用户列表"""
     try:
-        print(f"=== 管理员用户列表API被调用 ===")
-        print(f"请求参数: page={page}, size={size}, keyword={keyword}, status={status}")
         
         user_service = UserService(db)
         subscription_service = SubscriptionService(db)
@@ -45,7 +43,6 @@ def get_users(
             search_params['status'] = status
             
         skip = (page - 1) * size
-        print(f"分页参数: skip={skip}, limit={size}")
         
         users, total = user_service.get_users_with_pagination(
             skip=skip, 
@@ -53,7 +50,6 @@ def get_users(
             **search_params
         )
         
-        print(f"用户服务返回: {len(users)} 个用户，总数: {total}")
         
         # 获取每个用户的订阅信息和设备信息
         user_list = []
@@ -84,7 +80,6 @@ def get_users(
                         device_count = subscription.current_devices if subscription else 0
                         online_devices = 0
                 except Exception as e:
-                    print(f"获取用户设备信息失败: {e}")
                     device_count = subscription.current_devices if subscription else 0
                     online_devices = 0
             
@@ -145,12 +140,9 @@ def get_users(
             "pages": (total + size - 1) // size
         }
         
-        print(f"响应数据结构: {len(user_list)} 个用户在user_list中")
-        print(f"前3个用户示例: {[u['username'] for u in user_list[:3]]}")
         
         return ResponseBase(data=response_data)
     except Exception as e:
-        print(f"获取用户列表失败: {str(e)}")
         import traceback
         traceback.print_exc()
         return ResponseBase(success=False, message=f"获取用户列表失败: {str(e)}")
