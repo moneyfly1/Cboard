@@ -84,11 +84,15 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
         user_id: str = payload.get("sub")
         if user_id is None:
             raise credentials_exception
-        user_id = int(user_id)  # 转换为整数
+        
+        # 尝试按ID查找（如果是数字）
+        if user_id.isdigit():
+            user = db.query(User).filter(User.id == int(user_id)).first()
+        else:
+            # 按用户名查找
+            user = db.query(User).filter(User.username == user_id).first()
     except (JWTError, ValueError):
         raise credentials_exception
-    
-    user = db.query(User).filter(User.id == user_id).first()
     if user is None:
         raise credentials_exception
     

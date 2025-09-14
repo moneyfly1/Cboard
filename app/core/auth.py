@@ -133,7 +133,15 @@ async def get_current_user(
     
     # 从数据库获取用户
     try:
-        user = db.query(User).filter(User.id == int(user_id)).first()
+        # 尝试按ID查找（如果是数字）
+        if user_id.isdigit():
+            user = db.query(User).filter(User.id == int(user_id)).first()
+            # 如果按ID没找到，再按用户名查找（处理用户名是数字的情况）
+            if not user:
+                user = db.query(User).filter(User.username == user_id).first()
+        else:
+            # 按用户名查找
+            user = db.query(User).filter(User.username == user_id).first()
     except (ValueError, TypeError):
         raise credentials_exception
     if user is None:

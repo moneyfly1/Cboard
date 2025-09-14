@@ -2046,12 +2046,15 @@ def export_config(
 
 @router.get("/settings", response_model=ResponseBase)
 def get_all_settings(
+    db: Session = Depends(get_db),
     current_admin = Depends(get_current_admin_user)
 ) -> Any:
     """获取所有系统设置"""
     try:
-        # 返回所有设置的汇总数据
-        all_settings = {
+        from sqlalchemy import text
+        
+        # 默认设置
+        default_settings = {
             "general": {
                 "site_name": "XBoard Modern",
                 "site_description": "现代化的代理服务管理平台",
@@ -2085,7 +2088,28 @@ def get_all_settings(
                 "available_themes": ["light", "dark", "auto"]
             }
         }
-        return ResponseBase(data=all_settings)
+        
+        # 从数据库读取设置
+        query = text("SELECT key, value, category FROM system_configs WHERE category IN ('general', 'registration', 'notification', 'security', 'theme')")
+        result = db.execute(query).fetchall()
+        
+        # 将数据库中的设置覆盖默认设置
+        for row in result:
+            category = row.category
+            key = row.key
+            value = row.value
+            
+            # 转换布尔值
+            if value.lower() in ('true', 'false'):
+                value = value.lower() == 'true'
+            # 转换数字
+            elif value.isdigit():
+                value = int(value)
+            
+            if category in default_settings:
+                default_settings[category][key] = value
+        
+        return ResponseBase(data=default_settings)
     except Exception as e:
         return ResponseBase(success=False, message=f"获取系统设置失败: {str(e)}")
 
@@ -2105,26 +2129,26 @@ def update_general_settings(
         
         for key, value in settings.items():
             # 检查配置是否已存在
-            check_query = text("SELECT id FROM system_configs WHERE key = :key AND type = 'general'")
+            check_query = text("SELECT id FROM system_configs WHERE key = :key")
             existing = db.execute(check_query, {"key": key}).first()
             
             if existing:
                 # 更新现有配置
                 update_query = text("""
                     UPDATE system_configs 
-                    SET value = :value, updated_at = :updated_at
-                    WHERE key = :key AND type = 'general'
+                    SET value = :value, updated_at = :updated_at, category = 'general'
+                    WHERE key = :key
                 """)
                 db.execute(update_query, {
                     "value": str(value),
                     "updated_at": current_time,
                     "key": key
                 })
-        else:
+            else:
                 # 插入新配置
                 insert_query = text("""
                     INSERT INTO system_configs (key, value, type, category, display_name, description, created_at, updated_at)
-                    VALUES (:key, :value, 'general', 'system', :key, :key, :created_at, :updated_at)
+                    VALUES (:key, :value, 'general', 'general', :key, :key, :created_at, :updated_at)
                 """)
                 db.execute(insert_query, {
                     "key": key,
@@ -2142,40 +2166,151 @@ def update_general_settings(
 @router.put("/settings/registration", response_model=ResponseBase)
 def update_registration_settings(
     settings: dict,
+    db: Session = Depends(get_db),
     current_admin = Depends(get_current_admin_user)
 ) -> Any:
     """更新注册设置"""
     try:
-        # 这里应该将设置保存到数据库或配置文件
-        # 暂时返回成功
-            return ResponseBase(message="注册设置保存成功")
+        from sqlalchemy import text
+        from datetime import datetime
+        
+        # 保存注册设置到数据库
+        current_time = datetime.now()
+        
+        for key, value in settings.items():
+            # 检查配置是否已存在
+            check_query = text("SELECT id FROM system_configs WHERE key = :key")
+            existing = db.execute(check_query, {"key": key}).first()
+            
+            if existing:
+                # 更新现有配置
+                update_query = text("""
+                    UPDATE system_configs 
+                    SET value = :value, updated_at = :updated_at, category = 'registration'
+                    WHERE key = :key
+                """)
+                db.execute(update_query, {
+                    "value": str(value),
+                    "updated_at": current_time,
+                    "key": key
+                })
+            else:
+                # 插入新配置
+                insert_query = text("""
+                    INSERT INTO system_configs (key, value, type, category, display_name, description, created_at, updated_at)
+                    VALUES (:key, :value, 'boolean', 'registration', :key, :key, :created_at, :updated_at)
+                """)
+                db.execute(insert_query, {
+                    "key": key,
+                    "value": str(value),
+                    "created_at": current_time,
+                    "updated_at": current_time
+                })
+        
+        db.commit()
+        return ResponseBase(message="注册设置保存成功")
     except Exception as e:
+        db.rollback()
         return ResponseBase(success=False, message=f"保存注册设置失败: {str(e)}")
 
 @router.put("/settings/notification", response_model=ResponseBase)
 def update_notification_settings(
     settings: dict,
+    db: Session = Depends(get_db),
     current_admin = Depends(get_current_admin_user)
 ) -> Any:
     """更新通知设置"""
     try:
-        # 这里应该将设置保存到数据库或配置文件
-        # 暂时返回成功
-            return ResponseBase(message="通知设置保存成功")
+        from sqlalchemy import text
+        from datetime import datetime
+        
+        # 保存通知设置到数据库
+        current_time = datetime.now()
+        
+        for key, value in settings.items():
+            # 检查配置是否已存在
+            check_query = text("SELECT id FROM system_configs WHERE key = :key")
+            existing = db.execute(check_query, {"key": key}).first()
+            
+            if existing:
+                # 更新现有配置
+                update_query = text("""
+                    UPDATE system_configs 
+                    SET value = :value, updated_at = :updated_at, category = 'notification'
+                    WHERE key = :key
+                """)
+                db.execute(update_query, {
+                    "value": str(value),
+                    "updated_at": current_time,
+                    "key": key
+                })
+            else:
+                # 插入新配置
+                insert_query = text("""
+                    INSERT INTO system_configs (key, value, type, category, display_name, description, created_at, updated_at)
+                    VALUES (:key, :value, 'boolean', 'notification', :key, :key, :created_at, :updated_at)
+                """)
+                db.execute(insert_query, {
+                    "key": key,
+                    "value": str(value),
+                    "created_at": current_time,
+                    "updated_at": current_time
+                })
+        
+        db.commit()
+        return ResponseBase(message="通知设置保存成功")
     except Exception as e:
+        db.rollback()
         return ResponseBase(success=False, message=f"保存通知设置失败: {str(e)}")
 
 @router.put("/settings/security", response_model=ResponseBase)
 def update_security_settings(
     settings: dict,
+    db: Session = Depends(get_db),
     current_admin = Depends(get_current_admin_user)
 ) -> Any:
     """更新安全设置"""
     try:
-        # 这里应该将设置保存到数据库或配置文件
-        # 暂时返回成功
-            return ResponseBase(message="安全设置保存成功")
+        from sqlalchemy import text
+        from datetime import datetime
+        
+        # 保存安全设置到数据库
+        current_time = datetime.now()
+        
+        for key, value in settings.items():
+            # 检查配置是否已存在
+            check_query = text("SELECT id FROM system_configs WHERE key = :key")
+            existing = db.execute(check_query, {"key": key}).first()
+            
+            if existing:
+                # 更新现有配置
+                update_query = text("""
+                    UPDATE system_configs 
+                    SET value = :value, updated_at = :updated_at, category = 'security'
+                    WHERE key = :key
+                """)
+                db.execute(update_query, {
+                    "value": str(value),
+                    "updated_at": current_time,
+                    "key": key
+                })
+            else:
+                # 插入新配置
+                insert_query = text("""
+                    INSERT INTO system_configs (key, value, type, category, display_name, description, created_at, updated_at)
+                    VALUES (:key, :value, 'string', 'security', :key, :key, :created_at, :updated_at)
+                """)
+                db.execute(insert_query, {
+                    "key": key,
+                    "value": str(value),
+                    "created_at": current_time,
+                    "updated_at": current_time
+                })
+        
+        db.commit()
+        return ResponseBase(message="安全设置保存成功")
     except Exception as e:
+        db.rollback()
         return ResponseBase(success=False, message=f"保存安全设置失败: {str(e)}")
 
 @router.put("/settings/theme", response_model=ResponseBase)

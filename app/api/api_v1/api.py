@@ -4,7 +4,7 @@ from app.api.api_v1.endpoints import (
     auth, users, subscriptions, orders, packages,
     payment, payment_methods, payment_config, nodes, notifications, admin, config,
     statistics, settings, email_templates, email_stats, device_management, announcements,
-    software_config, config_update
+    software_config, config_update, dashboard_fix, simple_dashboard
 )
 
 api_router = APIRouter()
@@ -29,3 +29,5 @@ api_router.include_router(device_management.router, prefix="/admin/devices", tag
 api_router.include_router(announcements.router, prefix="/announcements", tags=["公告"])
 api_router.include_router(software_config.router, prefix="/software-config", tags=["软件配置"])
 api_router.include_router(config_update.router, prefix="/admin/config-update", tags=["配置更新"])
+api_router.include_router(dashboard_fix.router, prefix="/users", tags=["仪表盘修复"])
+api_router.include_router(simple_dashboard.router, prefix="/users", tags=["简化仪表盘"])

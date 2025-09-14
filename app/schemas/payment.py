@@ -22,7 +22,7 @@ class PaymentCreate(BaseModel):
     order_no: str = Field(..., description="订单号")
     amount: float = Field(..., gt=0, description="支付金额")
     currency: str = Field(default="CNY", description="货币类型")
-    payment_method: PaymentMethod = Field(..., description="支付方式")
+    payment_method: str = Field(..., description="支付方式")
     subject: str = Field(..., description="支付主题")
     body: str = Field(default="", description="支付描述")
     return_url: Optional[str] = Field(None, description="支付完成返回地址")

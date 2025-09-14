@@ -341,11 +341,11 @@ export default {
         }
         
         const response = await adminAPI.getSystemLogs(params)
-        if (response.success) {
-          logsList.value = response.data.logs || []
-          pagination.total = response.data.total || 0
+        if (response.data.success) {
+          logsList.value = response.data.data.logs || []
+          pagination.total = response.data.data.total || 0
         } else {
-          ElMessage.error(response.message || '加载日志失败')
+          ElMessage.error(response.data.message || '加载日志失败')
         }
       } catch (error) {
         console.error('加载日志失败:', error)
@@ -359,8 +359,8 @@ export default {
     const loadLogsStats = async () => {
       try {
         const response = await adminAPI.getLogsStats()
-        if (response.success) {
-          logsStats.value = response.data || {}
+        if (response.data.success) {
+          logsStats.value = response.data.data || {}
         }
       } catch (error) {
         console.error('加载日志统计失败:', error)
@@ -387,9 +387,9 @@ export default {
       try {
         const params = { ...filterForm }
         const response = await adminAPI.exportLogs(params)
-        if (response.success) {
+        if (response.data.success) {
           // 创建下载链接
-          const blob = new Blob([response.data], { type: 'text/csv' })
+          const blob = new Blob([response.data.data], { type: 'text/csv' })
           const url = window.URL.createObjectURL(blob)
           const a = document.createElement('a')
           a.href = url
@@ -401,7 +401,7 @@ export default {
           
           ElMessage.success('日志导出成功')
         } else {
-          ElMessage.error(response.message || '导出失败')
+          ElMessage.error(response.data.message || '导出失败')
         }
       } catch (error) {
         console.error('导出日志失败:', error)
@@ -423,12 +423,12 @@ export default {
         )
         
         const response = await adminAPI.clearLogs()
-        if (response.success) {
+        if (response.data.success) {
           ElMessage.success('日志清理成功')
           loadLogs()
           loadLogsStats()
         } else {
-          ElMessage.error(response.message || '清理失败')
+          ElMessage.error(response.data.message || '清理失败')
         }
       } catch (error) {
         if (error !== 'cancel') {

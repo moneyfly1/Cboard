@@ -9,7 +9,8 @@ from app.schemas.common import ResponseBase, PaginationParams
 from app.services.order import OrderService
 from app.services.package import PackageService
 from app.services.subscription import SubscriptionService
-from app.utils.security import get_current_user, generate_order_no
+from app.core.auth import get_current_user
+from app.utils.security import generate_order_no
 
 router = APIRouter()
 
@@ -164,7 +165,7 @@ def get_order_status(
             "order_no": order.order_no,
             "status": order.status,
             "amount": order.amount,
-            "payment_method": order.payment_method,
+            "payment_method_id": order.payment_method_id,
             "created_at": order.created_at.isoformat(),
             "payment_time": order.payment_time.isoformat() if order.payment_time else None
         }
@@ -211,6 +212,89 @@ def cancel_order(
         )
     
     return ResponseBase(message="订单取消成功")
+
+@router.post("/{order_no}/pay", response_model=ResponseBase)
+def pay_order(
+    order_no: str,
+    current_user = Depends(get_current_user),
+    db: Session = Depends(get_db)
+) -> Any:
+    """立即支付订单"""
+    order_service = OrderService(db)
+    
+    # 获取订单
+    order = order_service.get_by_order_no(order_no)
+    if not order:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="订单不存在"
+        )
+    
+    # 检查订单是否属于当前用户
+    if order.user_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="无权操作此订单"
+        )
+    
+    # 检查订单状态
+    if order.status != "pending":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="只能支付待支付的订单"
+        )
+    
+    # 生成支付URL
+    payment_url = order_service.generate_payment_url(order)
+    
+    return ResponseBase(
+        message="支付链接生成成功",
+        data={
+            "order_no": order.order_no,
+            "amount": order.amount,
+            "payment_url": payment_url,
+            "payment_qr_code": payment_url  # 用于生成二维码
+        }
+    )
+
+@router.post("/{order_no}/refund", response_model=ResponseBase)
+def refund_order(
+    order_no: str,
+    refund_data: dict,
+    current_user = Depends(get_current_user),
+    db: Session = Depends(get_db)
+) -> Any:
+    """申请退款"""
+    order_service = OrderService(db)
+    
+    # 获取订单
+    order = order_service.get_by_order_no(order_no)
+    if not order:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="订单不存在"
+        )
+    
+    # 检查订单是否属于当前用户
+    if order.user_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="无权操作此订单"
+        )
+    
+    # 检查订单状态
+    if order.status != "paid":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="只能对已支付的订单申请退款"
+        )
+    
+    # 这里应该调用支付平台的退款接口
+    # 为了演示，直接更新状态
+    order.status = "refunded"
+    db.commit()
+    
+    return ResponseBase(message="退款申请已提交，请等待审核")
 
 @router.post("/payment/notify", response_model=ResponseBase)
 def payment_notify(

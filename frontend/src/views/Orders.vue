@@ -245,14 +245,20 @@
               <span class="amount">¥{{ selectedOrder?.amount }}</span>
             </el-descriptions-item>
             <el-descriptions-item label="支付方式">
-              <el-tag type="primary">{{ selectedOrder?.payment_method === 'alipay' ? '支付宝' : '微信支付' }}</el-tag>
+              <el-tag type="primary">{{ getPaymentMethodName(paymentQRCode) }}</el-tag>
             </el-descriptions-item>
           </el-descriptions>
         </div>
         
         <div class="qr-code-wrapper">
           <div v-if="paymentQRCode" class="qr-code">
-            <img :src="paymentQRCode" alt="支付二维码" />
+            <img 
+              :src="paymentQRCode + '?t=' + Date.now()" 
+              alt="支付二维码" 
+              :title="getPaymentMethodName(paymentQRCode) + '二维码'"
+              @error="onImageError"
+              @load="onImageLoad"
+            />
           </div>
           <div v-else class="qr-loading">
             <el-icon class="is-loading"><Loading /></el-icon>
@@ -268,7 +274,7 @@
             show-icon
           >
             <template #default>
-              <p>1. 请使用{{ selectedOrder?.payment_method === 'alipay' ? '支付宝' : '微信' }}扫描上方二维码</p>
+              <p>1. 请使用{{ getPaymentMethodName(paymentQRCode) }}扫描上方二维码</p>
               <p>2. 确认订单信息无误后完成支付</p>
               <p>3. 支付完成后请勿关闭此窗口，系统将自动检测支付状态</p>
             </template>
@@ -521,27 +527,14 @@ export default {
         console.log('=== 订单支付流程 ===')
         console.log('订单信息:', order)
         
-        // 创建支付订单
-        const paymentData = {
-          order_no: order.order_no,
-          amount: order.amount,
-          currency: 'CNY',
-          payment_method: order.payment_method || 'alipay',
-          subject: `订阅套餐 - ${order.package_name}`,
-          body: `购买${order.package_duration}天订阅套餐`,
-          return_url: window.location.origin + '/payment/return',
-          notify_url: window.location.origin + '/api/v1/payment/notify'
-        }
-        
-        console.log('支付数据:', paymentData)
-        
-        const response = await api.post('/payment/create', paymentData)
+        // 调用立即支付API
+        const response = await api.post(`/orders/${order.order_no}/pay`)
         console.log('支付API响应:', response.data)
         
-        if (response.data && response.data.payment_url) {
-          console.log('支付URL:', response.data.payment_url)
+        if (response.data && response.data.data && response.data.data.payment_url) {
+          console.log('支付URL:', response.data.data.payment_url)
           // 显示支付二维码
-          showPaymentQR(order, response.data.payment_url)
+          showPaymentQR(order, response.data.data.payment_url)
         } else {
           console.error('支付响应格式错误:', response.data)
           ElMessage.error('创建支付订单失败')
@@ -553,17 +546,64 @@ export default {
       }
     }
     
-    const showPaymentQR = (order, paymentUrl) => {
+    const showPaymentQR = async (order, paymentUrl) => {
       console.log('显示支付二维码:', { order, paymentUrl })
       
       selectedOrder.value = order
-      paymentQRCode.value = paymentUrl
+      
+      // 检查是否是支付宝官方二维码URL
+      if (paymentUrl.includes('qr.alipay.com')) {
+        // 支付宝官方二维码URL，直接使用
+        paymentQRCode.value = paymentUrl
+        console.log('使用支付宝官方二维码:', paymentUrl)
+        console.log('支付方式:', getPaymentMethodName(paymentUrl))
+      } else {
+        // 其他支付方式，使用qrcode库生成二维码
+        try {
+          const QRCode = await import('qrcode')
+          const qrCodeDataURL = await QRCode.toDataURL(paymentUrl, {
+            width: 256,
+            margin: 2,
+            color: {
+              dark: '#000000',
+              light: '#FFFFFF'
+            }
+          })
+          paymentQRCode.value = qrCodeDataURL
+          console.log('生成自定义二维码')
+        } catch (error) {
+          console.error('生成二维码失败:', error)
+          paymentQRCode.value = paymentUrl
+        }
+      }
+      
       paymentQRVisible.value = true
       
       console.log('二维码对话框状态:', paymentQRVisible.value)
+      console.log('最终二维码URL:', paymentQRCode.value)
       
       // 开始检查支付状态
       startPaymentStatusCheck()
+    }
+    
+    // 获取支付方式名称
+    const getPaymentMethodName = (paymentUrl) => {
+      if (paymentUrl.includes('qr.alipay.com')) {
+        return '支付宝'
+      } else if (paymentUrl.includes('weixin') || paymentUrl.includes('wechat')) {
+        return '微信'
+      }
+      return '支付'
+    }
+    
+    // 图片加载成功
+    const onImageLoad = () => {
+      console.log('二维码图片加载成功:', paymentQRCode.value)
+    }
+    
+    // 图片加载失败
+    const onImageError = (event) => {
+      console.error('二维码图片加载失败:', paymentQRCode.value, event)
     }
     
     const startPaymentStatusCheck = () => {
@@ -584,22 +624,20 @@ export default {
       try {
         isCheckingPayment.value = true
         
-        const response = await api.get(`/payment/transactions?order_no=${selectedOrder.value.order_no}`)
-        const payments = response.data
+        // 检查订单状态
+        const response = await api.get(`/orders/${selectedOrder.value.order_no}/status`)
+        const orderData = response.data.data
         
-        if (payments.length > 0) {
-          const latestPayment = payments[0]
-          
-          if (latestPayment.status === 'success') {
-            // 支付成功
-            paymentQRVisible.value = false
-            ElMessage.success('支付成功！')
-            loadOrders() // 刷新订单列表
-          } else if (latestPayment.status === 'failed') {
-            // 支付失败
-            paymentQRVisible.value = false
-            ElMessage.error('支付失败，请重试')
-          }
+        if (orderData.status === 'paid') {
+          // 支付成功
+          paymentQRVisible.value = false
+          ElMessage.success('支付成功！')
+          loadOrders() // 刷新订单列表
+        } else if (orderData.status === 'cancelled') {
+          // 订单已取消
+          paymentQRVisible.value = false
+          ElMessage.info('订单已取消')
+          loadOrders() // 刷新订单列表
         }
         
       } catch (error) {
@@ -621,7 +659,7 @@ export default {
           }
         )
         
-        await api.post(`/orders/${order.id}/cancel`)
+        await api.post(`/orders/${order.order_no}/cancel`)
         ElMessage.success('订单已取消')
         loadOrders()
         
@@ -653,13 +691,12 @@ export default {
         isSubmitting.value = true
         
         const refundData = {
-          order_id: selectedOrder.value.id,
           amount: refundForm.amount,
           reason: refundForm.reason,
           description: refundForm.description
         }
         
-        await api.post('/orders/refund', refundData)
+        await api.post(`/orders/${selectedOrder.value.order_no}/refund`, refundData)
         
         ElMessage.success('退款申请已提交，请等待审核')
         refundDialogVisible.value = false
@@ -749,6 +786,9 @@ export default {
       getOrderStatusText,
       getPaymentMethodType,
       getPaymentMethodText,
+      getPaymentMethodName,
+      onImageLoad,
+      onImageError,
       formatDateTime
     }
   }
