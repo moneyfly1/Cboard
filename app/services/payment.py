@@ -367,7 +367,7 @@ class PaymentService:
             # 初始化支付宝客户端
             alipay = AliPay(
                 appid=config['app_id'],
-                app_notify_url=config.get('notify_url', 'https://yourdomain.com/api/v1/payment/alipay/notify'),
+                app_notify_url=config.get('notify_url', ''),
                 app_private_key_string=config['merchant_private_key'],
                 alipay_public_key_string=config['alipay_public_key'],
                 sign_type='RSA2',
@@ -379,8 +379,8 @@ class PaymentService:
                 out_trade_no=transaction_id,
                 total_amount=str(request.amount),
                 subject=f"XBoard套餐购买-{request.order_no}",
-                return_url=config.get('return_url', 'https://yourdomain.com/payment/success'),
-                notify_url=config.get('notify_url', 'https://yourdomain.com/api/v1/payment/alipay/notify')
+                return_url=config.get('return_url', ''),
+                notify_url=config.get('notify_url', '')
             )
             
             # 使用配置中的网关URL

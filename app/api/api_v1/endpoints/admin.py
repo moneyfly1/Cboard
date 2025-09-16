@@ -2638,7 +2638,10 @@ def get_subscriptions(
                     days_until_expire = 0
             
             # 生成订阅地址
-            base_url = "https://yourdomain.com"
+            # 使用动态域名配置
+            from app.core.domain_config import get_domain_config
+            domain_config = get_domain_config()
+            base_url = domain_config.get_base_url(request, db)
             v2ray_url = f"{base_url}/api/v1/subscriptions/ssr/{subscription.subscription_url}" if subscription.subscription_url else None
             clash_url = f"{base_url}/api/v1/subscriptions/clash/{subscription.subscription_url}" if subscription.subscription_url else None
             
@@ -3010,8 +3013,12 @@ def reset_user_all_subscriptions(
         """)
         
         # 构建完整的订阅URL
-        v2ray_url = f"https://yourdomain.com/api/v1/subscriptions/v2ray/{v2ray_key}"
-        clash_url = f"https://yourdomain.com/api/v1/subscriptions/clash/{clash_key}"
+        # 使用动态域名配置
+        from app.core.domain_config import get_domain_config
+        domain_config = get_domain_config()
+        base_url = domain_config.get_base_url(request, db)
+        v2ray_url = f"{base_url}/api/v1/subscriptions/v2ray/{v2ray_key}"
+        clash_url = f"{base_url}/api/v1/subscriptions/clash/{clash_key}"
         
         db.execute(v2ray_insert_query, {
             "user_id": user_id,
@@ -4511,8 +4518,8 @@ def export_subscriptions(
                 "用户名": subscription.user.username if subscription.user else "未知",
                 "邮箱": subscription.user.email if subscription.user else "未知",
                 "订阅地址": subscription.subscription_url,
-                "通用配置地址": f"https://yourdomain.com/api/v1/subscriptions/ssr/{subscription.subscription_url}",
-                "移动端配置地址": f"https://yourdomain.com/api/v1/subscriptions/clash/{subscription.subscription_url}",
+                "通用配置地址": f"{base_url}/api/v1/subscriptions/ssr/{subscription.subscription_url}",
+                "移动端配置地址": f"{base_url}/api/v1/subscriptions/clash/{subscription.subscription_url}",
                 "设备限制": subscription.device_limit,
                 "当前设备": subscription.current_devices,
                 "状态": "活跃" if subscription.is_active else "暂停",

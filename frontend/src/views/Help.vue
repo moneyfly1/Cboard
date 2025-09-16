@@ -137,7 +137,7 @@
             <i class="el-icon-message"></i>
             <div class="contact-details">
               <h4>邮箱验证</h4>
-              <p>support@yourdomain.com</p>
+              <p>{{ contactEmail }}</p>
             </div>
           </div>
           
@@ -163,13 +163,19 @@
 </template>
 
 <script>
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 
 export default {
   name: 'Help',
   setup() {
     const activeNames = ref(['guide-1'])
     const activeFAQ = ref(['faq-1'])
+    
+    // 动态获取联系邮箱
+    const contactEmail = computed(() => {
+      // 从环境变量或配置中获取联系邮箱
+      return process.env.VITE_CONTACT_EMAIL || 'support@yourdomain.com'
+    })
 
     const sections = [
       { id: 'guide', title: '使用指南' },
@@ -369,6 +375,7 @@ export default {
       guides,
       faqs,
       clients,
+      contactEmail,
       scrollToSection,
       downloadClient,
       viewClientGuide
