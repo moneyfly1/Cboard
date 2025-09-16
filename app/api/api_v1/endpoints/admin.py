@@ -1,5 +1,5 @@
 from typing import Any, Optional, List
-from fastapi import APIRouter, Depends, HTTPException, status, Query, Body, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, status, Query, Body, BackgroundTasks, Request
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
 
@@ -2553,6 +2553,7 @@ def get_subscriptions(
     status: str = Query("", description="状态筛选"),
     subscription_type: str = Query("", description="订阅类型筛选"),
     sort: str = Query("add_time_desc", description="排序方式"),
+    request: Request = None,
     db: Session = Depends(get_db),
     current_admin = Depends(get_current_admin_user)
 ) -> Any:

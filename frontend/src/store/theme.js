@@ -132,9 +132,15 @@ export const useThemeStore = defineStore('theme', () => {
         applyTheme(response.data.theme)
       }
     } catch (error) {
-      console.error('加载用户主题失败:', error)
-      // 使用本地存储的主题
-      applyTheme(currentTheme.value)
+      // 如果是认证错误（401），说明用户未登录，这是正常情况
+      if (error.response?.status === 401) {
+        // 用户未登录，使用本地存储的主题
+        applyTheme(currentTheme.value)
+      } else {
+        console.error('加载用户主题失败:', error)
+        // 其他错误，使用本地存储的主题
+        applyTheme(currentTheme.value)
+      }
     }
   }
 

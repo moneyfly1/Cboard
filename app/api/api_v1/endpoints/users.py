@@ -221,6 +221,23 @@ def change_user_password(
     
     return ResponseBase(message="密码修改成功")
 
+@router.get("/theme", response_model=ResponseBase)
+def get_user_theme(
+    current_user = Depends(get_current_user),
+    db: Session = Depends(get_db)
+) -> Any:
+    """获取用户主题设置"""
+    user_service = UserService(db)
+    user = user_service.get(current_user.id)
+    
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="用户不存在"
+        )
+    
+    return ResponseBase(data={"theme": user.theme or "light"})
+
 @router.put("/theme", response_model=ResponseBase)
 def update_user_theme(
     theme_update: ThemeUpdate,

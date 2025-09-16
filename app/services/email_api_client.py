@@ -72,20 +72,16 @@ class EmailAPIClient:
             
             # 直接查询数据库获取用户信息
             query = text("""
-                SELECT 
-                    u.id,
-                    u.username,
-                    u.email,
-                    u.is_verified,
-                    u.created_at,
-                    u.last_login,
-                    u.avatar_url,
-                    u.phone,
-                    u.country,
-                    u.timezone
-                FROM users u
-                WHERE u.id = :user_id
-            """)
+                       SELECT 
+                           u.id,
+                           u.username,
+                           u.email,
+                           u.is_verified,
+                           u.created_at,
+                           u.last_login
+                       FROM users u
+                       WHERE u.id = :user_id
+                   """)
             
             result = self.db.execute(query, {'user_id': user_id}).first()
             if result:
@@ -95,13 +91,13 @@ class EmailAPIClient:
                     'email': result.email or '',
                     'nickname': result.username or '用户',  # 使用username作为nickname
                     'status': 'active',  # 默认状态
-                    'is_verified': result.is_verified or False,
-                    'created_at': result.created_at.strftime('%Y-%m-%d %H:%M:%S') if result.created_at else '未知',
-                    'last_login': result.last_login.strftime('%Y-%m-%d %H:%M:%S') if result.last_login else '从未登录',
-                    'avatar_url': result.avatar_url or '',
-                    'phone': result.phone or '',
-                    'country': result.country or '',
-                    'timezone': result.timezone or ''
+                    'is_verified': bool(result.is_verified) if result.is_verified is not None else False,
+                    'created_at': result.created_at if result.created_at else '未知',
+                    'last_login': result.last_login if result.last_login else '从未登录',
+                    'avatar_url': '',  # 默认值
+                    'phone': '',  # 默认值
+                    'country': '',  # 默认值
+                    'timezone': ''  # 默认值
                 }
             return {}
         except Exception as e:
@@ -143,43 +139,50 @@ class EmailAPIClient:
                 # 计算剩余天数
                 remaining_days = 0
                 if result.expire_time:
-                    from datetime import datetime
+                    from datetime import datetime, timezone
                     try:
-                        # 如果expire_time是datetime对象
-                        if hasattr(result.expire_time, 'date'):
-                            from datetime import timezone
-                            now = datetime.now(timezone.utc)
-                            if result.expire_time.tzinfo is None:
-                                expire_time = result.expire_time.replace(tzinfo=timezone.utc)
-                            else:
-                                expire_time = result.expire_time
-                            remaining_days = max(0, (expire_time - now).days)
+                        # 如果expire_time是字符串，尝试解析
+                        if isinstance(result.expire_time, str):
+                            # 解析字符串为datetime对象
+                            expire_time = datetime.fromisoformat(result.expire_time.replace('Z', '+00:00'))
+                            if expire_time.tzinfo is None:
+                                expire_time = expire_time.replace(tzinfo=timezone.utc)
+                        elif hasattr(result.expire_time, 'date'):
+                            # 如果expire_time是datetime对象
+                            expire_time = result.expire_time
+                            if expire_time.tzinfo is None:
+                                expire_time = expire_time.replace(tzinfo=timezone.utc)
                         else:
-                            # 如果是字符串，尝试解析
                             remaining_days = 0
-                    except:
+                            expire_time = None
+                        
+                        if expire_time:
+                            now = datetime.now(timezone.utc)
+                            remaining_days = max(0, (expire_time - now).days)
+                    except Exception as e:
+                        print(f"计算剩余天数失败: {str(e)}")
                         remaining_days = 0
                 
                 return {
                     'id': result.id,
                     'user_id': result.user_id,
                     'subscription_url': result.subscription_url or '',
-                    'device_limit': result.device_limit,
-                    'current_devices': result.current_devices,
-                    'max_devices': result.device_limit,
-                    'is_active': result.is_active,
-                    'expire_time': result.expire_time.strftime('%Y-%m-%d %H:%M:%S') if result.expire_time and hasattr(result.expire_time, 'strftime') else '永久',
+                    'device_limit': result.device_limit or 3,
+                    'current_devices': result.current_devices or 0,
+                    'max_devices': result.device_limit or 3,
+                    'is_active': bool(result.is_active) if result.is_active is not None else True,
+                    'expire_time': result.expire_time if result.expire_time else '永久',
                     'remaining_days': remaining_days,
-                    'created_at': result.created_at.strftime('%Y-%m-%d %H:%M:%S') if result.created_at and hasattr(result.created_at, 'strftime') else '未知',
-                    'updated_at': result.updated_at.strftime('%Y-%m-%d %H:%M:%S') if result.updated_at and hasattr(result.updated_at, 'strftime') else '未知',
+                    'created_at': result.created_at if result.created_at else '未知',
+                    'updated_at': result.updated_at if result.updated_at else '未知',
                     'username': result.username or '用户',
                     'nickname': result.username or '用户',  # 使用username作为nickname
                     'user_email': result.email or '',
-                    'package_name': result.package_name or '未知套餐',
-                    'package_description': result.package_description or '无描述',
-                    'package_price': float(result.package_price) if result.package_price else 0.0,
-                    'package_duration': result.package_duration or 0,
-                    'package_bandwidth_limit': result.package_bandwidth_limit
+                    'package_name': result.package_name or '标准套餐',
+                    'package_description': result.package_description or '网络服务套餐',
+                    'package_price': float(result.package_price) if result.package_price is not None else 0.0,
+                    'package_duration': result.package_duration or 30,
+                    'package_bandwidth_limit': result.package_bandwidth_limit or '无限制'
                 }
             return {}
         except Exception as e:

@@ -220,8 +220,8 @@ class EmailTemplateEnhanced:
         """订阅地址通知邮件模板"""
         import urllib.parse
         
-        if not request or not db:
-            return "请求或数据库连接不可用"
+        if not db:
+            return "数据库连接不可用"
         
         # 使用API客户端获取完整的订阅数据
         from app.services.email_api_client import EmailAPIClient
@@ -300,52 +300,12 @@ class EmailTemplateEnhanced:
                     <td>{last_login}</td>
                 </tr>
                 <tr>
-                    <th>订阅ID</th>
-                    <td>{subscription_id}</td>
-                </tr>
-                <tr>
-                    <th>套餐名称</th>
-                    <td>{package_name}</td>
-                </tr>
-                <tr>
-                    <th>套餐描述</th>
-                    <td>{package_description}</td>
-                </tr>
-                <tr>
-                    <th>套餐价格</th>
-                    <td>¥{package_price}</td>
-                </tr>
-                <tr>
-                    <th>套餐时长</th>
-                    <td>{package_duration} 天</td>
-                </tr>
-                <tr>
-                    <th>流量限制</th>
-                    <td>{package_bandwidth_limit if package_bandwidth_limit else '无限制'} GB</td>
-                </tr>
-                <tr>
-                    <th>配置标识</th>
-                    <td style="font-family: monospace;">{subscription_url}</td>
-                </tr>
-                <tr>
-                    <th>设备使用情况</th>
-                    <td style="color: {'#e74c3c' if current_devices >= max_devices else '#27ae60'};">{current_devices}/{max_devices} 台设备</td>
-                </tr>
-                <tr>
-                    <th>订阅状态</th>
-                    <td style="color: {'#27ae60' if is_active else '#e74c3c'};">{'活跃' if is_active else '非活跃'}</td>
-                </tr>
-                <tr>
-                    <th>服务期限</th>
-                    <td style="color: #e74c3c; font-weight: bold;">{expire_time}</td>
-                </tr>
-                <tr>
-                    <th>剩余天数</th>
+                    <th>客户剩余时长</th>
                     <td style="color: {'#e74c3c' if remaining_days <= 7 else '#27ae60'}; font-weight: bold;">{remaining_days} 天</td>
                 </tr>
                 <tr>
-                    <th>订阅创建时间</th>
-                    <td>{subscription_created}</td>
+                    <th>允许最大设备数</th>
+                    <td style="color: #27ae60; font-weight: bold;">{max_devices} 台设备</td>
                 </tr>
             </table>
             
@@ -612,8 +572,8 @@ class EmailTemplateEnhanced:
         """到期提醒邮件模板"""
         title = "订阅已到期" if is_expired else "订阅即将到期"
         
-        if not request or not db:
-            return "请求或数据库连接不可用"
+        if not db:
+            return "数据库连接不可用"
         
         # 使用API客户端获取订阅数据
         from app.services.email_api_client import EmailAPIClient
@@ -783,8 +743,8 @@ class EmailTemplateEnhanced:
         """支付成功通知邮件模板"""
         title = "支付成功通知"
         
-        if not request or not db:
-            return "请求或数据库连接不可用"
+        if not db:
+            return "数据库连接不可用"
         
         # 使用API客户端获取订单数据
         from app.services.email_api_client import EmailAPIClient
@@ -860,8 +820,8 @@ class EmailTemplateEnhanced:
         """新用户欢迎邮件模板"""
         title = "欢迎加入我们！"
         
-        if not request or not db:
-            return "请求或数据库连接不可用"
+        if not db:
+            return "数据库连接不可用"
         
         # 使用API客户端获取用户数据
         from app.services.email_api_client import EmailAPIClient
@@ -924,8 +884,8 @@ class EmailTemplateEnhanced:
         """订阅创建成功邮件模板"""
         title = "订阅创建成功"
         
-        if not request or not db:
-            return "请求或数据库连接不可用"
+        if not db:
+            return "数据库连接不可用"
         
         # 使用API客户端获取完整的订阅数据
         from app.services.email_api_client import EmailAPIClient
@@ -961,16 +921,12 @@ class EmailTemplateEnhanced:
                 <h3>📋 订阅信息</h3>
                 <table class="info-table">
                     <tr>
-                        <td><strong>套餐名称：</strong></td>
-                        <td>{package_name}</td>
+                        <td><strong>客户剩余时长：</strong></td>
+                        <td style="color: {'#e74c3c' if remaining_days <= 7 else '#27ae60'}; font-weight: bold;">{remaining_days} 天</td>
                     </tr>
                     <tr>
-                        <td><strong>设备限制：</strong></td>
-                        <td>{device_limit} 台设备</td>
-                    </tr>
-                    <tr>
-                        <td><strong>到期时间：</strong></td>
-                        <td>{expire_time}</td>
+                        <td><strong>允许最大设备数：</strong></td>
+                        <td style="color: #27ae60; font-weight: bold;">{device_limit} 台设备</td>
                     </tr>
                 </table>
             </div>
