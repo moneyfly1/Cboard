@@ -229,13 +229,24 @@ class EmailAPIClient:
             # 获取订阅信息
             subscription_info = self.get_subscription_info(subscription_id)
             if not subscription_info:
+                print(f"❌ 订阅信息获取失败: subscription_id={subscription_id}")
                 return {}
+            
+            print(f"✅ 订阅信息获取成功: subscription_id={subscription_id}")
+            print(f"   - 订阅URL: {subscription_info.get('subscription_url')}")
+            print(f"   - 用户名: {subscription_info.get('username')}")
             
             # 获取用户信息
             user_info = self.get_user_info(subscription_info.get('user_id', 0))
             
             # 获取订阅地址
-            subscription_urls = self.get_subscription_urls(subscription_info.get('subscription_url', ''))
+            subscription_url = subscription_info.get('subscription_url', '')
+            subscription_urls = self.get_subscription_urls(subscription_url)
+            
+            print(f"✅ 订阅地址生成:")
+            print(f"   - V2Ray地址: {subscription_urls.get('v2ray_url')}")
+            print(f"   - Clash地址: {subscription_urls.get('clash_url')}")
+            print(f"   - SSR地址: {subscription_urls.get('ssr_url')}")
             
             # 合并所有信息
             complete_data = {

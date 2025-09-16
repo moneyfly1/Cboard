@@ -770,6 +770,15 @@ class EmailTemplateEnhanced:
         package_name = subscription_data.get('package_name', '未知套餐')
         expire_time = subscription_data.get('expire_time', '永久')
         
+        # 调试信息
+        print(f"🔍 邮件模板调试信息:")
+        print(f"   - 用户名: {username}")
+        print(f"   - V2Ray地址: {v2ray_url}")
+        print(f"   - Clash地址: {clash_url}")
+        print(f"   - SSR地址: {ssr_url}")
+        print(f"   - 基础URL: {base_url}")
+        print(f"   - 订阅数据键: {list(subscription_data.keys())}")
+        
         content = f'''
             <h2>您的订阅已重置</h2>
             <p>亲爱的 {username}，</p>
