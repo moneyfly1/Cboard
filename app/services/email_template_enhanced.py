@@ -5,10 +5,18 @@
 
 from datetime import datetime
 from typing import Dict, Any, Optional
+from app.core.domain_config import get_domain_config
+from app.services.email_data_service import EmailDataService
 
 
 class EmailTemplateEnhanced:
     """增强版邮件模板类"""
+    
+    @staticmethod
+    def _get_base_url(request=None, db=None) -> str:
+        """获取基础URL"""
+        domain_config = get_domain_config()
+        return domain_config.get_email_base_url(request, db)
     
     @staticmethod
     def get_base_template(title: str, content: str, footer_text: str = '') -> str:
@@ -179,39 +187,54 @@ class EmailTemplateEnhanced:
 </html>'''
 
     @staticmethod
-    def get_subscription_template(username: str, subscription_data: Dict[str, Any]) -> str:
+    def get_subscription_template(subscription_id: int, request=None, db=None) -> str:
         """订阅地址通知邮件模板"""
         import urllib.parse
         
+        if not db:
+            return "数据库连接不可用"
+        
+        # 获取完整的订阅数据
+        data_service = EmailDataService(db)
+        subscription_data = data_service.get_complete_subscription_data(subscription_id, request)
+        
+        if not subscription_data:
+            return "订阅信息不存在"
+        
         title = "服务配置信息"
         
-        # 使用中性词汇替换敏感词
-        v2ray_url = subscription_data.get('v2ray_url', '').replace('v2ray', 'config').replace('clash', 'mobile')
-        clash_url = subscription_data.get('clash_url', '').replace('v2ray', 'config').replace('clash', 'mobile')
+        # 从数据库获取的真实数据
+        username = subscription_data.get('username', '用户')
+        nickname = subscription_data.get('nickname', username)
+        v2ray_url = subscription_data.get('v2ray_url', '')
+        clash_url = subscription_data.get('clash_url', '')
+        ssr_url = subscription_data.get('ssr_url', '')
         subscription_url = subscription_data.get('subscription_url', '')
         expire_time = subscription_data.get('expire_time', '永久')
         device_limit = subscription_data.get('device_limit', 3)
         current_devices = subscription_data.get('current_devices', 0)
         max_devices = subscription_data.get('max_devices', device_limit)
         package_name = subscription_data.get('package_name', '未知套餐')
-        user_email = subscription_data.get('user_email', '')
+        user_email = subscription_data.get('email', '')
         
         # 从数据库获取的详细信息
         user_id = subscription_data.get('user_id', '')
         is_verified = subscription_data.get('is_verified', False)
         created_at = subscription_data.get('created_at', '未知')
         last_login = subscription_data.get('last_login', '从未登录')
-        subscription_id = subscription_data.get('subscription_id', '')
+        subscription_id = subscription_data.get('id', '')
         is_active = subscription_data.get('is_active', False)
         status = subscription_data.get('status', '未知')
         remaining_days = subscription_data.get('remaining_days', 0)
-        subscription_created = subscription_data.get('subscription_created', '未知')
+        subscription_created = subscription_data.get('created_at', '未知')
         package_description = subscription_data.get('package_description', '无描述')
         package_price = subscription_data.get('package_price', 0.0)
         package_duration = subscription_data.get('package_duration', 0)
         package_bandwidth_limit = subscription_data.get('package_bandwidth_limit', None)
         site_name = subscription_data.get('site_name', '网络服务')
-        base_url = subscription_data.get('base_url', 'https://yourdomain.com')
+        
+        # 使用动态域名配置
+        base_url = EmailTemplateEnhanced._get_base_url(request, db)
         
         # 正确编码URL用于二维码
         qr_url = urllib.parse.quote(v2ray_url, safe='')
@@ -600,9 +623,31 @@ class EmailTemplateEnhanced:
         return EmailTemplateEnhanced.get_base_template(title, content, '保护您的账户安全')
 
     @staticmethod
-    def get_expiration_template(username: str, expire_date: str, is_expired: bool = False, base_url: str = "https://yourdomain.com") -> str:
+    def get_expiration_template(subscription_id: int, is_expired: bool = False, request=None, db=None) -> str:
         """到期提醒邮件模板"""
         title = "订阅已到期" if is_expired else "订阅即将到期"
+        
+        if not db:
+            return "数据库连接不可用"
+        
+        # 获取订阅数据
+        data_service = EmailDataService(db)
+        subscription_data = data_service.get_complete_subscription_data(subscription_id, request)
+        
+        if not subscription_data:
+            return "订阅信息不存在"
+        
+        # 获取动态base_url
+        base_url = EmailTemplateEnhanced._get_base_url(request, db)
+        
+        # 从数据库获取的真实数据
+        username = subscription_data.get('username', '用户')
+        nickname = subscription_data.get('nickname', username)
+        expire_date = subscription_data.get('expire_time', '未知')
+        package_name = subscription_data.get('package_name', '未知套餐')
+        device_limit = subscription_data.get('device_limit', 3)
+        current_devices = subscription_data.get('current_devices', 0)
+        remaining_days = subscription_data.get('remaining_days', 0)
         
         if is_expired:
             content = f'''
@@ -657,10 +702,34 @@ class EmailTemplateEnhanced:
         return EmailTemplateEnhanced.get_base_template(title, content, '我们期待继续为您服务')
 
     @staticmethod
-    def get_subscription_reset_template(username: str, new_subscription_url: str, 
-                                      reset_time: str, reset_reason: str, base_url: str = "https://yourdomain.com") -> str:
+    def get_subscription_reset_template(subscription_id: int, reset_time: str, reset_reason: str, request=None, db=None) -> str:
         """订阅重置通知邮件模板"""
         title = "订阅重置通知"
+        
+        if not db:
+            return "数据库连接不可用"
+        
+        # 获取完整的订阅数据
+        data_service = EmailDataService(db)
+        subscription_data = data_service.get_complete_subscription_data(subscription_id, request)
+        
+        if not subscription_data:
+            return "订阅信息不存在"
+        
+        # 获取动态base_url
+        base_url = EmailTemplateEnhanced._get_base_url(request, db)
+        
+        # 从数据库获取的真实数据
+        username = subscription_data.get('username', '用户')
+        nickname = subscription_data.get('nickname', username)
+        v2ray_url = subscription_data.get('v2ray_url', '')
+        clash_url = subscription_data.get('clash_url', '')
+        ssr_url = subscription_data.get('ssr_url', '')
+        device_limit = subscription_data.get('device_limit', 3)
+        current_devices = subscription_data.get('current_devices', 0)
+        package_name = subscription_data.get('package_name', '未知套餐')
+        expire_time = subscription_data.get('expire_time', '永久')
+        
         content = f'''
             <h2>您的订阅已重置</h2>
             <p>亲爱的 {username}，</p>
@@ -668,17 +737,35 @@ class EmailTemplateEnhanced:
             
             <div class="info-box">
                 <h3>📋 重置信息</h3>
-                <p><strong>重置时间：</strong>{reset_time}</p>
-                <p><strong>重置原因：</strong>{reset_reason}</p>
+                <table class="info-table">
+                    <tr>
+                        <td><strong>重置时间：</strong></td>
+                        <td>{reset_time}</td>
+                    </tr>
+                    <tr>
+                        <td><strong>重置原因：</strong></td>
+                        <td>{reset_reason}</td>
+                    </tr>
+                </table>
             </div>
             
-            <h3>🔗 新的订阅地址</h3>
-            <div class="url-box">
-                {new_subscription_url}
+            <div class="success-box">
+                <h3>🔗 新的订阅地址</h3>
+                <div class="url-list">
+                    <div class="url-item">
+                        <strong>V2Ray/SSR 配置：</strong><br>
+                        <code class="url-code">{v2ray_url}</code>
+                    </div>
+                    <div class="url-item">
+                        <strong>Clash 配置：</strong><br>
+                        <code class="url-code">{clash_url}</code>
+                    </div>
+                    {f'<div class="url-item"><strong>SSR 配置：</strong><br><code class="url-code">{ssr_url}</code></div>' if ssr_url else ''}
+                </div>
             </div>
             
             <div class="warning-box">
-                <p><strong>⚠️ 重要提醒：</strong></p>
+                <h3>⚠️ 重要提醒</h3>
                 <ul>
                     <li>请立即更新您的客户端配置，使用新的订阅地址</li>
                     <li>旧的订阅地址将无法使用</li>
@@ -687,15 +774,43 @@ class EmailTemplateEnhanced:
                 </ul>
             </div>
             
+            <div style="text-align: center; margin: 30px 0;">
+                <a href="{base_url}/dashboard" class="btn">查看订阅详情</a>
+            </div>
+            
             <p>如有任何问题，请随时联系我们的客服团队。</p>
         '''
         
         return EmailTemplateEnhanced.get_base_template(title, content, '请及时更新您的客户端配置')
     
     @staticmethod
-    def get_payment_success_template(username: str, order_id: str, amount: str, package_name: str, base_url: str = "https://yourdomain.com") -> str:
+    def get_payment_success_template(order_id: int, request=None, db=None) -> str:
         """支付成功通知邮件模板"""
         title = "支付成功通知"
+        
+        if not db:
+            return "数据库连接不可用"
+        
+        # 获取订单数据
+        data_service = EmailDataService(db)
+        order_data = data_service.get_order_info(order_id)
+        
+        if not order_data:
+            return "订单信息不存在"
+        
+        # 获取动态base_url
+        base_url = EmailTemplateEnhanced._get_base_url(request, db)
+        
+        # 从数据库获取的真实数据
+        username = order_data.get('username', '用户')
+        nickname = order_data.get('username', username)  # 订单表中没有nickname字段
+        amount = order_data.get('amount', 0.0)
+        package_name = order_data.get('package_name', '未知套餐')
+        order_no = order_data.get('order_no', '')
+        payment_method = order_data.get('payment_method_name', '未知')
+        created_at = order_data.get('created_at', '未知')
+        package_description = order_data.get('package_description', '无描述')
+        package_duration = order_data.get('package_duration', 0)
         content = f'''
             <h2>🎉 支付成功！</h2>
             <p>亲爱的 {username}，</p>
@@ -742,9 +857,30 @@ class EmailTemplateEnhanced:
         return EmailTemplateEnhanced.get_base_template(title, content, '感谢您的信任')
     
     @staticmethod
-    def get_welcome_template(username: str, login_url: str, base_url: str = "https://yourdomain.com") -> str:
+    def get_welcome_template(user_id: int, request=None, db=None) -> str:
         """新用户欢迎邮件模板"""
         title = "欢迎加入我们！"
+        
+        if not db:
+            return "数据库连接不可用"
+        
+        # 获取用户数据
+        data_service = EmailDataService(db)
+        user_data = data_service.get_complete_user_data(user_id, request)
+        
+        if not user_data:
+            return "用户信息不存在"
+        
+        # 获取动态base_url
+        base_url = EmailTemplateEnhanced._get_base_url(request, db)
+        
+        # 从数据库获取的真实数据
+        username = user_data.get('username', '用户')
+        nickname = user_data.get('nickname', username)
+        email = user_data.get('email', '')
+        created_at = user_data.get('created_at', '未知')
+        is_verified = user_data.get('is_verified', False)
+        login_url = f"{base_url}/login"
         content = f'''
             <h2>🎉 欢迎注册成功！</h2>
             <p>亲爱的 {username}，</p>
@@ -784,9 +920,37 @@ class EmailTemplateEnhanced:
         return EmailTemplateEnhanced.get_base_template(title, content, '期待为您提供优质服务')
     
     @staticmethod
-    def get_subscription_created_template(username: str, subscription_url: str, expire_time: str, base_url: str = "https://yourdomain.com") -> str:
+    def get_subscription_created_template(subscription_id: int, request=None, db=None) -> str:
         """订阅创建成功邮件模板"""
         title = "订阅创建成功"
+        
+        if not db:
+            return "数据库连接不可用"
+        
+        # 获取完整的订阅数据
+        data_service = EmailDataService(db)
+        subscription_data = data_service.get_complete_subscription_data(subscription_id, request)
+        
+        if not subscription_data:
+            return "订阅信息不存在"
+        
+        # 获取动态base_url
+        base_url = EmailTemplateEnhanced._get_base_url(request, db)
+        
+        # 从数据库获取的真实数据
+        username = subscription_data.get('username', '用户')
+        nickname = subscription_data.get('nickname', username)
+        v2ray_url = subscription_data.get('v2ray_url', '')
+        clash_url = subscription_data.get('clash_url', '')
+        ssr_url = subscription_data.get('ssr_url', '')
+        expire_time = subscription_data.get('expire_time', '永久')
+        package_name = subscription_data.get('package_name', '未知套餐')
+        device_limit = subscription_data.get('device_limit', 3)
+        current_devices = subscription_data.get('current_devices', 0)
+        package_description = subscription_data.get('package_description', '无描述')
+        package_price = subscription_data.get('package_price', 0.0)
+        package_duration = subscription_data.get('package_duration', 0)
+        
         content = f'''
             <h2>🎉 订阅创建成功！</h2>
             <p>亲爱的 {username}，</p>
@@ -796,22 +960,43 @@ class EmailTemplateEnhanced:
                 <h3>📋 订阅信息</h3>
                 <table class="info-table">
                     <tr>
-                        <th>订阅地址</th>
-                        <td class="url-box">{subscription_url}</td>
+                        <td><strong>套餐名称：</strong></td>
+                        <td>{package_name}</td>
                     </tr>
                     <tr>
-                        <th>到期时间</th>
+                        <td><strong>设备限制：</strong></td>
+                        <td>{device_limit} 台设备</td>
+                    </tr>
+                    <tr>
+                        <td><strong>到期时间：</strong></td>
                         <td>{expire_time}</td>
                     </tr>
                 </table>
             </div>
             
             <div class="success-box">
-                <p><strong>🔗 配置地址：</strong></p>
-                <ul>
-                    <li><strong>V2Ray/SSR:</strong> <code>{base_url}/api/v1/subscriptions/ssr/{subscription_url}</code></li>
-                    <li><strong>Clash:</strong> <code>{base_url}/api/v1/subscriptions/clash/{subscription_url}</code></li>
-                </ul>
+                <h3>🔗 配置地址</h3>
+                <div class="url-list">
+                    <div class="url-item">
+                        <strong>V2Ray/SSR 配置：</strong><br>
+                        <code class="url-code">{v2ray_url}</code>
+                    </div>
+                    <div class="url-item">
+                        <strong>Clash 配置：</strong><br>
+                        <code class="url-code">{clash_url}</code>
+                    </div>
+                    {f'<div class="url-item"><strong>SSR 配置：</strong><br><code class="url-code">{ssr_url}</code></div>' if ssr_url else ''}
+                </div>
+            </div>
+            
+            <div class="info-box">
+                <h3>📱 使用说明</h3>
+                <ol>
+                    <li>复制上述配置地址到您的客户端</li>
+                    <li>选择合适的配置类型（V2Ray/Clash/SSR）</li>
+                    <li>导入配置并连接</li>
+                    <li>享受高速稳定的网络服务</li>
+                </ol>
             </div>
             
             <div style="text-align: center; margin: 30px 0;">
