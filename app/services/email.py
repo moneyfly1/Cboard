@@ -279,7 +279,7 @@ class EmailService:
 
     def send_subscription_reset_notification(self, user_email: str, username: str, 
                                            new_subscription_url: str, reset_time: str, 
-                                           reset_reason: str) -> bool:
+                                           reset_reason: str, subscription_id: int = None) -> bool:
         """发送订阅重置通知"""
         if not self.is_email_enabled():
             return False
@@ -288,12 +288,45 @@ class EmailService:
             # 使用增强模板发送重置通知
             from app.services.email_template_enhanced import EmailTemplateEnhanced
             
-            content = EmailTemplateEnhanced.get_subscription_reset_template(
-                username=username,
-                new_subscription_url=new_subscription_url,
-                reset_time=reset_time,
-                reset_reason=reset_reason
-            )
+            # 如果有subscription_id，使用新的API客户端方式
+            if subscription_id:
+                content = EmailTemplateEnhanced.get_subscription_reset_template(
+                    subscription_id=subscription_id,
+                    reset_time=reset_time,
+                    reset_reason=reset_reason,
+                    request=None,  # 这里需要实际的request对象
+                    db=self.db
+                )
+            else:
+                # 兼容旧版本，使用简单的模板
+                content = f"""
+                <h2>您的订阅已重置</h2>
+                <p>亲爱的 {username}，</p>
+                <p>您的订阅地址已被重置，请使用新的订阅地址更新您的客户端配置。</p>
+                
+                <div class="info-box">
+                    <h3>📋 重置信息</h3>
+                    <p><strong>重置时间：</strong>{reset_time}</p>
+                    <p><strong>重置原因：</strong>{reset_reason}</p>
+                </div>
+                
+                <div class="success-box">
+                    <h3>🔗 新的订阅地址</h3>
+                    <p><strong>订阅标识：</strong>{new_subscription_url}</p>
+                </div>
+                
+                <div class="warning-box">
+                    <h3>⚠️ 重要提醒</h3>
+                    <ul>
+                        <li>请立即更新您的客户端配置，使用新的订阅地址</li>
+                        <li>旧的订阅地址将无法使用</li>
+                        <li>请妥善保管新的订阅地址，不要分享给他人</li>
+                        <li>如有疑问，请及时联系客服</li>
+                    </ul>
+                </div>
+                
+                <p>如有任何问题，请随时联系我们的客服团队。</p>
+                """
             
             subject = f"{settings_manager.get_site_name(self.db)} - 订阅重置通知"
             

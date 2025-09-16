@@ -799,7 +799,8 @@ def reset_user_subscription(
                     username=user.username,
                     new_subscription_url=new_url,
                     reset_time=reset_time,
-                    reset_reason="管理员重置"
+                    reset_reason="管理员重置",
+                    subscription_id=subscription.id
                 )
                 print(f"已发送管理员重置订阅通知邮件到: {user.email}")
         except Exception as e:
