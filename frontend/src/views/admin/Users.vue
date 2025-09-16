@@ -186,37 +186,41 @@
             </div>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="240" fixed="right">
+        <el-table-column label="操作" width="280" fixed="right">
           <template #default="scope">
             <div class="action-buttons">
-              <el-button size="small" type="primary" @click="editUser(scope.row)">
-                <el-icon><Edit /></el-icon>
-                编辑
-              </el-button>
-              <el-button 
-                size="small" 
-                :type="scope.row.status === 'active' ? 'warning' : 'success'"
-                @click="toggleUserStatus(scope.row)"
-              >
-                <el-icon><Switch /></el-icon>
-                {{ scope.row.status === 'active' ? '禁用' : '启用' }}
-              </el-button>
-              <el-button 
-                size="small" 
-                type="info" 
-                @click="resetUserPassword(scope.row)"
-              >
-                <el-icon><Key /></el-icon>
-                重置密码
-              </el-button>
-              <el-button 
-                size="small" 
-                type="danger" 
-                @click="deleteUser(scope.row)"
-              >
-                <el-icon><Delete /></el-icon>
-                删除
-              </el-button>
+              <div class="button-row">
+                <el-button size="small" type="primary" @click="editUser(scope.row)">
+                  <el-icon><Edit /></el-icon>
+                  编辑
+                </el-button>
+                <el-button 
+                  size="small" 
+                  :type="scope.row.status === 'active' ? 'warning' : 'success'"
+                  @click="toggleUserStatus(scope.row)"
+                >
+                  <el-icon><Switch /></el-icon>
+                  {{ scope.row.status === 'active' ? '禁用' : '启用' }}
+                </el-button>
+              </div>
+              <div class="button-row">
+                <el-button 
+                  size="small" 
+                  type="info" 
+                  @click="resetUserPassword(scope.row)"
+                >
+                  <el-icon><Key /></el-icon>
+                  重置密码
+                </el-button>
+                <el-button 
+                  size="small" 
+                  type="danger" 
+                  @click="deleteUser(scope.row)"
+                >
+                  <el-icon><Delete /></el-icon>
+                  删除
+                </el-button>
+              </div>
             </div>
           </template>
         </el-table-column>
@@ -294,37 +298,94 @@
     </el-dialog>
 
     <!-- 用户详情对话框 -->
-    <el-dialog v-model="showUserDialog" title="用户详情" width="800px">
-      <el-descriptions :column="2" border v-if="selectedUser">
-        <el-descriptions-item label="用户ID">{{ selectedUser.id }}</el-descriptions-item>
-        <el-descriptions-item label="邮箱">{{ selectedUser.email }}</el-descriptions-item>
-        <el-descriptions-item label="用户名">{{ selectedUser.username }}</el-descriptions-item>
-        <el-descriptions-item label="状态">
-          <el-tag :type="getStatusType(selectedUser.status)">
-            {{ getStatusText(selectedUser.status) }}
-          </el-tag>
-        </el-descriptions-item>
-        <el-descriptions-item label="注册时间">{{ formatDate(selectedUser.created_at) }}</el-descriptions-item>
-        <el-descriptions-item label="最后登录">{{ formatDate(selectedUser.last_login) || '从未登录' }}</el-descriptions-item>
-        <el-descriptions-item label="订阅数量">{{ selectedUser.subscription_count || 0 }}</el-descriptions-item>
-        <el-descriptions-item label="备注">{{ selectedUser.note || '无' }}</el-descriptions-item>
-      </el-descriptions>
-      
-      <!-- 用户订阅列表 -->
-      <div class="user-subscriptions" v-if="selectedUser?.subscriptions?.length">
-        <h4>订阅列表</h4>
-        <el-table :data="selectedUser.subscriptions" size="small">
-          <el-table-column prop="id" label="订阅ID" width="80" />
-          <el-table-column prop="subscription_url" label="订阅地址" min-width="200" />
-          <el-table-column prop="status" label="状态" width="100">
-            <template #default="scope">
-              <el-tag :type="getStatusType(scope.row.status)" size="small">
-                {{ getStatusText(scope.row.status) }}
-              </el-tag>
-            </template>
-          </el-table-column>
-          <el-table-column prop="expires_at" label="到期时间" width="180" />
-        </el-table>
+    <el-dialog v-model="showUserDialog" title="用户详情" width="900px">
+      <div v-if="selectedUser">
+        <!-- 用户基本信息 -->
+        <el-descriptions :column="2" border>
+          <el-descriptions-item label="用户ID">{{ selectedUser.user_info?.id || selectedUser.id }}</el-descriptions-item>
+          <el-descriptions-item label="邮箱">{{ selectedUser.user_info?.email || selectedUser.email }}</el-descriptions-item>
+          <el-descriptions-item label="用户名">{{ selectedUser.user_info?.username || selectedUser.username }}</el-descriptions-item>
+          <el-descriptions-item label="状态">
+            <el-tag :type="getStatusType(selectedUser.user_info?.is_active !== false ? 'active' : 'inactive')">
+              {{ getStatusText(selectedUser.user_info?.is_active !== false ? 'active' : 'inactive') }}
+            </el-tag>
+          </el-descriptions-item>
+          <el-descriptions-item label="注册时间">{{ formatDate(selectedUser.user_info?.created_at || selectedUser.created_at) }}</el-descriptions-item>
+          <el-descriptions-item label="最后登录">{{ formatDate(selectedUser.user_info?.last_login || selectedUser.last_login) || '从未登录' }}</el-descriptions-item>
+          <el-descriptions-item label="订阅数量">{{ selectedUser.statistics?.total_subscriptions || selectedUser.subscription_count || 0 }}</el-descriptions-item>
+          <el-descriptions-item label="订单数量">{{ selectedUser.statistics?.total_orders || 0 }}</el-descriptions-item>
+        </el-descriptions>
+        
+        <!-- 统计信息 -->
+        <div class="user-stats" v-if="selectedUser.statistics">
+          <h4>统计信息</h4>
+          <el-row :gutter="20">
+            <el-col :span="6">
+              <el-statistic title="总消费" :value="selectedUser.statistics.total_spent" prefix="¥" />
+            </el-col>
+            <el-col :span="6">
+              <el-statistic title="重置次数" :value="selectedUser.statistics.total_resets" />
+            </el-col>
+            <el-col :span="6">
+              <el-statistic title="近30天重置" :value="selectedUser.statistics.recent_resets_30d" />
+            </el-col>
+            <el-col :span="6">
+              <el-statistic title="订阅数量" :value="selectedUser.statistics.total_subscriptions" />
+            </el-col>
+          </el-row>
+        </div>
+        
+        <!-- 用户订阅列表 -->
+        <div class="user-subscriptions" v-if="selectedUser.subscriptions && selectedUser.subscriptions.length">
+          <h4>订阅列表</h4>
+          <el-table :data="selectedUser.subscriptions" size="small">
+            <el-table-column prop="id" label="订阅ID" width="80" />
+            <el-table-column prop="subscription_url" label="订阅地址" min-width="200" />
+            <el-table-column prop="device_limit" label="设备限制" width="100" />
+            <el-table-column prop="current_devices" label="当前设备" width="100" />
+            <el-table-column prop="is_active" label="状态" width="100">
+              <template #default="scope">
+                <el-tag :type="scope.row.is_active ? 'success' : 'danger'" size="small">
+                  {{ scope.row.is_active ? '活跃' : '未激活' }}
+                </el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column prop="expire_time" label="到期时间" width="180" />
+          </el-table>
+        </div>
+        
+        <!-- 用户订单列表 -->
+        <div class="user-orders" v-if="selectedUser.orders && selectedUser.orders.length">
+          <h4>订单列表</h4>
+          <el-table :data="selectedUser.orders" size="small">
+            <el-table-column prop="order_no" label="订单号" min-width="150" />
+            <el-table-column prop="amount" label="金额" width="100">
+              <template #default="scope">
+                ¥{{ scope.row.amount }}
+              </template>
+            </el-table-column>
+            <el-table-column prop="status" label="状态" width="100">
+              <template #default="scope">
+                <el-tag :type="scope.row.status === 'paid' ? 'success' : (scope.row.status === 'pending' ? 'warning' : 'danger')" size="small">
+                  {{ scope.row.status === 'paid' ? '已支付' : (scope.row.status === 'pending' ? '待支付' : '已取消') }}
+                </el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column prop="payment_method" label="支付方式" width="120" />
+            <el-table-column prop="created_at" label="创建时间" width="180" />
+          </el-table>
+        </div>
+        
+        <!-- 最近活动 -->
+        <div class="user-activities" v-if="selectedUser.recent_activities && selectedUser.recent_activities.length">
+          <h4>最近活动</h4>
+          <el-table :data="selectedUser.recent_activities" size="small">
+            <el-table-column prop="activity_type" label="活动类型" width="120" />
+            <el-table-column prop="description" label="描述" min-width="200" />
+            <el-table-column prop="ip_address" label="IP地址" width="120" />
+            <el-table-column prop="created_at" label="时间" width="180" />
+          </el-table>
+        </div>
       </div>
     </el-dialog>
 
@@ -414,49 +475,14 @@ export default {
           date_range: searchForm.date_range
         }
         
-        console.log('=== 开始加载用户列表 ===')
-        console.log('请求用户列表参数:', params)
-        console.log('当前token:', localStorage.getItem('token'))
-        console.log('使用的API:', api)
-        console.log('API方法:', api.getUsers)
-        
         const response = await api.getUsers(params)
-        console.log('=== API响应详情 ===')
-        console.log('响应状态:', response.status)
-        console.log('响应状态文本:', response.statusText)
-        console.log('响应头:', response.headers)
-        console.log('响应数据:', response.data)
-        console.log('响应数据类型:', typeof response.data)
-        console.log('response.data.success:', response.data?.success)
-        console.log('response.data.data:', response.data?.data)
-        console.log('response.data.data.users:', response.data?.data?.users)
-        console.log('response.data.data.total:', response.data?.data?.total)
         
         // 检查响应是否成功
         if (response.data && response.data.success && response.data.data) {
           const responseData = response.data.data
           users.value = responseData.users || []
           total.value = responseData.total || 0
-          console.log('=== 数据绑定成功 ===')
-          console.log('用户列表加载成功，共', users.value.length, '个用户')
-          console.log('users.value:', users.value)
-          console.log('total.value:', total.value)
-          console.log('users.value类型:', Array.isArray(users.value))
-          console.log('users.value长度:', users.value.length)
-          
-          // 强制触发响应式更新
-          nextTick(() => {
-            console.log('nextTick后users.value:', users.value)
-            console.log('nextTick后users.value长度:', users.value.length)
-          })
         } else {
-          console.warn('=== 响应数据格式异常 ===')
-          console.warn('response.data:', response.data)
-          console.warn('response.data.success:', response.data?.success)
-          console.warn('response.data.data:', response.data?.data)
-          console.warn('response.data.data.users:', response.data?.data?.users)
-          console.warn('response.data.data.total:', response.data?.data?.total)
-          console.warn('response.data.message:', response.data?.message)
           users.value = []
           total.value = 0
           
@@ -466,12 +492,6 @@ export default {
           }
         }
       } catch (error) {
-        console.error('=== 加载用户列表失败 ===')
-        console.error('错误对象:', error)
-        console.error('错误消息:', error.message)
-        console.error('错误响应:', error.response)
-        console.error('错误响应数据:', error.response?.data)
-        console.error('错误响应状态:', error.response?.status)
         ElMessage.error(`加载用户列表失败: ${error.response?.data?.message || error.message}`)
         users.value = []
         total.value = 0
@@ -508,23 +528,18 @@ export default {
 
     const viewUserDetails = async (userId) => {
       try {
-        console.log('正在获取用户详情:', userId)
         const response = await adminAPI.getUserDetails(userId)
-        console.log('用户详情API响应:', response)
         
         if (response && response.data && response.data.success) {
           selectedUser.value = response.data.data
           showUserDialog.value = true
-          console.log('用户详情已设置:', selectedUser.value)
         } else if (response && response.success) {
           selectedUser.value = response.data
           showUserDialog.value = true
-          console.log('用户详情已设置(直接结构):', selectedUser.value)
         } else {
           ElMessage.error('获取用户详情失败: ' + (response?.data?.message || response?.message || '未知错误'))
         }
       } catch (error) {
-        console.error('获取用户详情失败:', error)
         ElMessage.error('获取用户详情失败: ' + (error.response?.data?.message || error.message))
       }
     }
@@ -556,7 +571,6 @@ export default {
             is_verified: userForm.is_verified,
             is_admin: userForm.is_admin
           }
-          console.log('发送更新用户数据:', userData)
           await api.updateUser(editingUser.value.id, userData)
           ElMessage.success('用户更新成功')
         } else {
@@ -569,7 +583,6 @@ export default {
             is_admin: false,
             is_verified: false
           }
-          console.log('发送创建用户数据:', userData)
           await api.createUser(userData)
           ElMessage.success('用户创建成功')
         }
@@ -822,15 +835,7 @@ export default {
     }
 
     onMounted(() => {
-      console.log('Users.vue 组件已挂载，开始加载数据...')
-      console.log('当前token:', localStorage.getItem('token'))
-      console.log('API对象:', api)
-      
-      // 延迟加载，确保组件完全挂载
-      setTimeout(() => {
-        console.log('开始加载用户数据...')
-        loadUsers()
-      }, 100)
+      loadUsers()
     })
 
     return {
@@ -1110,13 +1115,31 @@ export default {
   text-align: right;
 }
 
-.user-subscriptions {
+.user-stats {
+  margin: 20px 0;
+  padding: 20px;
+  background: #f8f9fa;
+  border-radius: 8px;
+}
+
+.user-stats h4 {
+  margin-bottom: 15px;
+  color: #606266;
+}
+
+.user-subscriptions,
+.user-orders,
+.user-activities {
   margin-top: 20px;
 }
 
-.user-subscriptions h4 {
+.user-subscriptions h4,
+.user-orders h4,
+.user-activities h4 {
   margin-bottom: 15px;
   color: #606266;
+  border-bottom: 1px solid #ebeef5;
+  padding-bottom: 8px;
 }
 
 :deep(.el-table .el-table__row:hover) {
@@ -1129,14 +1152,22 @@ export default {
 
 .action-buttons {
   display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.button-row {
+  display: flex;
+  gap: 6px;
+  justify-content: center;
 }
 
 .action-buttons .el-button {
   margin: 0;
-  padding: 4px 8px;
+  padding: 6px 12px;
   font-size: 12px;
+  min-width: 60px;
+  flex: 1;
 }
 
 .statistics-content {

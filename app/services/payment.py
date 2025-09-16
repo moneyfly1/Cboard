@@ -367,7 +367,7 @@ class PaymentService:
             # 初始化支付宝客户端
             alipay = AliPay(
                 appid=config['app_id'],
-                app_notify_url=config.get('notify_url', 'http://localhost:8000/api/v1/payment/alipay/notify'),
+                app_notify_url=config.get('notify_url', 'https://yourdomain.com/api/v1/payment/alipay/notify'),
                 app_private_key_string=config['merchant_private_key'],
                 alipay_public_key_string=config['alipay_public_key'],
                 sign_type='RSA2',
@@ -379,8 +379,8 @@ class PaymentService:
                 out_trade_no=transaction_id,
                 total_amount=str(request.amount),
                 subject=f"XBoard套餐购买-{request.order_no}",
-                return_url=config.get('return_url', 'http://localhost:3000/payment/success'),
-                notify_url=config.get('notify_url', 'http://localhost:8000/api/v1/payment/alipay/notify')
+                return_url=config.get('return_url', 'https://yourdomain.com/payment/success'),
+                notify_url=config.get('notify_url', 'https://yourdomain.com/api/v1/payment/alipay/notify')
             )
             
             # 使用配置中的网关URL
@@ -505,7 +505,34 @@ class PaymentService:
 
     def _get_paypal_token(self, config: PayPalConfig) -> str:
         """获取PayPal访问令牌"""
-        return "paypal_token_placeholder"
+        try:
+            # 这里应该实现真实的PayPal OAuth2认证流程
+            # 返回真实的访问令牌
+            import requests
+            
+            auth_url = "https://api-m.sandbox.paypal.com/v1/oauth2/token" if config.sandbox else "https://api-m.paypal.com/v1/oauth2/token"
+            
+            auth_data = {
+                "grant_type": "client_credentials"
+            }
+            
+            auth_response = requests.post(
+                auth_url,
+                data=auth_data,
+                auth=(config.client_id, config.client_secret),
+                headers={"Accept": "application/json", "Accept-Language": "en_US"}
+            )
+            
+            if auth_response.status_code == 200:
+                token_data = auth_response.json()
+                return token_data.get("access_token", "")
+            else:
+                raise Exception(f"PayPal认证失败: {auth_response.text}")
+                
+        except Exception as e:
+            # 如果认证失败，记录错误并返回空字符串
+            print(f"PayPal token获取失败: {str(e)}")
+            return ""
 
     def _dict_to_xml(self, data: Dict[str, Any]) -> str:
         """字典转XML"""

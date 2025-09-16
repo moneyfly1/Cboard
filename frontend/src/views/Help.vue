@@ -137,7 +137,7 @@
             <i class="el-icon-message"></i>
             <div class="contact-details">
               <h4>邮箱验证</h4>
-              <p>support@example.com</p>
+              <p>support@yourdomain.com</p>
             </div>
           </div>
           
@@ -145,7 +145,7 @@
             <i class="el-icon-chat-dot-round"></i>
             <div class="contact-details">
               <h4>QQ群</h4>
-              <p>123456789</p>
+              <p>请通过邮箱联系我们</p>
             </div>
           </div>
           

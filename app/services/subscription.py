@@ -703,29 +703,87 @@ rules:
     def send_subscription_email(self, user_id: int) -> bool:
         """发送订阅邮件给用户"""
         try:
-            # 获取用户信息
+            # 获取用户信息，包含所有相关数据
             user = self.db.query(User).filter(User.id == user_id).first()
             if not user:
                 return False
             
-            # 获取用户的订阅信息
-            subscription = self.get_by_user_id(user_id)
+            # 获取用户的订阅信息，包含套餐信息
+            subscription = self.db.query(Subscription).filter(
+                Subscription.user_id == user_id
+            ).first()
             if not subscription:
                 return False
+            
+            # 获取套餐信息
+            package = subscription.package
+            
+            # 获取用户当前活跃设备数量
+            from app.models.subscription import Device
+            active_devices = self.db.query(Device).filter(
+                Device.subscription_id == subscription.id,
+                Device.is_active == True
+            ).count()
             
             # 导入邮件服务
             from app.services.email import EmailService
             email_service = EmailService(self.db)
             
-            # 准备订阅数据
+            # 获取基础URL
+            from app.core.config import settings
+            base_url = settings.BASE_URL.rstrip('/')
+            
+            # 计算剩余天数
+            remaining_days = 0
+            if subscription.expire_time:
+                from datetime import datetime
+                now = datetime.now()
+                if subscription.expire_time.tzinfo is None:
+                    # 如果expire_time没有时区信息，假设为UTC
+                    from datetime import timezone
+                    expire_time = subscription.expire_time.replace(tzinfo=timezone.utc)
+                else:
+                    expire_time = subscription.expire_time
+                
+                if expire_time > now:
+                    remaining_days = (expire_time - now).days
+                else:
+                    remaining_days = 0
+            
+            # 准备订阅数据 - 从数据库动态获取
             subscription_data = {
+                # 用户基本信息
                 "username": user.username,
                 "user_email": user.email,
+                "user_id": user.id,
+                "is_verified": user.is_verified,
+                "created_at": user.created_at.strftime('%Y-%m-%d %H:%M:%S') if user.created_at else "未知",
+                "last_login": user.last_login.strftime('%Y-%m-%d %H:%M:%S') if user.last_login else "从未登录",
+                
+                # 订阅信息
+                "subscription_id": subscription.id,
                 "subscription_url": subscription.subscription_url,
-                "v2ray_url": f"http://localhost:8000/api/v1/subscriptions/ssr/{subscription.subscription_url}",
-                "clash_url": f"http://localhost:8000/api/v1/subscriptions/clash/{subscription.subscription_url}",
+                "v2ray_url": f"{base_url}/api/v1/subscriptions/ssr/{subscription.subscription_url}",
+                "clash_url": f"{base_url}/api/v1/subscriptions/clash/{subscription.subscription_url}",
                 "device_limit": subscription.device_limit,
-                "expire_time": subscription.expire_time.strftime('%Y-%m-%d %H:%M:%S') if subscription.expire_time else "永久"
+                "current_devices": active_devices,  # 实际活跃设备数
+                "max_devices": subscription.device_limit,
+                "is_active": subscription.is_active,
+                "status": subscription.status,
+                "expire_time": subscription.expire_time.strftime('%Y-%m-%d %H:%M:%S') if subscription.expire_time else "永久",
+                "remaining_days": remaining_days,
+                "subscription_created": subscription.created_at.strftime('%Y-%m-%d %H:%M:%S') if subscription.created_at else "未知",
+                
+                # 套餐信息
+                "package_name": package.name if package else "未知套餐",
+                "package_description": package.description if package else "无描述",
+                "package_price": float(package.price) if package else 0.0,
+                "package_duration": package.duration_days if package else 0,
+                "package_bandwidth_limit": package.bandwidth_limit if package else None,
+                
+                # 系统信息
+                "base_url": base_url,
+                "site_name": settings_manager.get_site_name(self.db) if hasattr(settings_manager, 'get_site_name') else "网络服务"
             }
             
             # 发送订阅邮件
@@ -733,4 +791,6 @@ rules:
             
         except Exception as e:
             print(f"发送订阅邮件失败: {e}")
+            import traceback
+            traceback.print_exc()
             return False 

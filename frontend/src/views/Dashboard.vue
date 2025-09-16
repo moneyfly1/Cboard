@@ -440,42 +440,42 @@ const platforms = ref([
         version: 'Latest',
         icon: '/images/clash-windows.png',
         downloadKey: 'clash_windows_url',
-        tutorialUrl: 'https://doc.example.com/clash-windows'
+        tutorialUrl: '/help#clash-windows'
       },
       {
         name: 'V2rayN',
         version: 'Latest',
         icon: '/images/v2rayn.png',
         downloadKey: 'v2rayn_url',
-        tutorialUrl: 'https://doc.example.com/v2rayn'
+        tutorialUrl: '/help#v2rayn'
       },
       {
         name: 'Mihomo Part',
         version: 'Latest',
         icon: '/images/mihomo.png',
         downloadKey: 'mihomo_windows_url',
-        tutorialUrl: 'https://doc.example.com/mihomo-windows'
+        tutorialUrl: '/help#mihomo-windows'
       },
       {
         name: 'Sparkle',
         version: 'Latest',
         icon: '/images/sparkle.png',
         downloadKey: 'sparkle_windows_url',
-        tutorialUrl: 'https://doc.example.com/sparkle-windows'
+        tutorialUrl: '/help#sparkle-windows'
       },
       {
         name: 'Hiddify',
         version: 'Latest',
         icon: '/images/hiddify.png',
         downloadKey: 'hiddify_windows_url',
-        tutorialUrl: 'https://doc.example.com/hiddify-windows'
+        tutorialUrl: '/help#hiddify-windows'
       },
       {
         name: 'Flash',
         version: 'Latest',
         icon: '/images/flash.png',
         downloadKey: 'flash_windows_url',
-        tutorialUrl: 'https://doc.example.com/flash-windows'
+        tutorialUrl: '/help#flash-windows'
       }
     ]
   },
@@ -488,21 +488,21 @@ const platforms = ref([
         version: 'Latest',
         icon: '/images/clash-meta.png',
         downloadKey: 'clash_android_url',
-        tutorialUrl: 'https://doc.example.com/clash-meta'
+        tutorialUrl: '/help#clash-meta'
       },
       {
         name: 'V2rayNG',
         version: 'Latest',
         icon: '/images/v2rayng.png',
         downloadKey: 'v2rayng_url',
-        tutorialUrl: 'https://doc.example.com/v2rayng'
+        tutorialUrl: '/help#v2rayng'
       },
       {
         name: 'Hiddify',
         version: 'Latest',
         icon: '/images/hiddify.png',
         downloadKey: 'hiddify_android_url',
-        tutorialUrl: 'https://doc.example.com/hiddify-android'
+        tutorialUrl: '/help#hiddify-android'
       }
     ]
   },
@@ -515,21 +515,21 @@ const platforms = ref([
         version: 'Latest',
         icon: '/images/flash.png',
         downloadKey: 'flash_macos_url',
-        tutorialUrl: 'https://doc.example.com/flash-macos'
+        tutorialUrl: '/help#flash-macos'
       },
       {
         name: 'Mihomo Part',
         version: 'Latest',
         icon: '/images/mihomo.png',
         downloadKey: 'mihomo_macos_url',
-        tutorialUrl: 'https://doc.example.com/mihomo-macos'
+        tutorialUrl: '/help#mihomo-macos'
       },
       {
         name: 'Sparkle',
         version: 'Latest',
         icon: '/images/sparkle.png',
         downloadKey: 'sparkle_macos_url',
-        tutorialUrl: 'https://doc.example.com/sparkle-macos'
+        tutorialUrl: '/help#sparkle-macos'
       }
     ]
   },
@@ -542,7 +542,7 @@ const platforms = ref([
         version: 'Latest',
         icon: '/images/shadowrocket.png',
         downloadKey: 'shadowrocket_url',
-        tutorialUrl: 'https://doc.example.com/shadowrocket'
+        tutorialUrl: '/help#shadowrocket'
       }
     ]
   }

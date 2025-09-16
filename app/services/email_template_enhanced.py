@@ -181,6 +181,8 @@ class EmailTemplateEnhanced:
     @staticmethod
     def get_subscription_template(username: str, subscription_data: Dict[str, Any]) -> str:
         """订阅地址通知邮件模板"""
+        import urllib.parse
+        
         title = "服务配置信息"
         
         # 使用中性词汇替换敏感词
@@ -189,10 +191,34 @@ class EmailTemplateEnhanced:
         subscription_url = subscription_data.get('subscription_url', '')
         expire_time = subscription_data.get('expire_time', '永久')
         device_limit = subscription_data.get('device_limit', 3)
+        current_devices = subscription_data.get('current_devices', 0)
+        max_devices = subscription_data.get('max_devices', device_limit)
+        package_name = subscription_data.get('package_name', '未知套餐')
+        user_email = subscription_data.get('user_email', '')
+        
+        # 从数据库获取的详细信息
+        user_id = subscription_data.get('user_id', '')
+        is_verified = subscription_data.get('is_verified', False)
+        created_at = subscription_data.get('created_at', '未知')
+        last_login = subscription_data.get('last_login', '从未登录')
+        subscription_id = subscription_data.get('subscription_id', '')
+        is_active = subscription_data.get('is_active', False)
+        status = subscription_data.get('status', '未知')
+        remaining_days = subscription_data.get('remaining_days', 0)
+        subscription_created = subscription_data.get('subscription_created', '未知')
+        package_description = subscription_data.get('package_description', '无描述')
+        package_price = subscription_data.get('package_price', 0.0)
+        package_duration = subscription_data.get('package_duration', 0)
+        package_bandwidth_limit = subscription_data.get('package_bandwidth_limit', None)
+        site_name = subscription_data.get('site_name', '网络服务')
+        base_url = subscription_data.get('base_url', 'https://yourdomain.com')
+        
+        # 正确编码URL用于二维码
+        qr_url = urllib.parse.quote(v2ray_url, safe='')
         
         content = f'''
             <h2>您的服务配置信息</h2>
-            <p>亲爱的用户，</p>
+            <p>亲爱的 {username}，</p>
             <p>您的服务配置已生成完成，请查收以下信息：</p>
             
             <table class="info-table">
@@ -201,16 +227,72 @@ class EmailTemplateEnhanced:
                     <td>{username}</td>
                 </tr>
                 <tr>
+                    <th>用户ID</th>
+                    <td>{user_id}</td>
+                </tr>
+                <tr>
+                    <th>用户邮箱</th>
+                    <td>{user_email}</td>
+                </tr>
+                <tr>
+                    <th>邮箱验证状态</th>
+                    <td style="color: {'#27ae60' if is_verified else '#e74c3c'};">{'已验证' if is_verified else '未验证'}</td>
+                </tr>
+                <tr>
+                    <th>注册时间</th>
+                    <td>{created_at}</td>
+                </tr>
+                <tr>
+                    <th>最后登录</th>
+                    <td>{last_login}</td>
+                </tr>
+                <tr>
+                    <th>订阅ID</th>
+                    <td>{subscription_id}</td>
+                </tr>
+                <tr>
+                    <th>套餐名称</th>
+                    <td>{package_name}</td>
+                </tr>
+                <tr>
+                    <th>套餐描述</th>
+                    <td>{package_description}</td>
+                </tr>
+                <tr>
+                    <th>套餐价格</th>
+                    <td>¥{package_price}</td>
+                </tr>
+                <tr>
+                    <th>套餐时长</th>
+                    <td>{package_duration} 天</td>
+                </tr>
+                <tr>
+                    <th>流量限制</th>
+                    <td>{package_bandwidth_limit if package_bandwidth_limit else '无限制'} GB</td>
+                </tr>
+                <tr>
                     <th>配置标识</th>
                     <td style="font-family: monospace;">{subscription_url}</td>
                 </tr>
                 <tr>
-                    <th>设备限制</th>
-                    <td>{device_limit} 台设备</td>
+                    <th>设备使用情况</th>
+                    <td style="color: {'#e74c3c' if current_devices >= max_devices else '#27ae60'};">{current_devices}/{max_devices} 台设备</td>
+                </tr>
+                <tr>
+                    <th>订阅状态</th>
+                    <td style="color: {'#27ae60' if is_active else '#e74c3c'};">{'活跃' if is_active else '非活跃'}</td>
                 </tr>
                 <tr>
                     <th>服务期限</th>
                     <td style="color: #e74c3c; font-weight: bold;">{expire_time}</td>
+                </tr>
+                <tr>
+                    <th>剩余天数</th>
+                    <td style="color: {'#e74c3c' if remaining_days <= 7 else '#27ae60'}; font-weight: bold;">{remaining_days} 天</td>
+                </tr>
+                <tr>
+                    <th>订阅创建时间</th>
+                    <td>{subscription_created}</td>
                 </tr>
             </table>
             
@@ -227,7 +309,7 @@ class EmailTemplateEnhanced:
                 <div style="margin-top: 20px; text-align: center;">
                     <p><strong>📱 扫码快速配置</strong></p>
                     <p style="color: #666; font-size: 14px; margin-bottom: 10px;">使用相机扫描下方二维码即可快速添加配置</p>
-                    <img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data={v2ray_url}" style="border: 1px solid #ddd; border-radius: 8px; max-width: 200px;" alt="配置二维码">
+                    <img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data={qr_url}" style="border: 1px solid #ddd; border-radius: 8px; max-width: 200px;" alt="配置二维码">
                 </div>
             </div>
             
@@ -264,7 +346,7 @@ class EmailTemplateEnhanced:
             </div>
             
             <div style="text-align: center; margin: 30px 0;">
-                <a href="http://localhost:8000/" class="btn">查看我的服务</a>
+                <a href="{base_url}/" class="btn">查看我的服务</a>
             </div>
             
             <p style="text-align: center; color: #666; font-size: 14px;">如有任何问题，请随时联系我们的客服团队</p>
@@ -518,7 +600,7 @@ class EmailTemplateEnhanced:
         return EmailTemplateEnhanced.get_base_template(title, content, '保护您的账户安全')
 
     @staticmethod
-    def get_expiration_template(username: str, expire_date: str, is_expired: bool = False) -> str:
+    def get_expiration_template(username: str, expire_date: str, is_expired: bool = False, base_url: str = "https://yourdomain.com") -> str:
         """到期提醒邮件模板"""
         title = "订阅已到期" if is_expired else "订阅即将到期"
         
@@ -566,7 +648,7 @@ class EmailTemplateEnhanced:
             </table>
             
             <div style="text-align: center; margin: 30px 0;">
-                <a href="http://localhost:8000/" class="btn">立即续费</a>
+                <a href="{base_url}/" class="btn">立即续费</a>
             </div>
             
             <p>如有任何问题，请随时联系我们的客服团队。</p>
@@ -576,7 +658,7 @@ class EmailTemplateEnhanced:
 
     @staticmethod
     def get_subscription_reset_template(username: str, new_subscription_url: str, 
-                                      reset_time: str, reset_reason: str) -> str:
+                                      reset_time: str, reset_reason: str, base_url: str = "https://yourdomain.com") -> str:
         """订阅重置通知邮件模板"""
         title = "订阅重置通知"
         content = f'''
@@ -611,7 +693,7 @@ class EmailTemplateEnhanced:
         return EmailTemplateEnhanced.get_base_template(title, content, '请及时更新您的客户端配置')
     
     @staticmethod
-    def get_payment_success_template(username: str, order_id: str, amount: str, package_name: str) -> str:
+    def get_payment_success_template(username: str, order_id: str, amount: str, package_name: str, base_url: str = "https://yourdomain.com") -> str:
         """支付成功通知邮件模板"""
         title = "支付成功通知"
         content = f'''
@@ -651,7 +733,7 @@ class EmailTemplateEnhanced:
             </div>
             
             <div style="text-align: center; margin: 30px 0;">
-                <a href="http://localhost:5173/" class="btn">查看订阅详情</a>
+                <a href="{base_url}/dashboard" class="btn">查看订阅详情</a>
             </div>
             
             <p>如有任何问题，请随时联系我们的客服团队。</p>
@@ -660,7 +742,7 @@ class EmailTemplateEnhanced:
         return EmailTemplateEnhanced.get_base_template(title, content, '感谢您的信任')
     
     @staticmethod
-    def get_welcome_template(username: str, login_url: str) -> str:
+    def get_welcome_template(username: str, login_url: str, base_url: str = "https://yourdomain.com") -> str:
         """新用户欢迎邮件模板"""
         title = "欢迎加入我们！"
         content = f'''
@@ -702,7 +784,7 @@ class EmailTemplateEnhanced:
         return EmailTemplateEnhanced.get_base_template(title, content, '期待为您提供优质服务')
     
     @staticmethod
-    def get_subscription_created_template(username: str, subscription_url: str, expire_time: str) -> str:
+    def get_subscription_created_template(username: str, subscription_url: str, expire_time: str, base_url: str = "https://yourdomain.com") -> str:
         """订阅创建成功邮件模板"""
         title = "订阅创建成功"
         content = f'''
@@ -727,13 +809,13 @@ class EmailTemplateEnhanced:
             <div class="success-box">
                 <p><strong>🔗 配置地址：</strong></p>
                 <ul>
-                    <li><strong>V2Ray/SSR:</strong> <code>http://localhost:8000/api/v1/subscriptions/ssr/{subscription_url}</code></li>
-                    <li><strong>Clash:</strong> <code>http://localhost:8000/api/v1/subscriptions/clash/{subscription_url}</code></li>
+                    <li><strong>V2Ray/SSR:</strong> <code>{base_url}/api/v1/subscriptions/ssr/{subscription_url}</code></li>
+                    <li><strong>Clash:</strong> <code>{base_url}/api/v1/subscriptions/clash/{subscription_url}</code></li>
                 </ul>
             </div>
             
             <div style="text-align: center; margin: 30px 0;">
-                <a href="http://localhost:5173/" class="btn">查看订阅详情</a>
+                <a href="{base_url}/dashboard" class="btn">查看订阅详情</a>
             </div>
             
             <p>如有任何问题，请随时联系我们的客服团队。</p>

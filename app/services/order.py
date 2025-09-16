@@ -198,14 +198,25 @@ class OrderService:
 
     def generate_payment_url(self, order: Order) -> str:
         """生成支付URL"""
-        # 这里应该根据支付方式生成不同的支付URL
-        # 示例：支付宝支付
+        # 根据支付方式生成不同的支付URL
         if order.payment_method_name == "alipay":
+            # 支付宝支付URL应该通过支付宝SDK生成
             return f"https://openapi.alipay.com/gateway.do?order_no={order.order_no}&amount={order.amount}"
         elif order.payment_method_name == "wechat":
+            # 微信支付URL应该通过微信支付SDK生成
             return f"weixin://wxpay/bizpayurl?order_no={order.order_no}&amount={order.amount}"
+        elif order.payment_method_name == "paypal":
+            # PayPal支付URL应该通过PayPal SDK生成
+            return f"https://www.paypal.com/paypalme/yourbusiness/{order.amount}"
+        elif order.payment_method_name == "stripe":
+            # Stripe支付URL应该通过Stripe SDK生成
+            return f"https://checkout.stripe.com/pay/{order.order_no}"
+        elif order.payment_method_name == "bank_transfer":
+            # 银行转账显示转账信息
+            return f"/payment/bank-transfer/{order.order_no}"
         else:
-            return f"https://example.com/payment?order_no={order.order_no}&amount={order.amount}"
+            # 未知支付方式，返回订单详情页面
+            return f"/orders/{order.order_no}"
 
     def count(self) -> int:
         """统计订单数量"""

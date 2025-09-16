@@ -116,7 +116,7 @@
       <div class="logs-stats">
         <el-row :gutter="20">
           <el-col :span="6">
-            <el-card class="stat-card">
+            <el-card class="stat-card clickable" @click="filterByLevel('')">
               <div class="stat-content">
                 <div class="stat-number">{{ logsStats.total || 0 }}</div>
                 <div class="stat-label">总日志数</div>
@@ -124,7 +124,7 @@
             </el-card>
           </el-col>
           <el-col :span="6">
-            <el-card class="stat-card">
+            <el-card class="stat-card clickable" @click="filterByLevel('error')">
               <div class="stat-content">
                 <div class="stat-number error">{{ logsStats.error || 0 }}</div>
                 <div class="stat-label">错误日志</div>
@@ -132,7 +132,7 @@
             </el-card>
           </el-col>
           <el-col :span="6">
-            <el-card class="stat-card">
+            <el-card class="stat-card clickable" @click="filterByLevel('warning')">
               <div class="stat-content">
                 <div class="stat-number warning">{{ logsStats.warning || 0 }}</div>
                 <div class="stat-label">警告日志</div>
@@ -140,7 +140,7 @@
             </el-card>
           </el-col>
           <el-col :span="6">
-            <el-card class="stat-card">
+            <el-card class="stat-card clickable" @click="filterByLevel('info')">
               <div class="stat-content">
                 <div class="stat-number info">{{ logsStats.info || 0 }}</div>
                 <div class="stat-label">信息日志</div>
@@ -382,6 +382,13 @@ export default {
       loadLogs()
     }
 
+    // 按级别筛选
+    const filterByLevel = (level) => {
+      filterForm.log_level = level
+      pagination.page = 1
+      loadLogs()
+    }
+
     // 导出日志
     const exportLogs = async () => {
       try {
@@ -539,6 +546,7 @@ ${selectedLog.value.stack_trace ? `堆栈跟踪: ${selectedLog.value.stack_trace
       selectedLog,
       applyFilter,
       resetFilter,
+      filterByLevel,
       exportLogs,
       clearLogs,
       showLogDetails,
@@ -596,6 +604,16 @@ ${selectedLog.value.stack_trace ? `堆栈跟踪: ${selectedLog.value.stack_trace
 
 .stat-card {
   text-align: center;
+}
+
+.stat-card.clickable {
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.stat-card.clickable:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
 
 .stat-content {

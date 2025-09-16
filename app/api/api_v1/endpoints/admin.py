@@ -1734,7 +1734,7 @@ def get_clash_config(
         if result:
             config_content = result.value
         else:
-            config_content = "# Clash配置文件\n# 请在此处配置Clash代理规则\n\n# 代理服务器配置\nproxy:\n  - name: 'default'\n    type: http\n    server: 127.0.0.1\n    port: 7890\n\n# 规则配置\nrules:\n  - DOMAIN-SUFFIX,google.com,default\n  - DOMAIN-SUFFIX,facebook.com,default\n  - DOMAIN-SUFFIX,twitter.com,default\n  - GEOIP,CN,DIRECT\n  - MATCH,default"
+            config_content = "# Clash配置文件\n# 请在此处配置Clash代理规则\n\n# 代理服务器配置\n# 注意：请将下面的示例服务器替换为您的实际代理服务器\nproxy:\n  - name: 'example-server'\n    type: ss\n    server: your-server-ip\n    port: 443\n    cipher: aes-256-gcm\n    password: your-password\n\n# 规则配置\nrules:\n  - DOMAIN-SUFFIX,google.com,example-server\n  - DOMAIN-SUFFIX,facebook.com,example-server\n  - DOMAIN-SUFFIX,twitter.com,example-server\n  - GEOIP,CN,DIRECT\n  - MATCH,example-server"
         
         return ResponseBase(data=config_content)
     except Exception as e:
@@ -1880,7 +1880,7 @@ def get_v2ray_config(
         if result:
             config_content = result.value
         else:
-            config_content = "# V2Ray配置文件\n# 请在此处配置V2Ray代理规则\n\n{\n  \"log\": {\n    \"loglevel\": \"warning\"\n  },\n  \"inbounds\": [\n    {\n      \"port\": 1080,\n      \"protocol\": \"socks\",\n      \"settings\": {\n        \"auth\": \"noauth\",\n        \"udp\": true\n      }\n    }\n  ],\n  \"outbounds\": [\n    {\n      \"protocol\": \"vmess\",\n      \"settings\": {\n        \"vnext\": [\n          {\n            \"address\": \"127.0.0.1\",\n            \"port\": 10086,\n            \"users\": [\n              {\n                \"id\": \"uuid-here\",\n                \"alterId\": 64\n              }\n            ]\n          }\n        ]\n      }\n    }\n  ]\n}"
+            config_content = "# V2Ray配置文件\n# 请在此处配置V2Ray代理规则\n\n{\n  \"log\": {\n    \"loglevel\": \"warning\"\n  },\n  \"inbounds\": [\n    {\n      \"port\": 1080,\n      \"protocol\": \"socks\",\n      \"settings\": {\n        \"auth\": \"noauth\",\n        \"udp\": true\n      }\n    }\n  ],\n  \"outbounds\": [\n    {\n      \"protocol\": \"vmess\",\n      \"settings\": {\n        \"vnext\": [\n          {\n            \"address\": \"your-server-ip\",\n            \"port\": 443,\n            \"users\": [\n              {\n                \"id\": \"your-uuid-here\",\n                \"alterId\": 0,\n                \"security\": \"auto\"\n              }\n            ]\n          }\n        ]\n      },\n      \"streamSettings\": {\n        \"network\": \"ws\",\n        \"wsSettings\": {\n          \"path\": \"/your-path\"\n        },\n        \"security\": \"tls\"\n      }\n    }\n  ]\n}"
         
         return ResponseBase(data=config_content)
     except Exception as e:
@@ -2014,27 +2014,206 @@ def get_v2ray_config_invalid(
 
 @router.get("/export-config", response_model=ResponseBase)
 def export_config(
+    db: Session = Depends(get_db),
     current_admin = Depends(get_current_admin_user)
 ) -> Any:
     """导出系统配置"""
     try:
-        # 这里应该收集所有系统配置并导出
-        # 暂时返回模拟数据
+        from app.services.settings import SettingsService
+        from app.services.payment_config import PaymentConfigService
+        from app.services.software_config import SoftwareConfigService
+        from app.models.config import SystemConfig
+        from app.models.payment_config import PaymentConfig
+        from app.models.software_config import SoftwareConfig
+        from datetime import datetime
+        import json
+        
+        # 收集系统配置
+        system_configs = db.query(SystemConfig).all()
+        system_config_data = {}
+        for config in system_configs:
+            system_config_data[config.key] = config.value
+        
+        # 收集支付配置
+        payment_configs = db.query(PaymentConfig).all()
+        payment_config_data = {}
+        for config in payment_configs:
+            payment_config_data[config.pay_type] = {
+                "app_id": config.app_id,
+                "merchant_private_key": config.merchant_private_key,
+                "alipay_public_key": config.alipay_public_key,
+                "notify_url": config.notify_url,
+                "return_url": config.return_url,
+                "debug": config.debug,
+                "status": config.status
+            }
+        
+        # 收集软件配置
+        software_configs = db.query(SoftwareConfig).all()
+        software_config_data = {}
+        for config in software_configs:
+            software_config_data[config.software_name] = {
+                "download_url": config.download_url,
+                "version": config.version,
+                "description": config.description,
+                "is_active": config.is_active
+            }
+        
+        # 收集邮件配置
+        email_config_data = {}
+        email_keys = ['smtp_host', 'smtp_port', 'email_username', 'email_password', 
+                     'sender_name', 'smtp_encryption', 'from_email']
+        for key in email_keys:
+            config = db.query(SystemConfig).filter(SystemConfig.key == key).first()
+            if config:
+                email_config_data[key] = config.value
+        
+        # 收集Clash和V2Ray配置
+        clash_config_data = {}
+        v2ray_config_data = {}
+        
+        # 读取配置文件
+        from pathlib import Path
+        config_dir = Path("uploads/config")
+        clash_config_path = config_dir / "clash.yaml"
+        v2ray_config_path = config_dir / "v2ray.json"
+        
+        if clash_config_path.exists():
+            clash_config_data["content"] = clash_config_path.read_text(encoding='utf-8')
+        
+        if v2ray_config_path.exists():
+            v2ray_config_data["content"] = v2ray_config_path.read_text(encoding='utf-8')
+        
+        # 构建完整的配置数据
         config_data = {
-            "system_config": {
-                "site_name": "XBoard Modern",
-                "site_description": "现代化的代理服务管理平台",
-                "maintenance_mode": False
+            "export_info": {
+                "export_time": datetime.now().isoformat(),
+                "exported_by": current_admin.username,
+                "version": "1.0.0"
             },
-            "email_config": {
-                "smtp_host": "smtp.qq.com",
-                "smtp_port": 587
-            },
-            "export_time": "2024-01-01T00:00:00Z"
+            "system_config": system_config_data,
+            "email_config": email_config_data,
+            "payment_config": payment_config_data,
+            "software_config": software_config_data,
+            "clash_config": clash_config_data,
+            "v2ray_config": v2ray_config_data
         }
+        
         return ResponseBase(data=config_data)
     except Exception as e:
         return ResponseBase(success=False, message=f"导出配置失败: {str(e)}")
+
+@router.post("/import-config", response_model=ResponseBase)
+def import_config(
+    config_data: dict,
+    db: Session = Depends(get_db),
+    current_admin = Depends(get_current_admin_user)
+) -> Any:
+    """导入系统配置"""
+    try:
+        from app.models.config import SystemConfig
+        from app.models.payment_config import PaymentConfig
+        from app.models.software_config import SoftwareConfig
+        from pathlib import Path
+        import json
+        
+        # 验证配置数据格式
+        if not isinstance(config_data, dict):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="配置数据格式错误"
+            )
+        
+        # 导入系统配置
+        if "system_config" in config_data:
+            system_config_data = config_data["system_config"]
+            for key, value in system_config_data.items():
+                # 检查配置是否已存在
+                existing_config = db.query(SystemConfig).filter(SystemConfig.key == key).first()
+                if existing_config:
+                    existing_config.value = str(value)
+                else:
+                    new_config = SystemConfig(key=key, value=str(value))
+                    db.add(new_config)
+        
+        # 导入邮件配置
+        if "email_config" in config_data:
+            email_config_data = config_data["email_config"]
+            for key, value in email_config_data.items():
+                existing_config = db.query(SystemConfig).filter(SystemConfig.key == key).first()
+                if existing_config:
+                    existing_config.value = str(value)
+                else:
+                    new_config = SystemConfig(key=key, value=str(value))
+                    db.add(new_config)
+        
+        # 导入支付配置
+        if "payment_config" in config_data:
+            payment_config_data = config_data["payment_config"]
+            for pay_type, config in payment_config_data.items():
+                existing_config = db.query(PaymentConfig).filter(PaymentConfig.pay_type == pay_type).first()
+                if existing_config:
+                    existing_config.app_id = config.get("app_id", "")
+                    existing_config.merchant_private_key = config.get("merchant_private_key", "")
+                    existing_config.alipay_public_key = config.get("alipay_public_key", "")
+                    existing_config.notify_url = config.get("notify_url", "")
+                    existing_config.return_url = config.get("return_url", "")
+                    existing_config.debug = config.get("debug", False)
+                    existing_config.status = config.get("status", 1)
+                else:
+                    new_config = PaymentConfig(
+                        pay_type=pay_type,
+                        app_id=config.get("app_id", ""),
+                        merchant_private_key=config.get("merchant_private_key", ""),
+                        alipay_public_key=config.get("alipay_public_key", ""),
+                        notify_url=config.get("notify_url", ""),
+                        return_url=config.get("return_url", ""),
+                        debug=config.get("debug", False),
+                        status=config.get("status", 1)
+                    )
+                    db.add(new_config)
+        
+        # 导入软件配置
+        if "software_config" in config_data:
+            software_config_data = config_data["software_config"]
+            for software_name, config in software_config_data.items():
+                existing_config = db.query(SoftwareConfig).filter(SoftwareConfig.software_name == software_name).first()
+                if existing_config:
+                    existing_config.download_url = config.get("download_url", "")
+                    existing_config.version = config.get("version", "")
+                    existing_config.description = config.get("description", "")
+                    existing_config.is_active = config.get("is_active", True)
+                else:
+                    new_config = SoftwareConfig(
+                        software_name=software_name,
+                        download_url=config.get("download_url", ""),
+                        version=config.get("version", ""),
+                        description=config.get("description", ""),
+                        is_active=config.get("is_active", True)
+                    )
+                    db.add(new_config)
+        
+        # 导入Clash配置
+        if "clash_config" in config_data and "content" in config_data["clash_config"]:
+            config_dir = Path("uploads/config")
+            config_dir.mkdir(parents=True, exist_ok=True)
+            clash_config_path = config_dir / "clash.yaml"
+            clash_config_path.write_text(config_data["clash_config"]["content"], encoding='utf-8')
+        
+        # 导入V2Ray配置
+        if "v2ray_config" in config_data and "content" in config_data["v2ray_config"]:
+            config_dir = Path("uploads/config")
+            config_dir.mkdir(parents=True, exist_ok=True)
+            v2ray_config_path = config_dir / "v2ray.json"
+            v2ray_config_path.write_text(config_data["v2ray_config"]["content"], encoding='utf-8')
+        
+        # 提交所有更改
+        db.commit()
+        
+        return ResponseBase(message="配置导入成功")
+    except Exception as e:
+        db.rollback()
+        return ResponseBase(success=False, message=f"导入配置失败: {str(e)}")
 
 @router.get("/settings", response_model=ResponseBase)
 def get_all_settings(
@@ -2459,7 +2638,7 @@ def get_subscriptions(
                     days_until_expire = 0
             
             # 生成订阅地址
-            base_url = "http://localhost:8000"
+            base_url = "https://yourdomain.com"
             v2ray_url = f"{base_url}/api/v1/subscriptions/ssr/{subscription.subscription_url}" if subscription.subscription_url else None
             clash_url = f"{base_url}/api/v1/subscriptions/clash/{subscription.subscription_url}" if subscription.subscription_url else None
             
@@ -2831,8 +3010,8 @@ def reset_user_all_subscriptions(
         """)
         
         # 构建完整的订阅URL
-        v2ray_url = f"http://localhost:8000/api/v1/subscriptions/v2ray/{v2ray_key}"
-        clash_url = f"http://localhost:8000/api/v1/subscriptions/clash/{clash_key}"
+        v2ray_url = f"https://yourdomain.com/api/v1/subscriptions/v2ray/{v2ray_key}"
+        clash_url = f"https://yourdomain.com/api/v1/subscriptions/clash/{clash_key}"
         
         db.execute(v2ray_insert_query, {
             "user_id": user_id,
@@ -3802,77 +3981,42 @@ def get_system_logs(
 ) -> Any:
     """获取系统日志"""
     try:
-        # 这里需要实现日志服务
-        # 暂时返回模拟数据
-        mock_logs = [
-            {
-                "id": 1,
-                "timestamp": "2024-01-15T10:30:00Z",
-                "level": "INFO",
-                "module": "用户管理",
-                "message": "用户 admin 登录成功",
-                "username": "admin",
-                "ip_address": "127.0.0.1",
-                "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-                "details": "用户从本地登录系统"
-            },
-            {
-                "id": 2,
-                "timestamp": "2024-01-15T10:25:00Z",
-                "level": "WARNING",
-                "module": "系统配置",
-                "message": "配置文件更新失败",
-                "username": "admin",
-                "ip_address": "127.0.0.1",
-                "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-                "details": "尝试更新系统配置时发生错误"
-            },
-            {
-                "id": 3,
-                "timestamp": "2024-01-15T10:20:00Z",
-                "level": "ERROR",
-                "module": "邮件服务",
-                "message": "邮件发送失败",
-                "username": "system",
-                "ip_address": "127.0.0.1",
-                "user_agent": "System/1.0",
-                "details": "SMTP连接超时，无法发送邮件"
-            },
-            {
-                "id": 4,
-                "timestamp": "2024-01-15T10:15:00Z",
-                "level": "INFO",
-                "module": "订单管理",
-                "message": "新订单创建成功",
-                "username": "user123",
-                "ip_address": "192.168.1.100",
-                "user_agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 14_0 like Mac OS X)",
-                "details": "用户创建了新的订阅订单"
-            },
-            {
-                "id": 5,
-                "timestamp": "2024-01-15T10:10:00Z",
-                "level": "INFO",
-                "module": "支付系统",
-                "message": "支付处理成功",
-                "username": "user123",
-                "ip_address": "192.168.1.100",
-                "user_agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 14_0 like Mac OS X)",
-                "details": "支付宝支付完成，订单金额：¥99.00"
-            }
-        ]
+        from app.services.logging import log_manager
+        from datetime import datetime
         
-        # 简单的过滤逻辑
-        filtered_logs = mock_logs
-        if log_level:
-            filtered_logs = [log for log in filtered_logs if log["level"] == log_level.upper()]
-        if module:
-            filtered_logs = [log for log in filtered_logs if module.lower() in log["module"].lower()]
-        if username:
-            filtered_logs = [log for log in filtered_logs if username.lower() in log["username"].lower()]
+        # 解析时间参数
+        start_dt = None
+        end_dt = None
+        
+        if start_time:
+            try:
+                start_dt = datetime.fromisoformat(start_time.replace('Z', '+00:00'))
+            except ValueError:
+                pass
+        
+        if end_time:
+            try:
+                end_dt = datetime.fromisoformat(end_time.replace('Z', '+00:00'))
+            except ValueError:
+                pass
+        
+        # 使用日志管理器搜索日志，与统计使用相同的数据源
         if keyword:
-            filtered_logs = [log for log in filtered_logs if keyword.lower() in log["message"].lower()]
+            logs = log_manager.search_logs(keyword, log_type or "app", start_dt, end_dt)
+        else:
+            # 如果没有关键词，获取所有日志（与统计保持一致）
+            logs = log_manager.get_recent_logs(limit=10000)
         
+        # 应用过滤条件
+        filtered_logs = logs
+        if log_level:
+            filtered_logs = [log for log in filtered_logs if log.get("level", "").upper() == log_level.upper()]
+        if module:
+            filtered_logs = [log for log in filtered_logs if module.lower() in log.get("module", "").lower()]
+        if username:
+            filtered_logs = [log for log in filtered_logs if username.lower() in log.get("username", "").lower()]
+        
+        # 分页
         total = len(filtered_logs)
         start_index = (page - 1) * size
         end_index = start_index + size
@@ -4129,14 +4273,10 @@ def get_logs_stats(
 ) -> Any:
     """获取日志统计信息"""
     try:
-        # 这里需要实现日志统计服务
-        # 暂时返回模拟数据
-        stats = {
-            "total": 1250,
-            "error": 45,
-            "warning": 128,
-            "info": 1077
-        }
+        from app.services.logging import log_manager
+        
+        # 使用日志管理器获取真实统计
+        stats = log_manager.get_log_stats()
         
         return ResponseBase(data=stats)
     except Exception as e:
@@ -4166,16 +4306,21 @@ def export_logs(
         # 写入CSV头部
         writer.writerow(['时间', '级别', '模块', '用户', 'IP地址', '日志内容', '详细信息'])
         
-        # 写入模拟数据
-        writer.writerow([
-            '2024-01-01 10:00:00',
-            'INFO',
-            '用户管理',
-            'admin',
-            '192.168.1.1',
-            '用户登录成功',
-            '用户admin成功登录系统'
-        ])
+        # 获取真实日志数据
+        from app.services.logging import log_manager
+        logs = log_manager.get_recent_logs(limit=10000)
+        
+        # 写入真实日志数据
+        for log in logs:
+            writer.writerow([
+                log.get('timestamp', ''),
+                log.get('level', ''),
+                log.get('module', ''),
+                log.get('username', ''),
+                log.get('ip_address', ''),
+                log.get('message', ''),
+                log.get('details', '')
+            ])
         
         csv_content = output.getvalue()
         output.close()
@@ -4188,11 +4333,20 @@ def export_logs(
 def clear_logs(
     current_admin = Depends(get_current_admin_user)
 ) -> Any:
-    """清理日志"""
+    """清理所有日志"""
     try:
-        # 这里需要实现日志清理服务
-        # 暂时返回成功
-        return ResponseBase(message="日志清理成功")
+        from app.services.logging import log_manager
+        
+        # 清理所有日志文件
+        result = log_manager.cleanup_old_logs(0)  # 0天表示清理所有日志
+        
+        if result["success"]:
+            return ResponseBase(
+                data=result, 
+                message=f"日志清理成功，删除了 {result['deleted_count']} 个日志文件"
+            )
+        else:
+            return ResponseBase(success=False, message=f"清理失败: {result.get('error', '未知错误')}")
     except Exception as e:
         return ResponseBase(success=False, message=f"清理日志失败: {str(e)}")
 
@@ -4357,8 +4511,8 @@ def export_subscriptions(
                 "用户名": subscription.user.username if subscription.user else "未知",
                 "邮箱": subscription.user.email if subscription.user else "未知",
                 "订阅地址": subscription.subscription_url,
-                "通用配置地址": f"http://localhost:8000/api/v1/subscriptions/ssr/{subscription.subscription_url}",
-                "移动端配置地址": f"http://localhost:8000/api/v1/subscriptions/clash/{subscription.subscription_url}",
+                "通用配置地址": f"https://yourdomain.com/api/v1/subscriptions/ssr/{subscription.subscription_url}",
+                "移动端配置地址": f"https://yourdomain.com/api/v1/subscriptions/clash/{subscription.subscription_url}",
                 "设备限制": subscription.device_limit,
                 "当前设备": subscription.current_devices,
                 "状态": "活跃" if subscription.is_active else "暂停",

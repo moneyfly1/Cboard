@@ -212,7 +212,7 @@ export const adminAPI = {
   getEmailDetail: (emailId) => api.get(`/admin/email-queue/${emailId}`),
   retryEmail: (emailId) => api.post(`/admin/email-queue/${emailId}/retry`),
   deleteEmailFromQueue: (emailId) => api.delete(`/admin/email-queue/${emailId}`),
-  clearEmailQueue: (status) => api.post('/admin/email-queue/clear', { status }),
+  clearEmailQueue: (status) => api.post(`/admin/email-queue/clear${status ? `?status=${status}` : ''}`),
   getEmailQueueStatistics: () => api.get('/admin/email-queue/statistics'),
   
   // 个人资料管理
@@ -286,6 +286,7 @@ export const configAPI = {
   getV2rayConfigInvalid: () => api.get('/admin/v2ray-config-invalid'),
   saveV2rayConfigInvalid: (content) => api.post('/admin/v2ray-config-invalid', { content }),
   exportConfig: () => api.get('/admin/export-config'),
+  importConfig: (data) => api.post('/admin/import-config', data),
   
   // 支付设置管理
   getPaymentSettings: () => api.get('/admin/payment-configs'),

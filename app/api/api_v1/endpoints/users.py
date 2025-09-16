@@ -52,8 +52,6 @@ def get_user_dashboard_info(
         
         # 获取用户订阅信息
         subscription = subscription_service.get_by_user_id(current_user.id)
-        if subscription:
-        else:
         
         # 计算剩余天数和到期时间
         remaining_days = 0
@@ -67,6 +65,7 @@ def get_user_dashboard_info(
                     remaining_days = (expire_date - datetime.now()).days
                     expiry_date = expire_date.strftime('%Y-%m-%d %H:%M:%S')
                 else:
+                    expiry_date = "未设置"
             except Exception as e:
                 import traceback
                 traceback.print_exc()
@@ -97,7 +96,6 @@ def get_user_dashboard_info(
                     qrcode_url = f"sub://{base64.b64encode(mobile_url.encode()).decode()}"
             except Exception as e:
                 qrcode_url = f"sub://{base64.b64encode(mobile_url.encode()).decode()}"
-        else:
         
         # 计算订阅状态
         subscription_status = "inactive"

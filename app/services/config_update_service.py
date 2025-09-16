@@ -1400,7 +1400,7 @@ class ConfigUpdateService:
                 }
             ],
             "rules": [
-                "DOMAIN-SUFFIX,localhost,🎯 全球直连",
+                "DOMAIN-SUFFIX,yourdomain.com,🎯 全球直连",
                 "IP-CIDR,127.0.0.0/8,🎯 全球直连,no-resolve",
                 "IP-CIDR,172.16.0.0/12,🎯 全球直连,no-resolve",
                 "IP-CIDR,192.168.0.0/16,🎯 全球直连,no-resolve",

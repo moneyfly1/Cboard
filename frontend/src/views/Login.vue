@@ -140,48 +140,24 @@ export default {
       loading.value = true
 
       try {
-        console.log('开始登录，用户名:', loginForm.username)
-        console.log('开始登录，密码:', loginForm.password)
-
         const result = await authStore.login(loginForm)
-        console.log('登录结果:', result)
 
         if (result.success) {
           ElMessage.success('登录成功')
 
-          // 添加调试信息
-          console.log('登录成功，用户数据:', authStore.user)
-          console.log('用户权限状态:', authStore.isAdmin)
-          console.log('用户ID:', authStore.user?.id)
-          console.log('用户名:', authStore.user?.username)
-          console.log('邮箱:', authStore.user?.email)
-          console.log('is_admin字段:', authStore.user?.is_admin)
-          console.log('localStorage中的用户数据:', localStorage.getItem('user'))
-
           // 确保用户信息已经更新后再跳转
           await nextTick()
 
-          console.log('跳转前再次检查用户状态:')
-          console.log('isAdmin:', authStore.isAdmin)
-          console.log('user:', authStore.user)
-
           // 根据用户权限跳转到不同页面
           if (authStore.isAdmin) {
-            console.log('跳转到管理员界面')
             await router.push('/admin/dashboard')
           } else {
-            console.log('跳转到普通用户界面')
             await router.push('/dashboard')
           }
-
-          console.log('跳转完成')
         } else {
-          console.log('登录失败:', result.message)
           ElMessage.error(result.message)
         }
       } catch (error) {
-        console.error('登录异常:', error)
-        console.error('错误详情:', error.response?.data)
         ElMessage.error('登录失败，请重试')
       } finally {
         loading.value = false

@@ -21,7 +21,7 @@
     <!-- 统计概览 -->
     <el-row :gutter="20" class="stats-overview">
       <el-col :span="6">
-        <el-card class="stat-card">
+        <el-card class="stat-card clickable" @click="filterByStatus('')">
           <div class="stat-content">
             <div class="stat-number">{{ statistics.total || 0 }}</div>
             <div class="stat-label">总邮件数</div>
@@ -29,7 +29,7 @@
         </el-card>
       </el-col>
       <el-col :span="6">
-        <el-card class="stat-card">
+        <el-card class="stat-card clickable" @click="filterByStatus('pending')">
           <div class="stat-content">
             <div class="stat-number success">{{ statistics.pending || 0 }}</div>
             <div class="stat-label">待发送</div>
@@ -37,7 +37,7 @@
         </el-card>
       </el-col>
       <el-col :span="6">
-        <el-card class="stat-card">
+        <el-card class="stat-card clickable" @click="filterByStatus('sent')">
           <div class="stat-content">
             <div class="stat-number warning">{{ statistics.sent || 0 }}</div>
             <div class="stat-label">已发送</div>
@@ -45,7 +45,7 @@
         </el-card>
       </el-col>
       <el-col :span="6">
-        <el-card class="stat-card">
+        <el-card class="stat-card clickable" @click="filterByStatus('failed')">
           <div class="stat-content">
             <div class="stat-number danger">{{ statistics.failed || 0 }}</div>
             <div class="stat-label">发送失败</div>
@@ -384,6 +384,13 @@ export default {
       fetchEmailQueue()
     }
 
+    // 按状态筛选
+    const filterByStatus = (status) => {
+      filterForm.status = status
+      pagination.page = 1
+      fetchEmailQueue()
+    }
+
     // 查看邮件详情
     const viewEmailDetail = async (row) => {
       try {
@@ -588,6 +595,7 @@ export default {
       refreshQueue,
       applyFilter,
       resetFilter,
+      filterByStatus,
       viewEmailDetail,
       retryEmail,
       retryEmailFromDetail,
@@ -633,6 +641,16 @@ export default {
 
 .stat-card {
   text-align: center;
+}
+
+.stat-card.clickable {
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.stat-card.clickable:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
 
 .stat-content {

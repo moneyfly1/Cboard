@@ -2,10 +2,12 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 import uvicorn
+from datetime import datetime
 
 from .core.config import settings
 from .api.api_v1.api import api_router
 from .core.database import init_database
+from .middleware.rate_limit import rate_limit_middleware, monitoring_middleware
 from .models import (
     User, Subscription, Device, Order, Package, EmailQueue, 
     EmailTemplate, Notification, Node, PaymentTransaction, 
@@ -31,6 +33,12 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# 添加监控中间件
+app.middleware("http")(monitoring_middleware)
+
+# 添加速率限制中间件
+app.middleware("http")(rate_limit_middleware)
 
 # 包含API路由
 app.include_router(api_router, prefix=settings.API_V1_STR)
@@ -86,7 +94,41 @@ async def root():
 
 @app.get("/health")
 async def health_check():
-    return {"status": "healthy"}
+    """健康检查端点"""
+    try:
+        from .services.monitoring import system_monitor
+        from .core.database import get_db
+        from sqlalchemy.orm import Session
+        
+        # 检查系统健康状态
+        system_health = system_monitor.check_system_health()
+        
+        # 检查数据库连接
+        db_health = {"status": "healthy", "message": "数据库连接正常"}
+        try:
+            db = next(get_db())
+            db.execute("SELECT 1")
+        except Exception as e:
+            db_health = {"status": "error", "message": f"数据库连接失败: {str(e)}"}
+        
+        # 确定整体状态
+        overall_status = "healthy"
+        if system_health["status"] != "healthy" or db_health["status"] != "healthy":
+            overall_status = "unhealthy"
+        
+        return {
+            "status": overall_status,
+            "timestamp": datetime.now().isoformat(),
+            "system": system_health,
+            "database": db_health,
+            "version": settings.VERSION
+        }
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": f"健康检查失败: {str(e)}",
+            "timestamp": datetime.now().isoformat()
+        }
 
 if __name__ == "__main__":
     uvicorn.run(

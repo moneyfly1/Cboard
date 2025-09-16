@@ -485,8 +485,8 @@
             
             <el-upload
               class="upload-demo"
-              :action="uploadUrl"
-              :on-success="handleConfigImport"
+              :auto-upload="false"
+              :on-change="handleConfigImport"
               :before-upload="beforeConfigUpload"
               accept=".json"
             >
@@ -774,11 +774,8 @@ export default {
     const loadClashConfig = async () => {
       try {
         const response = await configAPI.getClashConfig()
-        console.log('Clash配置响应:', response)
         if (response.data && response.data.success) {
-          // 后端返回的是ResponseBase格式，数据在response.data.data中
           clashConfig.value = response.data.data
-          console.log('Clash配置已加载:', clashConfig.value)
         }
       } catch (error) {
         console.error('加载Clash配置失败:', error)
@@ -789,11 +786,8 @@ export default {
     const loadV2rayConfig = async () => {
       try {
         const response = await configAPI.getV2rayConfig()
-        console.log('V2Ray配置响应:', response)
         if (response.data && response.data.success) {
-          // 后端返回的是ResponseBase格式，数据在response.data.data中
           v2rayConfig.value = response.data.data
-          console.log('V2Ray配置已加载:', v2rayConfig.value)
         }
       } catch (error) {
         console.error('加载V2Ray配置失败:', error)
@@ -831,11 +825,8 @@ export default {
     const loadClashConfigInvalid = async () => {
       try {
         const response = await configAPI.getClashConfigInvalid()
-        console.log('Clash失效配置响应:', response)
         if (response.data && response.data.success) {
-          // 后端返回的是ResponseBase格式，数据在response.data.data中
           clashConfigInvalid.value = response.data.data
-          console.log('Clash失效配置已加载:', clashConfigInvalid.value)
         }
       } catch (error) {
         console.error('加载Clash失效配置失败:', error)
@@ -847,11 +838,8 @@ export default {
     const loadV2rayConfigInvalid = async () => {
       try {
         const response = await configAPI.getV2rayConfigInvalid()
-        console.log('V2Ray失效配置响应:', response)
         if (response.data && response.data.success) {
-          // 后端返回的是ResponseBase格式，数据在response.data.data中
           v2rayConfigInvalid.value = response.data.data
-          console.log('V2Ray失效配置已加载:', v2rayConfigInvalid.value)
         }
       } catch (error) {
         console.error('加载V2Ray失效配置失败:', error)
@@ -899,10 +887,40 @@ export default {
       return true
     }
 
-    const handleConfigImport = (response) => {
-      ElMessage.success('配置导入成功')
-      // 重新加载配置
-      loadSystemConfig()
+    const handleConfigImport = async (file, fileList) => {
+      try {
+        // 读取文件内容
+        const fileContent = await readFileContent(file.raw)
+        const configData = JSON.parse(fileContent)
+        
+        // 调用导入API
+        await configAPI.importConfig(configData)
+        
+        ElMessage.success('配置导入成功')
+        
+        // 重新加载所有配置
+        await loadSystemConfig()
+        await loadEmailConfig()
+        await loadPaymentConfig()
+        await loadSoftwareConfig()
+        await loadClashConfig()
+        await loadV2rayConfig()
+        await loadClashConfigInvalid()
+        await loadV2rayConfigInvalid()
+      } catch (error) {
+        console.error('导入配置失败:', error)
+        ElMessage.error('导入配置失败: ' + (error.message || '未知错误'))
+      }
+    }
+    
+    // 读取文件内容的辅助函数
+    const readFileContent = (file) => {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onload = (e) => resolve(e.target.result)
+        reader.onerror = (e) => reject(e)
+        reader.readAsText(file)
+      })
     }
 
     const beforeConfigUpload = (file) => {
@@ -918,12 +936,9 @@ export default {
     const loadSystemConfig = async () => {
       try {
         const response = await configAPI.getSystemConfig()
-        console.log('系统配置响应:', response)
         if (response.data && response.data.success) {
-          // 后端返回的是ResponseBase格式，数据在response.data.data中
           const configData = response.data.data
           Object.assign(systemForm, configData)
-          console.log('系统配置已加载:', systemForm)
         }
       } catch (error) {
         console.error('加载系统配置失败:', error)
@@ -1060,9 +1075,7 @@ export default {
     const loadPaymentSettings = async () => {
       try {
         const response = await configAPI.getPaymentSettings()
-        console.log('支付配置响应:', response)
         if (response.data && response.data.success) {
-          // 后端返回的是ResponseBase格式，数据在response.data.data中
           const configs = response.data.data.payment_configs || []
           configs.forEach(config => {
             if (config.key && config.value !== undefined) {

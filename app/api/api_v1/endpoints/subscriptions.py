@@ -200,32 +200,7 @@ def send_subscription_email_endpoint(
     
     # 发送邮件
     try:
-        email_service = EmailService(db)
-        subscription_data = {
-            'id': subscription.id,
-            'package_name': subscription.package.name if subscription.package else '未知套餐',
-            'expires_at': subscription.expire_time.strftime('%Y-%m-%d %H:%M:%S') if subscription.expire_time else '未知',
-            'status': subscription.status,
-            'ssr_url': ssr_url,
-            'clash_url': clash_url
-        }
-        success = email_service.email_service = EmailService(db)
-        subscription_data = {
-            'id': subscription.id,
-            'package_name': subscription.package.name if subscription.package else '未知套餐',
-            'expires_at': subscription.expire_time.strftime('%Y-%m-%d %H:%M:%S') if subscription.expire_time else '未知',
-            'status': subscription.status,
-            'ssr_url': ssr_url,
-            'clash_url': clash_url
-        }
-        success = email_service.send_subscription_email(current_user.email, subscription_data)
-        if success:
-            return ResponseBase(message="订阅邮件发送成功")
-        else:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="邮件发送失败"
-            )
+        success = subscription_service.send_subscription_email(current_user.id)
         if success:
             return ResponseBase(message="订阅邮件发送成功")
         else:
