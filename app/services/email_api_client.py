@@ -76,7 +76,6 @@ class EmailAPIClient:
                     u.id,
                     u.username,
                     u.email,
-                    u.nickname,
                     u.status,
                     u.is_verified,
                     u.created_at,
@@ -95,7 +94,7 @@ class EmailAPIClient:
                     'id': result.id,
                     'username': result.username or '用户',
                     'email': result.email or '',
-                    'nickname': result.nickname or result.username or '用户',
+                    'nickname': result.username or '用户',  # 使用username作为nickname
                     'status': result.status or 'active',
                     'is_verified': result.is_verified or False,
                     'created_at': result.created_at.strftime('%Y-%m-%d %H:%M:%S') if result.created_at else '未知',
@@ -129,11 +128,10 @@ class EmailAPIClient:
                     s.updated_at,
                     u.username,
                     u.email,
-                    u.nickname,
                     p.name as package_name,
                     p.description as package_description,
                     p.price as package_price,
-                    p.duration as package_duration,
+                    p.duration_days as package_duration,
                     p.bandwidth_limit as package_bandwidth_limit
                 FROM subscriptions s
                 LEFT JOIN users u ON s.user_id = u.id
@@ -147,7 +145,15 @@ class EmailAPIClient:
                 remaining_days = 0
                 if result.expire_time:
                     from datetime import datetime
-                    remaining_days = max(0, (result.expire_time - datetime.now()).days)
+                    try:
+                        # 如果expire_time是datetime对象
+                        if hasattr(result.expire_time, 'date'):
+                            remaining_days = max(0, (result.expire_time - datetime.now()).days)
+                        else:
+                            # 如果是字符串，尝试解析
+                            remaining_days = 0
+                    except:
+                        remaining_days = 0
                 
                 return {
                     'id': result.id,
@@ -157,12 +163,12 @@ class EmailAPIClient:
                     'current_devices': result.current_devices,
                     'max_devices': result.device_limit,
                     'is_active': result.is_active,
-                    'expire_time': result.expire_time.strftime('%Y-%m-%d %H:%M:%S') if result.expire_time else '永久',
+                    'expire_time': result.expire_time.strftime('%Y-%m-%d %H:%M:%S') if result.expire_time and hasattr(result.expire_time, 'strftime') else '永久',
                     'remaining_days': remaining_days,
-                    'created_at': result.created_at.strftime('%Y-%m-%d %H:%M:%S') if result.created_at else '未知',
-                    'updated_at': result.updated_at.strftime('%Y-%m-%d %H:%M:%S') if result.updated_at else '未知',
+                    'created_at': result.created_at.strftime('%Y-%m-%d %H:%M:%S') if result.created_at and hasattr(result.created_at, 'strftime') else '未知',
+                    'updated_at': result.updated_at.strftime('%Y-%m-%d %H:%M:%S') if result.updated_at and hasattr(result.updated_at, 'strftime') else '未知',
                     'username': result.username or '用户',
-                    'nickname': result.nickname or result.username or '用户',
+                    'nickname': result.username or '用户',  # 使用username作为nickname
                     'user_email': result.email or '',
                     'package_name': result.package_name or '未知套餐',
                     'package_description': result.package_description or '无描述',

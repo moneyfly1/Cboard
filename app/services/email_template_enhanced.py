@@ -693,8 +693,8 @@ class EmailTemplateEnhanced:
         """订阅重置通知邮件模板"""
         title = "订阅重置通知"
         
-        if not request or not db:
-            return "请求或数据库连接不可用"
+        if not db:
+            return "数据库连接不可用"
         
         # 使用API客户端获取完整的订阅数据
         from app.services.email_api_client import EmailAPIClient
