@@ -54,28 +54,44 @@ class EmailAPIClient:
             return None
     
     def get_user_info(self, user_id: int) -> Dict[str, Any]:
-        """通过API获取用户信息"""
+        """通过数据库直接获取用户信息"""
         try:
-            # 这里需要根据实际的API端点调整
-            # 假设有一个获取用户信息的API端点
-            endpoint = f"/api/v1/users/{user_id}"
-            result = self._make_api_request(endpoint)
+            from sqlalchemy import text
             
-            if result and result.get('success'):
-                user_data = result.get('data', {})
+            # 直接查询数据库获取用户信息
+            query = text("""
+                SELECT 
+                    u.id,
+                    u.username,
+                    u.email,
+                    u.nickname,
+                    u.status,
+                    u.is_verified,
+                    u.created_at,
+                    u.last_login,
+                    u.avatar_url,
+                    u.phone,
+                    u.country,
+                    u.timezone
+                FROM users u
+                WHERE u.id = :user_id
+            """)
+            
+            result = self.db.execute(query, {'user_id': user_id}).first()
+            if result:
                 return {
-                    'id': user_data.get('id'),
-                    'username': user_data.get('username', '用户'),
-                    'email': user_data.get('email', ''),
-                    'nickname': user_data.get('nickname') or user_data.get('username', '用户'),
-                    'status': user_data.get('status', 'active'),
-                    'is_verified': user_data.get('is_verified', False),
-                    'created_at': user_data.get('created_at', '未知'),
-                    'last_login': user_data.get('last_login', '从未登录'),
-                    'avatar_url': user_data.get('avatar_url', ''),
-                    'phone': user_data.get('phone', ''),
-                    'country': user_data.get('country', ''),
-                    'timezone': user_data.get('timezone', '')
+                    'id': result.id,
+                    'username': result.username or '用户',
+                    'email': result.email or '',
+                    'nickname': result.nickname or result.username or '用户',
+                    'status': result.status or 'active',
+                    'is_verified': result.is_verified or False,
+                    'created_at': result.created_at.strftime('%Y-%m-%d %H:%M:%S') if result.created_at else '未知',
+                    'last_login': result.last_login.strftime('%Y-%m-%d %H:%M:%S') if result.last_login else '从未登录',
+                    'avatar_url': result.avatar_url or '',
+                    'phone': result.phone or '',
+                    'country': result.country or '',
+                    'timezone': result.timezone or ''
                 }
             return {}
         except Exception as e:
@@ -83,33 +99,64 @@ class EmailAPIClient:
             return {}
     
     def get_subscription_info(self, subscription_id: int) -> Dict[str, Any]:
-        """通过API获取订阅信息"""
+        """通过数据库直接获取订阅信息"""
         try:
-            # 使用订阅API端点
-            endpoint = f"/api/v1/subscriptions/{subscription_id}"
-            result = self._make_api_request(endpoint)
+            from sqlalchemy import text
             
-            if result and result.get('success'):
-                sub_data = result.get('data', {})
+            # 直接查询数据库获取订阅信息
+            query = text("""
+                SELECT 
+                    s.id,
+                    s.user_id,
+                    s.subscription_url,
+                    s.device_limit,
+                    s.current_devices,
+                    s.is_active,
+                    s.expire_time,
+                    s.created_at,
+                    s.updated_at,
+                    u.username,
+                    u.email,
+                    u.nickname,
+                    p.name as package_name,
+                    p.description as package_description,
+                    p.price as package_price,
+                    p.duration as package_duration,
+                    p.bandwidth_limit as package_bandwidth_limit
+                FROM subscriptions s
+                LEFT JOIN users u ON s.user_id = u.id
+                LEFT JOIN packages p ON s.package_id = p.id
+                WHERE s.id = :subscription_id
+            """)
+            
+            result = self.db.execute(query, {'subscription_id': subscription_id}).first()
+            if result:
+                # 计算剩余天数
+                remaining_days = 0
+                if result.expire_time:
+                    from datetime import datetime
+                    remaining_days = max(0, (result.expire_time - datetime.now()).days)
+                
                 return {
-                    'id': sub_data.get('id'),
-                    'user_id': sub_data.get('user_id'),
-                    'subscription_url': sub_data.get('subscription_url', ''),
-                    'device_limit': sub_data.get('device_limit', 3),
-                    'current_devices': sub_data.get('current_devices', 0),
-                    'max_devices': sub_data.get('device_limit', 3),
-                    'is_active': sub_data.get('is_active', True),
-                    'expire_time': sub_data.get('expire_time', '永久'),
-                    'remaining_days': sub_data.get('remaining_days', 0),
-                    'created_at': sub_data.get('created_at', '未知'),
-                    'updated_at': sub_data.get('updated_at', '未知'),
-                    'username': sub_data.get('username', '用户'),
-                    'user_email': sub_data.get('user_email', ''),
-                    'package_name': sub_data.get('package_name', '未知套餐'),
-                    'package_description': sub_data.get('package_description', '无描述'),
-                    'package_price': sub_data.get('package_price', 0.0),
-                    'package_duration': sub_data.get('package_duration', 0),
-                    'package_bandwidth_limit': sub_data.get('package_bandwidth_limit')
+                    'id': result.id,
+                    'user_id': result.user_id,
+                    'subscription_url': result.subscription_url or '',
+                    'device_limit': result.device_limit,
+                    'current_devices': result.current_devices,
+                    'max_devices': result.device_limit,
+                    'is_active': result.is_active,
+                    'expire_time': result.expire_time.strftime('%Y-%m-%d %H:%M:%S') if result.expire_time else '永久',
+                    'remaining_days': remaining_days,
+                    'created_at': result.created_at.strftime('%Y-%m-%d %H:%M:%S') if result.created_at else '未知',
+                    'updated_at': result.updated_at.strftime('%Y-%m-%d %H:%M:%S') if result.updated_at else '未知',
+                    'username': result.username or '用户',
+                    'nickname': result.nickname or result.username or '用户',
+                    'user_email': result.email or '',
+                    'package_name': result.package_name or '未知套餐',
+                    'package_description': result.package_description or '无描述',
+                    'package_price': float(result.package_price) if result.package_price else 0.0,
+                    'package_duration': result.package_duration or 0,
+                    'package_bandwidth_limit': result.package_bandwidth_limit
                 }
             return {}
         except Exception as e:
@@ -150,19 +197,21 @@ class EmailAPIClient:
             print(f"获取用户仪表板信息失败: {str(e)}")
             return {}
     
-    def get_subscription_urls(self, subscription_id: int) -> Dict[str, str]:
+    def get_subscription_urls(self, subscription_url: str) -> Dict[str, str]:
         """通过API获取订阅地址"""
         try:
-            # 获取V2Ray/SSR订阅地址
-            v2ray_endpoint = f"/api/v1/subscriptions/{subscription_id}/v2ray"
-            clash_endpoint = f"/api/v1/subscriptions/{subscription_id}/clash"
-            ssr_endpoint = f"/api/v1/subscriptions/{subscription_id}/ssr"
+            if not subscription_url:
+                return {
+                    'v2ray_url': '',
+                    'clash_url': '',
+                    'ssr_url': ''
+                }
             
-            # 构建完整的订阅地址
+            # 构建完整的订阅地址（使用subscription_url而不是subscription_id）
             subscription_urls = {
-                'v2ray_url': f"{self.base_url}{v2ray_endpoint}",
-                'clash_url': f"{self.base_url}{clash_endpoint}",
-                'ssr_url': f"{self.base_url}{ssr_endpoint}"
+                'v2ray_url': f"{self.base_url}/api/v1/subscriptions/ssr/{subscription_url}",
+                'clash_url': f"{self.base_url}/api/v1/subscriptions/clash/{subscription_url}",
+                'ssr_url': f"{self.base_url}/api/v1/subscriptions/ssr/{subscription_url}"
             }
             
             return subscription_urls
@@ -186,7 +235,7 @@ class EmailAPIClient:
             user_info = self.get_user_info(subscription_info.get('user_id', 0))
             
             # 获取订阅地址
-            subscription_urls = self.get_subscription_urls(subscription_id)
+            subscription_urls = self.get_subscription_urls(subscription_info.get('subscription_url', ''))
             
             # 合并所有信息
             complete_data = {
@@ -243,9 +292,9 @@ class EmailAPIClient:
                 return {}
             
             # 获取订阅地址
-            subscription_id = user_data.get('subscription_id')
-            if subscription_id:
-                subscription_urls = self.get_subscription_urls(subscription_id)
+            subscription_url = user_data.get('subscription_url', '')
+            if subscription_url:
+                subscription_urls = self.get_subscription_urls(subscription_url)
                 user_data.update(subscription_urls)
             
             user_data['base_url'] = self.base_url
