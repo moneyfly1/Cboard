@@ -76,7 +76,6 @@ class EmailAPIClient:
                     u.id,
                     u.username,
                     u.email,
-                    u.status,
                     u.is_verified,
                     u.created_at,
                     u.last_login,
@@ -95,7 +94,7 @@ class EmailAPIClient:
                     'username': result.username or '用户',
                     'email': result.email or '',
                     'nickname': result.username or '用户',  # 使用username作为nickname
-                    'status': result.status or 'active',
+                    'status': 'active',  # 默认状态
                     'is_verified': result.is_verified or False,
                     'created_at': result.created_at.strftime('%Y-%m-%d %H:%M:%S') if result.created_at else '未知',
                     'last_login': result.last_login.strftime('%Y-%m-%d %H:%M:%S') if result.last_login else '从未登录',
@@ -148,7 +147,13 @@ class EmailAPIClient:
                     try:
                         # 如果expire_time是datetime对象
                         if hasattr(result.expire_time, 'date'):
-                            remaining_days = max(0, (result.expire_time - datetime.now()).days)
+                            from datetime import timezone
+                            now = datetime.now(timezone.utc)
+                            if result.expire_time.tzinfo is None:
+                                expire_time = result.expire_time.replace(tzinfo=timezone.utc)
+                            else:
+                                expire_time = result.expire_time
+                            remaining_days = max(0, (expire_time - now).days)
                         else:
                             # 如果是字符串，尝试解析
                             remaining_days = 0

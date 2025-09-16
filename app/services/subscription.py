@@ -233,8 +233,8 @@ class SubscriptionService:
             elif status == 'inactive':
                 query = query.filter(Subscription.is_active == False)
             elif status == 'expired':
-                from datetime import datetime
-                query = query.filter(Subscription.expire_time < datetime.now())
+                from datetime import datetime, timezone
+                query = query.filter(Subscription.expire_time < datetime.now(timezone.utc))
         
         total = query.count()
         subscriptions = query.offset(skip).limit(limit).all()
