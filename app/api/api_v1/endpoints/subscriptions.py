@@ -540,7 +540,8 @@ def reset_user_subscription_url(
                     username=current_user.username,
                     new_subscription_url=new_url,
                     reset_time=reset_time,
-                    reset_reason="用户重置订阅地址"
+                    reset_reason="用户重置订阅地址",
+                    subscription_id=subscription.id
                 )
                 print(f"已发送用户重置订阅地址通知邮件到: {current_user.email}")
         except Exception as e:
