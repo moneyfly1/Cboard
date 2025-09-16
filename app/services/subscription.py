@@ -737,10 +737,10 @@ rules:
             remaining_days = 0
             if subscription.expire_time:
                 from datetime import datetime
-                now = datetime.now()
+                from datetime import timezone
+                now = datetime.now(timezone.utc)
                 if subscription.expire_time.tzinfo is None:
                     # 如果expire_time没有时区信息，假设为UTC
-                    from datetime import timezone
                     expire_time = subscription.expire_time.replace(tzinfo=timezone.utc)
                 else:
                     expire_time = subscription.expire_time

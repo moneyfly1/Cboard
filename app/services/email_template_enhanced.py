@@ -364,7 +364,6 @@ class EmailTemplateEnhanced:
                         <code class="url-code">{clash_url}</code>
                     </div>
                     
-                    {f'<div class="url-item"><strong>🚀 SSR 配置地址：</strong><p style="margin: 5px 0; color: #666; font-size: 12px;">SSR协议专用配置</p><code class="url-code">{ssr_url}</code></div>' if ssr_url else ''}
                 </div>
                 
                 <div style="margin-top: 20px; text-align: center;">
@@ -757,7 +756,6 @@ class EmailTemplateEnhanced:
                         <strong>Clash 配置：</strong><br>
                         <code class="url-code">{clash_url}</code>
                     </div>
-                    {f'<div class="url-item"><strong>SSR 配置：</strong><br><code class="url-code">{ssr_url}</code></div>' if ssr_url else ''}
                 </div>
             </div>
             
@@ -988,7 +986,6 @@ class EmailTemplateEnhanced:
                         <strong>Clash 配置：</strong><br>
                         <code class="url-code">{clash_url}</code>
                     </div>
-                    {f'<div class="url-item"><strong>SSR 配置：</strong><br><code class="url-code">{ssr_url}</code></div>' if ssr_url else ''}
                 </div>
             </div>
             
