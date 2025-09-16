@@ -151,6 +151,36 @@ class EmailTemplateEnhanced:
             font-family: monospace;
             color: #667eea;
         }}
+        .url-list {{
+            margin: 15px 0;
+        }}
+        .url-item {{
+            background-color: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 6px;
+            padding: 15px;
+            margin: 10px 0;
+            border-left: 4px solid #667eea;
+        }}
+        .url-item strong {{
+            color: #333;
+            font-size: 14px;
+            display: block;
+            margin-bottom: 8px;
+        }}
+        .url-code {{
+            background-color: #ffffff;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            padding: 10px;
+            margin: 5px 0;
+            word-break: break-all;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            color: #495057;
+            display: block;
+            line-height: 1.4;
+        }}
         @media only screen and (max-width: 600px) {{
             .email-container {{
                 width: 100% !important;
@@ -320,14 +350,22 @@ class EmailTemplateEnhanced:
             </table>
             
             <h3>📱 配置地址</h3>
-            <div class="info-box">
-                <p><strong>🔗 通用配置地址（推荐）：</strong></p>
-                <p style="margin-bottom: 5px; color: #666; font-size: 14px;">适用于大部分客户端，包括手机和电脑</p>
-                <div class="url-box">{v2ray_url}</div>
-                
-                <p style="margin-top: 20px;"><strong>⚡ 移动端专用地址：</strong></p>
-                <p style="margin-bottom: 5px; color: #666; font-size: 14px;">专为移动设备优化，支持规则分流</p>
-                <div class="url-box">{clash_url}</div>
+            <div class="success-box">
+                <div class="url-list">
+                    <div class="url-item">
+                        <strong>🔗 通用配置地址（推荐）：</strong>
+                        <p style="margin: 5px 0; color: #666; font-size: 12px;">适用于大部分客户端，包括手机和电脑</p>
+                        <code class="url-code">{v2ray_url}</code>
+                    </div>
+                    
+                    <div class="url-item">
+                        <strong>⚡ 移动端专用地址：</strong>
+                        <p style="margin: 5px 0; color: #666; font-size: 12px;">专为移动设备优化，支持规则分流</p>
+                        <code class="url-code">{clash_url}</code>
+                    </div>
+                    
+                    {f'<div class="url-item"><strong>🚀 SSR 配置地址：</strong><p style="margin: 5px 0; color: #666; font-size: 12px;">SSR协议专用配置</p><code class="url-code">{ssr_url}</code></div>' if ssr_url else ''}
+                </div>
                 
                 <div style="margin-top: 20px; text-align: center;">
                     <p><strong>📱 扫码快速配置</strong></p>

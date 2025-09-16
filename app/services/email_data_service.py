@@ -254,7 +254,7 @@ class EmailDataService:
             
             if subscription_info.get('subscription_url'):
                 complete_data.update({
-                    'v2ray_url': f"{base_url}/api/v1/subscriptions/v2ray/{subscription_info['subscription_url']}",
+                    'v2ray_url': f"{base_url}/api/v1/subscriptions/ssr/{subscription_info['subscription_url']}",
                     'clash_url': f"{base_url}/api/v1/subscriptions/clash/{subscription_info['subscription_url']}",
                     'ssr_url': f"{base_url}/api/v1/subscriptions/ssr/{subscription_info['subscription_url']}"
                 })
@@ -293,7 +293,7 @@ class EmailDataService:
             
             if subscription_info.get('subscription_url'):
                 complete_data.update({
-                    'v2ray_url': f"{base_url}/api/v1/subscriptions/v2ray/{subscription_info['subscription_url']}",
+                    'v2ray_url': f"{base_url}/api/v1/subscriptions/ssr/{subscription_info['subscription_url']}",
                     'clash_url': f"{base_url}/api/v1/subscriptions/clash/{subscription_info['subscription_url']}",
                     'ssr_url': f"{base_url}/api/v1/subscriptions/ssr/{subscription_info['subscription_url']}"
                 })
