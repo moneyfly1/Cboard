@@ -490,58 +490,6 @@ class EmailTemplateEnhanced:
         
         return EmailTemplateEnhanced.get_base_template(title, content, '开启您的专属网络体验')
 
-    @staticmethod
-    def get_payment_success_template(username: str, payment_data: dict) -> str:
-        """支付成功邮件模板"""
-        title = "支付成功"
-        content = f'''
-            <h2>支付成功</h2>
-            <p>亲爱的用户 <strong>{username}</strong>，</p>
-            <p>恭喜！您的支付已成功完成，服务已激活。</p>
-            
-            <div class="success-box">
-                <p><strong>支付详情：</strong></p>
-                <table class="info-table">
-                    <tr>
-                        <th>订单号</th>
-                        <td>{payment_data.get('order_no', 'N/A')}</td>
-                    </tr>
-                    <tr>
-                        <th>套餐名称</th>
-                        <td>{payment_data.get('package_name', 'N/A')}</td>
-                    </tr>
-                    <tr>
-                        <th>支付金额</th>
-                        <td>¥{payment_data.get('amount', '0.00')}</td>
-                    </tr>
-                    <tr>
-                        <th>支付方式</th>
-                        <td>{payment_data.get('payment_method', 'N/A')}</td>
-                    </tr>
-                    <tr>
-                        <th>支付时间</th>
-                        <td>{payment_data.get('paid_at', 'N/A')}</td>
-                    </tr>
-                    <tr>
-                        <th>交易号</th>
-                        <td>{payment_data.get('transaction_id', 'N/A')}</td>
-                    </tr>
-                </table>
-            </div>
-            
-            <div class="info-box">
-                <p><strong>服务说明：</strong></p>
-                <ul>
-                    <li>您的服务已激活，可以立即使用</li>
-                    <li>订阅地址已发送到您的邮箱</li>
-                    <li>如有技术问题，请联系技术支持</li>
-                </ul>
-            </div>
-            
-            <p>感谢您的信任，祝您使用愉快！</p>
-        '''
-        
-        return EmailTemplateEnhanced.get_base_template(title, content, '开启您的专属网络体验')
 
     @staticmethod
     def get_account_deletion_template(username: str, deletion_data: dict) -> str:

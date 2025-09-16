@@ -231,8 +231,36 @@ class EmailService:
         
         try:
             # 使用增强版模板发送订阅邮件
-            username = subscription_data.get('username', '用户')
-            html_content = EmailTemplateEnhanced.get_subscription_template(username, subscription_data)
+            subscription_id = subscription_data.get('subscription_id')
+            if subscription_id:
+                # 使用新的API客户端方式
+                html_content = EmailTemplateEnhanced.get_subscription_template(
+                    subscription_id=subscription_id,
+                    request=None,  # 这里需要实际的request对象
+                    db=self.db
+                )
+            else:
+                # 兼容旧版本，使用简单的模板
+                username = subscription_data.get('username', '用户')
+                html_content = f"""
+                <h2>您的服务配置信息</h2>
+                <p>亲爱的 {username}，</p>
+                <p>您的服务配置已生成完成，请查收以下信息：</p>
+                
+                <div class="info-box">
+                    <h3>📋 账户信息</h3>
+                    <p><strong>用户账号：</strong>{username}</p>
+                    <p><strong>设备限制：</strong>{subscription_data.get('device_limit', 3)} 台设备</p>
+                    <p><strong>服务期限：</strong>{subscription_data.get('expire_time', '永久')}</p>
+                </div>
+                
+                <div class="success-box">
+                    <h3>🔗 配置地址</h3>
+                    <p><strong>订阅标识：</strong>{subscription_data.get('subscription_url', '')}</p>
+                </div>
+                
+                <p>如有任何问题，请随时联系我们的客服团队。</p>
+                """
             
             # 创建邮件队列
             email_queue_data = EmailQueueCreate(
@@ -800,7 +828,31 @@ class EmailService:
         
         try:
             # 使用增强版模板发送支付成功邮件
-            html_content = EmailTemplateEnhanced.get_payment_success_template(username, payment_data)
+            order_id = payment_data.get('order_id')
+            if order_id:
+                # 使用新的API客户端方式
+                html_content = EmailTemplateEnhanced.get_payment_success_template(
+                    order_id=order_id,
+                    request=None,  # 这里需要实际的request对象
+                    db=self.db
+                )
+            else:
+                # 兼容旧版本，使用简单的模板
+                html_content = f"""
+                <h2>支付成功</h2>
+                <p>亲爱的用户 <strong>{username}</strong>，</p>
+                <p>恭喜！您的支付已成功完成，服务已激活。</p>
+                
+                <div class="success-box">
+                    <p><strong>支付详情：</strong></p>
+                    <p><strong>订单号：</strong>{payment_data.get('order_no', 'N/A')}</p>
+                    <p><strong>套餐名称：</strong>{payment_data.get('package_name', 'N/A')}</p>
+                    <p><strong>支付金额：</strong>¥{payment_data.get('amount', '0.00')}</p>
+                    <p><strong>支付方式：</strong>{payment_data.get('payment_method', 'N/A')}</p>
+                </div>
+                
+                <p>感谢您的信任，祝您使用愉快！</p>
+                """
             
             # 创建邮件队列
             email_data = EmailQueueCreate(
