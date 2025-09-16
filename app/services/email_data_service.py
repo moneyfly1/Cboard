@@ -85,6 +85,9 @@ class EmailDataService:
             
             result = self.db.execute(query, {'subscription_id': subscription_id}).first()
             if result:
+                # 调试信息
+                print(f"订阅信息查询结果: subscription_id={subscription_id}, username={result.username}, email={result.email}")
+                
                 # 计算剩余天数
                 remaining_days = 0
                 if result.expire_time:
@@ -239,13 +242,19 @@ class EmailDataService:
             # 获取系统配置
             site_name = self.get_system_config('site_name') or '网络服务'
             
-            # 合并所有信息
+            # 合并所有信息，确保用户名正确传递
             complete_data = {
                 **subscription_info,
                 **user_info,
                 'site_name': site_name,
                 'subscription_id': subscription_id
             }
+            
+            # 确保用户名字段存在且不为空
+            if not complete_data.get('username') and user_info.get('username'):
+                complete_data['username'] = user_info['username']
+            elif not complete_data.get('username') and subscription_info.get('username'):
+                complete_data['username'] = subscription_info['username']
             
             # 添加订阅URL（使用动态域名）
             from app.core.domain_config import get_domain_config
@@ -279,12 +288,16 @@ class EmailDataService:
             # 获取系统配置
             site_name = self.get_system_config('site_name') or '网络服务'
             
-            # 合并所有信息
+            # 合并所有信息，确保用户名正确传递
             complete_data = {
                 **user_info,
                 **subscription_info,
                 'site_name': site_name
             }
+            
+            # 确保用户名字段存在且不为空
+            if not complete_data.get('username') and user_info.get('username'):
+                complete_data['username'] = user_info['username']
             
             # 添加订阅URL（使用动态域名）
             from app.core.domain_config import get_domain_config
