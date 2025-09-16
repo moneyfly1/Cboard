@@ -783,7 +783,7 @@ rules:
                 
                 # 系统信息
                 "base_url": base_url,
-                "site_name": settings_manager.get_site_name(self.db) if hasattr(settings_manager, 'get_site_name') else "网络服务"
+                "site_name": "网络服务"  # 简化处理，避免导入问题
             }
             
             # 发送订阅邮件
