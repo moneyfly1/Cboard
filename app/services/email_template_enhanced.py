@@ -221,12 +221,13 @@ class EmailTemplateEnhanced:
         """订阅地址通知邮件模板"""
         import urllib.parse
         
-        if not db:
-            return "数据库连接不可用"
+        if not request or not db:
+            return "请求或数据库连接不可用"
         
-        # 获取完整的订阅数据
-        data_service = EmailDataService(db)
-        subscription_data = data_service.get_complete_subscription_data(subscription_id, request)
+        # 使用API客户端获取完整的订阅数据
+        from app.services.email_api_client import EmailAPIClient
+        api_client = EmailAPIClient(request, db)
+        subscription_data = api_client.get_complete_subscription_data(subscription_id)
         
         if not subscription_data:
             return "订阅信息不存在"
@@ -264,7 +265,7 @@ class EmailTemplateEnhanced:
         site_name = subscription_data.get('site_name', '网络服务')
         
         # 使用动态域名配置
-        base_url = EmailTemplateEnhanced._get_base_url(request, db)
+        base_url = subscription_data.get('base_url', EmailTemplateEnhanced._get_base_url(request, db))
         
         # 正确编码URL用于二维码
         qr_url = urllib.parse.quote(v2ray_url, safe='')
@@ -665,18 +666,19 @@ class EmailTemplateEnhanced:
         """到期提醒邮件模板"""
         title = "订阅已到期" if is_expired else "订阅即将到期"
         
-        if not db:
-            return "数据库连接不可用"
+        if not request or not db:
+            return "请求或数据库连接不可用"
         
-        # 获取订阅数据
-        data_service = EmailDataService(db)
-        subscription_data = data_service.get_complete_subscription_data(subscription_id, request)
+        # 使用API客户端获取订阅数据
+        from app.services.email_api_client import EmailAPIClient
+        api_client = EmailAPIClient(request, db)
+        subscription_data = api_client.get_complete_subscription_data(subscription_id)
         
         if not subscription_data:
             return "订阅信息不存在"
         
         # 获取动态base_url
-        base_url = EmailTemplateEnhanced._get_base_url(request, db)
+        base_url = subscription_data.get('base_url', EmailTemplateEnhanced._get_base_url(request, db))
         
         # 从数据库获取的真实数据
         username = subscription_data.get('username', '用户')
@@ -744,18 +746,19 @@ class EmailTemplateEnhanced:
         """订阅重置通知邮件模板"""
         title = "订阅重置通知"
         
-        if not db:
-            return "数据库连接不可用"
+        if not request or not db:
+            return "请求或数据库连接不可用"
         
-        # 获取完整的订阅数据
-        data_service = EmailDataService(db)
-        subscription_data = data_service.get_complete_subscription_data(subscription_id, request)
+        # 使用API客户端获取完整的订阅数据
+        from app.services.email_api_client import EmailAPIClient
+        api_client = EmailAPIClient(request, db)
+        subscription_data = api_client.get_complete_subscription_data(subscription_id)
         
         if not subscription_data:
             return "订阅信息不存在"
         
         # 获取动态base_url
-        base_url = EmailTemplateEnhanced._get_base_url(request, db)
+        base_url = subscription_data.get('base_url', EmailTemplateEnhanced._get_base_url(request, db))
         
         # 从数据库获取的真实数据
         username = subscription_data.get('username', '用户')
@@ -826,18 +829,22 @@ class EmailTemplateEnhanced:
         """支付成功通知邮件模板"""
         title = "支付成功通知"
         
-        if not db:
-            return "数据库连接不可用"
+        if not request or not db:
+            return "请求或数据库连接不可用"
         
-        # 获取订单数据
-        data_service = EmailDataService(db)
-        order_data = data_service.get_order_info(order_id)
+        # 使用API客户端获取订单数据
+        from app.services.email_api_client import EmailAPIClient
+        api_client = EmailAPIClient(request, db)
+        
+        # 先获取订单信息，然后获取用户和订阅信息
+        # 这里需要根据实际的API端点调整
+        order_data = api_client.get_order_info(order_id)  # 这个方法需要在EmailAPIClient中实现
         
         if not order_data:
             return "订单信息不存在"
         
         # 获取动态base_url
-        base_url = EmailTemplateEnhanced._get_base_url(request, db)
+        base_url = order_data.get('base_url', EmailTemplateEnhanced._get_base_url(request, db))
         
         # 从数据库获取的真实数据
         username = order_data.get('username', '用户')
@@ -899,18 +906,19 @@ class EmailTemplateEnhanced:
         """新用户欢迎邮件模板"""
         title = "欢迎加入我们！"
         
-        if not db:
-            return "数据库连接不可用"
+        if not request or not db:
+            return "请求或数据库连接不可用"
         
-        # 获取用户数据
-        data_service = EmailDataService(db)
-        user_data = data_service.get_complete_user_data(user_id, request)
+        # 使用API客户端获取用户数据
+        from app.services.email_api_client import EmailAPIClient
+        api_client = EmailAPIClient(request, db)
+        user_data = api_client.get_complete_user_data(user_id)
         
         if not user_data:
             return "用户信息不存在"
         
         # 获取动态base_url
-        base_url = EmailTemplateEnhanced._get_base_url(request, db)
+        base_url = user_data.get('base_url', EmailTemplateEnhanced._get_base_url(request, db))
         
         # 从数据库获取的真实数据
         username = user_data.get('username', '用户')
@@ -962,18 +970,19 @@ class EmailTemplateEnhanced:
         """订阅创建成功邮件模板"""
         title = "订阅创建成功"
         
-        if not db:
-            return "数据库连接不可用"
+        if not request or not db:
+            return "请求或数据库连接不可用"
         
-        # 获取完整的订阅数据
-        data_service = EmailDataService(db)
-        subscription_data = data_service.get_complete_subscription_data(subscription_id, request)
+        # 使用API客户端获取完整的订阅数据
+        from app.services.email_api_client import EmailAPIClient
+        api_client = EmailAPIClient(request, db)
+        subscription_data = api_client.get_complete_subscription_data(subscription_id)
         
         if not subscription_data:
             return "订阅信息不存在"
         
         # 获取动态base_url
-        base_url = EmailTemplateEnhanced._get_base_url(request, db)
+        base_url = subscription_data.get('base_url', EmailTemplateEnhanced._get_base_url(request, db))
         
         # 从数据库获取的真实数据
         username = subscription_data.get('username', '用户')
