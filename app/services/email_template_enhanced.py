@@ -6,7 +6,6 @@
 from datetime import datetime
 from typing import Dict, Any, Optional
 from app.core.domain_config import get_domain_config
-from app.services.email_data_service import EmailDataService
 
 
 class EmailTemplateEnhanced:
