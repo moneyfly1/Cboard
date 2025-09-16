@@ -7,11 +7,12 @@ import asyncio
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional
 from sqlalchemy.orm import Session
+from fastapi import Request
 from app.core.database import get_db
 from app.models.user import User
 from app.models.subscription import Subscription
 from app.models.order import Order
-from app.models.payment import Payment
+from app.models.payment import PaymentTransaction
 import logging
 
 logger = logging.getLogger(__name__)
@@ -175,8 +176,8 @@ class DatabaseMonitor:
             paid_orders = self.db.query(Order).filter(Order.status == "paid").count()
             
             # 支付统计
-            total_payments = self.db.query(Payment).count()
-            successful_payments = self.db.query(Payment).filter(Payment.status == "success").count()
+            total_payments = self.db.query(PaymentTransaction).count()
+            successful_payments = self.db.query(PaymentTransaction).filter(PaymentTransaction.status == "success").count()
             
             return {
                 "users": {

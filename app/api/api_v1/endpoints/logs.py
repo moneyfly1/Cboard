@@ -2,7 +2,7 @@
 日志管理API端点
 """
 from typing import Any, Optional
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Query, Path
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
 
@@ -202,7 +202,7 @@ def download_log_file(
 
 @router.get("/realtime/{log_type}", response_model=ResponseBase)
 def get_realtime_logs(
-    log_type: str = Query("app", regex="^(app|error|access|security)$"),
+    log_type: str = Path(..., regex="^(app|error|access|security)$"),
     lines: int = Query(50, ge=1, le=200),
     current_admin = Depends(get_current_admin_user)
 ) -> Any:
