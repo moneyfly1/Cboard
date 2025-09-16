@@ -21,8 +21,20 @@ class EmailAPIClient:
         """获取API基础URL"""
         try:
             from app.core.domain_config import get_domain_config
+            import os
+            
             domain_config = get_domain_config()
-            return domain_config.get_base_url(self.request, self.db)
+            # 使用get_email_base_url方法，专门为邮件设计
+            base_url = domain_config.get_email_base_url(self.request, self.db)
+            
+            # 调试信息
+            print(f"🔍 EmailAPIClient base_url调试:")
+            print(f"   - DOMAIN_NAME环境变量: {os.getenv('DOMAIN_NAME')}")
+            print(f"   - SSL_ENABLED环境变量: {os.getenv('SSL_ENABLED')}")
+            print(f"   - 获取到的base_url: {base_url}")
+            print(f"   - request是否为None: {self.request is None}")
+            
+            return base_url
         except Exception as e:
             print(f"获取base_url失败: {str(e)}")
             return "http://localhost:8000"
