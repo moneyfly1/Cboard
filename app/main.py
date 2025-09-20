@@ -7,7 +7,7 @@ from datetime import datetime
 from .core.config import settings
 from .api.api_v1.api import api_router
 from .core.database import init_database
-from .middleware.rate_limit import rate_limit_middleware, monitoring_middleware
+from .middleware.rate_limit import rate_limit_middleware
 from .models import (
     User, Subscription, Device, Order, Package, EmailQueue, 
     EmailTemplate, Notification, Node, PaymentTransaction, 
@@ -33,9 +33,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-# 添加监控中间件
-app.middleware("http")(monitoring_middleware)
 
 # 添加速率限制中间件
 app.middleware("http")(rate_limit_middleware)

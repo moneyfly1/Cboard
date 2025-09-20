@@ -2977,7 +2977,7 @@ def reset_user_all_subscriptions(
     db: Session = Depends(get_db),
     current_admin = Depends(get_current_admin_user)
 ) -> Any:
-    """重置用户的所有订阅（V2Ray和Clash）"""
+    """重置用户的所有订阅"""
     try:
         subscription_service = SubscriptionService(db)
         
@@ -2988,100 +2988,26 @@ def reset_user_all_subscriptions(
         if not user_subscriptions:
             return ResponseBase(success=False, message="用户没有订阅")
         
-        # 删除现有订阅
+        # 使用订阅服务的重置方法，而不是删除和重建
+        success_count = 0
         for subscription in user_subscriptions:
-            db.delete(subscription)
-        
-        # 创建新的V2Ray和Clash订阅
-        from sqlalchemy import text
-        from datetime import datetime, timedelta
-        import secrets
-        
-        # 计算到期时间（默认30天）
-        expire_time = datetime.now() + timedelta(days=30)
-        current_time = datetime.now()
-        device_limit = 3  # 默认设备限制
-        
-        # 生成V2Ray订阅标识符（16位字符）
-        v2ray_key = secrets.token_urlsafe(16)
-        
-        # 生成Clash订阅标识符（16位字符）
-        clash_key = secrets.token_urlsafe(16)
-        
-        # 插入V2Ray订阅
-        v2ray_insert_query = text("""
-            INSERT INTO subscriptions (user_id, subscription_url, device_limit, current_devices, is_active, expire_time, created_at, updated_at)
-            VALUES (:user_id, :subscription_url, :device_limit, :current_devices, :is_active, :expire_time, :created_at, :updated_at)
-        """)
-        
-        # 构建完整的订阅URL
-        # 使用动态域名配置
-        from app.core.domain_config import get_domain_config
-        domain_config = get_domain_config()
-        base_url = domain_config.get_base_url(request, db)
-        v2ray_url = f"{base_url}/api/v1/subscriptions/v2ray/{v2ray_key}"
-        clash_url = f"{base_url}/api/v1/subscriptions/clash/{clash_key}"
-        
-        db.execute(v2ray_insert_query, {
-            "user_id": user_id,
-            "subscription_url": v2ray_key,
-            "device_limit": device_limit,
-            "current_devices": 0,
-            "is_active": True,
-            "expire_time": expire_time,
-            "created_at": current_time,
-            "updated_at": current_time
-        })
-        
-        # 插入Clash订阅
-        clash_insert_query = text("""
-            INSERT INTO subscriptions (user_id, subscription_url, device_limit, current_devices, is_active, expire_time, created_at, updated_at)
-            VALUES (:user_id, :subscription_url, :device_limit, :current_devices, :is_active, :expire_time, :created_at, :updated_at)
-        """)
-        
-        db.execute(clash_insert_query, {
-            "user_id": user_id,
-            "subscription_url": clash_key,
-            "device_limit": device_limit,
-            "current_devices": 0,
-            "is_active": True,
-            "expire_time": expire_time,
-            "created_at": current_time,
-            "updated_at": current_time
-        })
-        
-        db.commit()
-        
-        # 发送重置通知邮件
-        try:
-            from app.services.email import EmailService
-            from app.models.user import User
-            
-            # 获取用户信息
-            user = db.query(User).filter(User.id == user_id).first()
-            if user and user.email:
-                email_service = EmailService(db)
-                reset_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-                
-                # 发送重置通知邮件（包含新的订阅地址）
-                email_service.send_subscription_reset_notification(
-                    user_email=user.email,
-                    username=user.username,
-                    new_subscription_url=f"V2Ray: {v2ray_url}\nClash: {clash_url}",
-                    reset_time=reset_time,
-                    reset_reason="管理员重置所有订阅"
+            if subscription.is_active:  # 只重置活跃的订阅
+                success = subscription_service.reset_subscription(
+                    subscription_id=subscription.id,
+                    user_id=user_id,
+                    reset_type="admin",
+                    reason="管理员重置"
                 )
-                print(f"已发送管理员重置所有订阅通知邮件到: {user.email}")
-        except Exception as e:
-            print(f"发送管理员重置所有订阅通知邮件失败: {e}")
+                if success:
+                    success_count += 1
         
-        return ResponseBase(message="用户所有订阅重置成功", data={
-            "v2ray_subscription_url": v2ray_key,
-            "clash_subscription_url": clash_key
-        })
+        if success_count > 0:
+            return ResponseBase(message=f"成功重置 {success_count} 个订阅")
+        else:
+            return ResponseBase(success=False, message="没有找到可重置的活跃订阅")
+        
     except Exception as e:
-        db.rollback()
-        return ResponseBase(success=False, message=f"重置用户订阅失败: {str(e)}")
+        return ResponseBase(success=False, message=f"重置订阅失败: {str(e)}")
 
 @router.delete("/subscriptions/{subscription_id}", response_model=ResponseBase)
 def delete_subscription(

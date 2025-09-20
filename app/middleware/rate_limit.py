@@ -92,7 +92,7 @@ async def rate_limit_middleware(request: Request, call_next):
     
     # 登录接口更严格的限制
     if path in ["/api/v1/auth/login", "/api/v1/auth/register"]:
-        limit = 10  # 每分钟10次
+        limit = 100  # 每分钟100次
         window = 60
     # 管理员接口限制
     elif path.startswith("/api/v1/admin"):
