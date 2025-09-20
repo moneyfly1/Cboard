@@ -23,8 +23,29 @@ class EmailAPIClient:
             from app.core.domain_config import get_domain_config
             import os
             
+            # 优先使用环境变量
+            domain = os.getenv('DOMAIN_NAME')
+            if domain:
+                ssl_enabled = os.getenv('SSL_ENABLED', 'false').lower() == 'true'
+                scheme = 'https' if ssl_enabled else 'http'
+                return f"{scheme}://{domain}"
+            
+            # 如果没有环境变量，尝试从request获取
+            if self.request and hasattr(self.request, 'url'):
+                try:
+                    scheme = self.request.url.scheme
+                    hostname = self.request.url.hostname
+                    port = self.request.url.port
+                    
+                    if port and port not in [80, 443]:
+                        return f"{scheme}://{hostname}:{port}"
+                    else:
+                        return f"{scheme}://{hostname}"
+                except:
+                    pass
+            
+            # 使用domain_config
             domain_config = get_domain_config()
-            # 使用get_email_base_url方法，专门为邮件设计
             base_url = domain_config.get_email_base_url(self.request, self.db)
             
             # 调试信息

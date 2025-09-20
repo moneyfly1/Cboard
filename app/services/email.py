@@ -307,7 +307,8 @@ class EmailService:
 
     def send_subscription_reset_notification(self, user_email: str, username: str, 
                                            new_subscription_url: str, reset_time: str, 
-                                           reset_reason: str, subscription_id: int = None) -> bool:
+                                           reset_reason: str, subscription_id: int = None, 
+                                           request=None) -> bool:
         """发送订阅重置通知"""
         if not self.is_email_enabled():
             return False
@@ -322,7 +323,7 @@ class EmailService:
                     subscription_id=subscription_id,
                     reset_time=reset_time,
                     reset_reason=reset_reason,
-                    request=None,  # 这里需要实际的request对象
+                    request=request,  # 使用传入的request对象
                     db=self.db
                 )
             else:

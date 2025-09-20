@@ -757,6 +757,7 @@ def clear_user_devices_admin(
 @router.post("/users/{user_id}/reset-subscription", response_model=ResponseBase)
 def reset_user_subscription(
     user_id: int,
+    request: Request,
     db: Session = Depends(get_db),
     current_admin = Depends(get_current_admin_user)
 ) -> Any:
@@ -800,7 +801,8 @@ def reset_user_subscription(
                     new_subscription_url=new_url,
                     reset_time=reset_time,
                     reset_reason="管理员重置",
-                    subscription_id=subscription.id
+                    subscription_id=subscription.id,
+                    request=request
                 )
                 print(f"已发送管理员重置订阅通知邮件到: {user.email}")
         except Exception as e:
