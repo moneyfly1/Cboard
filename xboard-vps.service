@@ -1,0 +1,39 @@
+[Unit]
+Description=XBoard VPS Service
+After=network.target
+Wants=network.target
+
+[Service]
+Type=simple
+User=root
+Group=root
+WorkingDirectory=/root/xboard
+Environment=PATH=/root/xboard/venv/bin
+Environment=PYTHONPATH=/root/xboard
+Environment=DOMAIN_NAME=your-domain.com
+Environment=SSL_ENABLED=true
+Environment=DEBUG=false
+ExecStart=/root/xboard/start_vps.sh start
+ExecReload=/bin/kill -HUP $MAINPID
+ExecStop=/root/xboard/start_vps.sh stop
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=xboard-vps
+
+# 资源限制
+LimitNOFILE=65536
+LimitNPROC=4096
+MemoryLimit=1G
+CPUQuota=200%
+
+# 安全设置
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/root/xboard
+
+[Install]
+WantedBy=multi-user.target

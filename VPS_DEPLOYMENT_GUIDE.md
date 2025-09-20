@@ -1,543 +1,338 @@
-# XBoard VPS部署完整指南
+# VPS部署稳定性解决方案
 
-## 概述
+## 问题分析
 
-本指南将帮助您在VPS服务器上完整部署XBoard项目，包括设备限制功能、域名配置、SSL证书、宝塔面板集成等。
+### 1. 邮件队列服务器停止的原因
+- **内存不足** - VPS资源限制导致进程被系统杀死
+- **数据库连接超时** - 长时间无活动导致连接断开
+- **异常处理不当** - 邮件发送失败时处理器崩溃
+- **线程管理问题** - 多线程竞争导致死锁
 
-## 系统要求
+### 2. 后端容易停止的原因
+- **端口冲突** - 多个进程占用同一端口
+- **资源竞争** - CPU/内存使用过高
+- **依赖服务失败** - 数据库、Redis等服务不可用
+- **配置问题** - 环境变量或配置文件错误
 
-### 最低配置
-- **CPU**: 1核心
-- **内存**: 2GB RAM
-- **存储**: 20GB SSD
-- **带宽**: 1Mbps
-- **操作系统**: Ubuntu 20.04+ / CentOS 7+ / Debian 10+
+## VPS部署解决方案
 
-### 推荐配置
-- **CPU**: 2核心
-- **内存**: 4GB RAM
-- **存储**: 40GB SSD
-- **带宽**: 5Mbps
-- **操作系统**: Ubuntu 22.04 LTS
+### 1. 系统服务配置
 
-## 第一步：VPS服务器准备
-
-### 1.1 购买VPS服务器
-
-推荐VPS提供商：
-- **阿里云ECS**: 稳定可靠，国内访问快
-- **腾讯云CVM**: 性价比高，技术支持好
-- **华为云ECS**: 企业级服务
-- **Vultr**: 海外服务器，价格便宜
-- **DigitalOcean**: 开发者友好
-
-### 1.2 系统选择
-
-推荐选择以下系统之一：
-- Ubuntu 22.04 LTS (推荐)
-- Ubuntu 20.04 LTS
-- CentOS 8 Stream
-- Debian 11
-
-### 1.3 安全组配置
-
-在VPS控制台配置安全组，开放以下端口：
-- **22**: SSH访问
-- **80**: HTTP访问
-- **443**: HTTPS访问
-- **8888**: 宝塔面板（可选）
-
-## 第二步：宝塔面板安装
-
-### 2.1 安装宝塔面板
-
+#### 创建系统服务文件
 ```bash
-# Ubuntu/Debian系统
-wget -O install.sh http://download.bt.cn/install/install-ubuntu_6.0.sh && sudo bash install.sh
-
-# CentOS系统
-yum install -y wget && wget -O install.sh http://download.bt.cn/install/install_6.0.sh && sh install.sh
+sudo nano /etc/systemd/system/xboard-backend.service
 ```
 
-### 2.2 宝塔面板配置
+```ini
+[Unit]
+Description=XBoard Backend Service
+After=network.target
+Wants=network.target
 
-1. 安装完成后，记录面板地址、用户名和密码
-2. 登录宝塔面板
-3. 安装推荐软件：
-   - Nginx 1.20+
-   - MySQL 8.0+ (可选，本项目使用SQLite)
-   - PHP 8.0+ (可选)
-   - PM2管理器
+[Service]
+Type=simple
+User=root
+Group=root
+WorkingDirectory=/root/xboard
+Environment=PATH=/root/xboard/venv/bin
+Environment=PYTHONPATH=/root/xboard
+Environment=DOMAIN_NAME=your-domain.com
+Environment=SSL_ENABLED=true
+ExecStart=/root/xboard/venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=xboard-backend
 
-### 2.3 宝塔面板安全设置
+# 资源限制
+LimitNOFILE=65536
+LimitNPROC=4096
+MemoryLimit=1G
+CPUQuota=200%
 
-1. 修改面板端口（默认8888）
-2. 设置面板用户名和密码
-3. 绑定域名（可选）
-4. 开启面板SSL
+# 安全设置
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/root/xboard
 
-## 第三步：域名准备
-
-### 3.1 购买域名
-
-推荐域名注册商：
-- **阿里云万网**: 国内用户首选
-- **腾讯云DNSPod**: 解析速度快
-- **GoDaddy**: 海外用户
-- **Namecheap**: 价格便宜
-
-### 3.2 域名解析
-
-在域名管理后台添加A记录：
-```
-类型: A
-主机记录: @
-记录值: 您的VPS IP地址
-TTL: 600
-```
-
-同时添加www记录：
-```
-类型: A
-主机记录: www
-记录值: 您的VPS IP地址
-TTL: 600
+[Install]
+WantedBy=multi-user.target
 ```
 
-### 3.3 域名验证
-
-等待DNS解析生效（通常5-30分钟）：
+#### 启用服务
 ```bash
-# 检查域名解析
-nslookup yourdomain.com
-ping yourdomain.com
+sudo systemctl daemon-reload
+sudo systemctl enable xboard-backend
+sudo systemctl start xboard-backend
+sudo systemctl status xboard-backend
 ```
 
-## 第四步：运行安装脚本
+### 2. 邮件队列稳定性优化
 
-### 4.1 下载安装脚本
-
-```bash
-# 登录VPS
-ssh root@your-vps-ip
-
-# 下载安装脚本
-wget https://raw.githubusercontent.com/moneyfly1/Cboard/master/install_xboard.sh
-
-# 给脚本执行权限
-chmod +x install_xboard.sh
+#### 修改邮件队列处理器
+```python
+# 在 app/services/email_queue_processor.py 中添加
+class EmailQueueProcessor:
+    def __init__(self):
+        # 增加稳定性配置
+        self.max_memory_usage = 100 * 1024 * 1024  # 100MB
+        self.connection_timeout = 30
+        self.max_processing_time = 300  # 5分钟
+        self.health_check_interval = 60  # 1分钟
 ```
 
-### 4.2 运行安装脚本
-
-```bash
-# 运行安装脚本
-./install_xboard.sh
+#### 添加内存监控
+```python
+def _check_memory_usage(self):
+    """检查内存使用情况"""
+    import psutil
+    process = psutil.Process()
+    memory_info = process.memory_info()
+    
+    if memory_info.rss > self.max_memory_usage:
+        logger.warning(f"内存使用过高: {memory_info.rss / 1024 / 1024:.2f}MB")
+        return False
+    return True
 ```
 
-安装过程中需要输入：
-- 域名（例如：example.com）
-- 管理员邮箱
-- 管理员密码（至少8位）
+### 3. 数据库连接优化
 
-### 4.3 安装过程说明
+#### 配置数据库连接池
+```python
+# 在 app/core/database.py 中
+from sqlalchemy.pool import QueuePool
 
-安装脚本会自动完成以下操作：
-
-1. **系统环境检查**
-   - 检查操作系统版本
-   - 检查内存和磁盘空间
-   - 检查网络连接
-
-2. **依赖安装**
-   - 安装系统依赖包
-   - 安装Python 3.9+
-   - 安装Node.js 18+
-   - 安装PM2进程管理器
-
-3. **项目部署**
-   - 下载项目代码
-   - 创建Python虚拟环境
-   - 安装Python依赖
-   - 安装前端依赖
-   - 构建前端项目
-
-4. **数据库初始化**
-   - 创建数据库表
-   - 初始化软件识别规则
-   - 创建管理员用户
-
-5. **服务配置**
-   - 配置环境变量
-   - 创建PM2配置
-   - 配置Nginx
-   - 配置防火墙
-
-## 第五步：宝塔面板配置
-
-### 5.1 创建网站
-
-1. 登录宝塔面板
-2. 点击"网站" → "添加站点"
-3. 填写域名：`yourdomain.com`
-4. 选择PHP版本：纯静态
-5. 点击提交
-
-### 5.2 配置SSL证书
-
-1. 在网站列表中点击"设置"
-2. 选择"SSL"选项卡
-3. 选择"Let's Encrypt"
-4. 勾选域名和www域名
-5. 点击申请
-6. 开启"强制HTTPS"
-
-### 5.3 配置反向代理
-
-1. 在网站设置中选择"反向代理"
-2. 添加反向代理：
-   - 代理名称：API
-   - 目标URL：`http://127.0.0.1:8000`
-   - 发送域名：`$host`
-   - 代理目录：`/api/`
-
-### 5.4 配置伪静态
-
-在网站设置中选择"伪静态"，添加以下规则：
-```nginx
-location / {
-    try_files $uri $uri/ /index.html;
-}
-
-location /api/ {
-    proxy_pass http://127.0.0.1:8000;
-    proxy_set_header Host $host;
-    proxy_set_header X-Real-IP $remote_addr;
-    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-    proxy_set_header X-Forwarded-Proto $scheme;
-}
+engine = create_engine(
+    DATABASE_URL,
+    poolclass=QueuePool,
+    pool_size=10,
+    max_overflow=20,
+    pool_pre_ping=True,
+    pool_recycle=3600,  # 1小时回收连接
+    echo=False
+)
 ```
 
-## 第六步：服务管理
+### 4. 监控和自动恢复
 
-### 6.1 启动服务
-
-```bash
-cd /www/wwwroot/xboard
-./start.sh
-```
-
-### 6.2 检查服务状态
-
-```bash
-# 查看PM2进程状态
-pm2 status
-
-# 查看服务日志
-pm2 logs xboard-backend
-
-# 查看系统资源使用
-pm2 monit
-```
-
-### 6.3 服务管理命令
-
-```bash
-# 启动服务
-./start.sh
-
-# 停止服务
-./stop.sh
-
-# 重启服务
-./restart.sh
-
-# 查看状态
-./status.sh
-```
-
-## 第七步：功能验证
-
-### 7.1 访问测试
-
-1. **前端界面**: `https://yourdomain.com`
-2. **管理面板**: `https://yourdomain.com/admin`
-3. **API文档**: `https://yourdomain.com/docs`
-
-### 7.2 设备限制功能测试
-
-1. 登录管理面板
-2. 创建测试用户和订阅
-3. 使用不同设备访问订阅地址
-4. 验证设备识别和限制功能
-
-### 7.3 软件识别测试
-
-测试支持的订阅软件：
-- Shadowrocket (iOS)
-- Clash for Windows
-- V2rayNG (Android)
-- 其他支持的软件
-
-## 第八步：安全配置
-
-### 8.1 防火墙配置
-
-```bash
-# 查看防火墙状态
-ufw status
-
-# 开放必要端口
-ufw allow 22/tcp
-ufw allow 80/tcp
-ufw allow 443/tcp
-ufw allow 8888/tcp  # 宝塔面板端口
-```
-
-### 8.2 系统安全
-
-```bash
-# 更新系统
-apt update && apt upgrade -y
-
-# 安装fail2ban防暴力破解
-apt install fail2ban -y
-
-# 配置SSH密钥登录（推荐）
-# 禁用密码登录
-```
-
-### 8.3 数据库安全
-
-```bash
-# 设置数据库文件权限
-chmod 600 /www/wwwroot/xboard/xboard.db
-chown www:www /www/wwwroot/xboard/xboard.db
-```
-
-## 第九步：监控和维护
-
-### 9.1 日志监控
-
-```bash
-# 查看应用日志
-tail -f /www/wwwroot/xboard/logs/combined.log
-
-# 查看Nginx日志
-tail -f /www/wwwlogs/yourdomain.com.log
-
-# 查看系统日志
-journalctl -u nginx -f
-```
-
-### 9.2 性能监控
-
-```bash
-# 查看系统资源使用
-htop
-
-# 查看磁盘使用
-df -h
-
-# 查看内存使用
-free -h
-```
-
-### 9.3 定期备份
-
-创建备份脚本：
+#### 创建监控脚本
 ```bash
 #!/bin/bash
-# 备份脚本
-DATE=$(date +%Y%m%d_%H%M%S)
-BACKUP_DIR="/backup/xboard_$DATE"
+# /root/xboard/monitor.sh
 
-mkdir -p $BACKUP_DIR
+LOG_FILE="/root/xboard/monitor.log"
+SERVICE_NAME="xboard-backend"
 
-# 备份数据库
-cp /www/wwwroot/xboard/xboard.db $BACKUP_DIR/
-
-# 备份配置文件
-cp /www/wwwroot/xboard/.env $BACKUP_DIR/
-
-# 备份代码
-tar -czf $BACKUP_DIR/code.tar.gz /www/wwwroot/xboard
-
-echo "备份完成: $BACKUP_DIR"
-```
-
-设置定时备份：
-```bash
-# 编辑crontab
-crontab -e
-
-# 添加每日备份任务
-0 2 * * * /path/to/backup_script.sh
-```
-
-## 第十步：故障排除
-
-### 10.1 常见问题
-
-#### 问题1：服务无法启动
-```bash
-# 检查端口占用
-netstat -tlnp | grep 8000
-
-# 检查日志
-pm2 logs xboard-backend
-
-# 重启服务
-pm2 restart xboard-backend
-```
-
-#### 问题2：域名无法访问
-```bash
-# 检查Nginx状态
-systemctl status nginx
-
-# 检查Nginx配置
-nginx -t
-
-# 重启Nginx
-systemctl restart nginx
-```
-
-#### 问题3：SSL证书问题
-```bash
-# 检查证书文件
-ls -la /www/server/panel/vhost/cert/yourdomain.com/
-
-# 重新申请证书
-# 在宝塔面板中重新申请Let's Encrypt证书
-```
-
-### 10.2 性能优化
-
-#### 数据库优化
-```bash
-# 定期清理日志
-pm2 flush
-
-# 优化数据库
-sqlite3 /www/wwwroot/xboard/xboard.db "VACUUM;"
-```
-
-#### Nginx优化
-```nginx
-# 在Nginx配置中添加
-gzip on;
-gzip_vary on;
-gzip_min_length 1024;
-gzip_types text/plain text/css application/json application/javascript text/xml application/xml application/xml+rss text/javascript;
-```
-
-## 第十一步：高级配置
-
-### 11.1 负载均衡
-
-如果需要多服务器部署：
-```nginx
-upstream xboard_backend {
-    server 127.0.0.1:8000;
-    server 127.0.0.1:8001;
-    server 127.0.0.1:8002;
+check_service() {
+    if ! systemctl is-active --quiet $SERVICE_NAME; then
+        echo "$(date): 服务未运行，尝试重启" >> $LOG_FILE
+        systemctl restart $SERVICE_NAME
+        sleep 10
+        
+        if systemctl is-active --quiet $SERVICE_NAME; then
+            echo "$(date): 服务重启成功" >> $LOG_FILE
+        else
+            echo "$(date): 服务重启失败" >> $LOG_FILE
+        fi
+    fi
 }
 
+check_memory() {
+    MEMORY_USAGE=$(free | grep Mem | awk '{printf "%.0f", $3/$2 * 100.0}')
+    if [ $MEMORY_USAGE -gt 90 ]; then
+        echo "$(date): 内存使用过高: ${MEMORY_USAGE}%" >> $LOG_FILE
+        systemctl restart $SERVICE_NAME
+    fi
+}
+
+check_disk() {
+    DISK_USAGE=$(df /root | tail -1 | awk '{print $5}' | sed 's/%//')
+    if [ $DISK_USAGE -gt 90 ]; then
+        echo "$(date): 磁盘使用过高: ${DISK_USAGE}%" >> $LOG_FILE
+        # 清理日志文件
+        find /root/xboard -name "*.log" -mtime +7 -delete
+    fi
+}
+
+# 主监控循环
+while true; do
+    check_service
+    check_memory
+    check_disk
+    sleep 60
+done
+```
+
+#### 设置监控定时任务
+```bash
+# 添加到 crontab
+crontab -e
+
+# 添加以下行
+* * * * * /root/xboard/monitor.sh
+```
+
+### 5. 日志管理
+
+#### 配置日志轮转
+```bash
+sudo nano /etc/logrotate.d/xboard
+```
+
+```
+/root/xboard/*.log {
+    daily
+    missingok
+    rotate 7
+    compress
+    delaycompress
+    notifempty
+    create 644 root root
+    postrotate
+        systemctl reload xboard-backend
+    endscript
+}
+```
+
+### 6. 防火墙和安全
+
+#### 配置防火墙
+```bash
+# 只开放必要端口
+sudo ufw allow 22/tcp
+sudo ufw allow 80/tcp
+sudo ufw allow 443/tcp
+sudo ufw allow 8000/tcp
+sudo ufw enable
+```
+
+#### 配置Nginx反向代理
+```nginx
+# /etc/nginx/sites-available/xboard
 server {
-    location /api/ {
-        proxy_pass http://xboard_backend;
+    listen 80;
+    server_name your-domain.com;
+    
+    location / {
+        proxy_pass http://127.0.0.1:8000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
     }
 }
 ```
 
-### 11.2 CDN配置
+### 7. 性能优化
 
-使用CDN加速静态资源：
-1. 在CDN提供商配置域名
-2. 设置缓存规则
-3. 配置回源地址
-
-### 11.3 邮件服务配置
-
-配置SMTP邮件服务：
+#### 系统优化
 ```bash
-# 编辑.env文件
-SMTP_HOST=smtp.gmail.com
-SMTP_PORT=587
-SMTP_USERNAME=your-email@gmail.com
-SMTP_PASSWORD=your-app-password
-SMTP_USE_TLS=True
+# 增加文件描述符限制
+echo "* soft nofile 65536" >> /etc/security/limits.conf
+echo "* hard nofile 65536" >> /etc/security/limits.conf
+
+# 优化内核参数
+echo "net.core.somaxconn = 65535" >> /etc/sysctl.conf
+echo "net.ipv4.tcp_max_syn_backlog = 65535" >> /etc/sysctl.conf
+sysctl -p
 ```
 
-## 第十二步：项目特色功能
+#### 应用优化
+```python
+# 在 app/main.py 中
+app = FastAPI(
+    title=settings.PROJECT_NAME,
+    version="1.0.0",
+    docs_url="/docs",
+    redoc_url="/redoc"
+)
 
-### 12.1 设备限制系统
+# 添加中间件
+@app.middleware("http")
+async def add_security_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+    return response
+```
 
-- 支持24种主流订阅软件识别
-- 智能设备指纹算法
-- 同设备不同IP处理
-- 设备管理界面
+### 8. 部署脚本
 
-### 12.2 软件识别支持
+#### 创建部署脚本
+```bash
+#!/bin/bash
+# deploy.sh
 
-#### iOS软件
-- Shadowrocket
-- Quantumult X
-- Surge
-- Loon
-- Stash
-- Sparkle
+set -e
 
-#### Android软件
-- Clash Meta for Android
-- V2rayNG
-- SagerNet
-- Matsuri
-- AnXray
-- Nekobox
+echo "🚀 开始部署 XBoard 到 VPS..."
 
-#### Windows软件
-- Clash for Windows
-- v2rayN
-- FlClash
-- Clash Verge
+# 更新系统
+apt update && apt upgrade -y
 
-#### macOS软件
-- ClashX Pro
-- Clash for Mac
+# 安装依赖
+apt install -y python3 python3-pip python3-venv nginx ufw
 
-### 12.3 管理功能
+# 创建项目目录
+mkdir -p /root/xboard
+cd /root/xboard
 
-- 用户管理
-- 订阅管理
-- 设备管理
-- 访问日志
-- 统计报表
+# 克隆代码
+git clone https://github.com/moneyfly1/Cboard.git .
+
+# 创建虚拟环境
+python3 -m venv venv
+source venv/bin/activate
+
+# 安装依赖
+pip install -r requirements.txt
+
+# 配置环境变量
+cat > .env << EOF
+DOMAIN_NAME=your-domain.com
+SSL_ENABLED=true
+DEBUG=false
+HOST=0.0.0.0
+PORT=8000
+WORKERS=2
+EOF
+
+# 配置系统服务
+cp xboard-backend.service /etc/systemd/system/
+systemctl daemon-reload
+systemctl enable xboard-backend
+
+# 配置Nginx
+cp nginx.conf /etc/nginx/sites-available/xboard
+ln -s /etc/nginx/sites-available/xboard /etc/nginx/sites-enabled/
+nginx -t && systemctl reload nginx
+
+# 配置防火墙
+ufw allow 22/tcp
+ufw allow 80/tcp
+ufw allow 443/tcp
+ufw --force enable
+
+# 启动服务
+systemctl start xboard-backend
+systemctl status xboard-backend
+
+echo "✅ 部署完成！"
+```
 
 ## 总结
 
-通过本指南，您可以完整部署XBoard项目，包括：
+通过以上配置，可以确保：
 
-1. ✅ VPS服务器配置
-2. ✅ 宝塔面板安装
-3. ✅ 域名配置和SSL证书
-4. ✅ 项目自动部署
-5. ✅ 服务配置和管理
-6. ✅ 安全配置
-7. ✅ 监控和维护
-8. ✅ 故障排除
+1. **服务稳定性** - 系统服务自动重启
+2. **资源监控** - 内存和磁盘使用监控
+3. **日志管理** - 自动日志轮转
+4. **安全防护** - 防火墙和反向代理
+5. **性能优化** - 系统参数调优
 
-项目部署完成后，您将拥有一个功能完整的设备限制系统，支持所有主流订阅软件的精确识别和管理。
-
-## 技术支持
-
-如果在部署过程中遇到问题，请：
-
-1. 检查日志文件
-2. 查看错误信息
-3. 参考故障排除部分
-4. 联系技术支持
-
-**项目地址**: https://github.com/moneyfly1/Cboard
-**文档地址**: https://github.com/moneyfly1/Cboard/wiki
+这样配置后，你的XBoard应用在VPS上将会非常稳定！

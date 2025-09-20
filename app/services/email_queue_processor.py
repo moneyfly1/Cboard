@@ -20,13 +20,18 @@ class EmailQueueProcessor:
     def __init__(self):
         self.is_running = False
         self.processing_thread = None
-        self.batch_size = 10
-        self.processing_interval = 5  # 秒
+        self.batch_size = 5  # 减少批次大小，降低内存压力
+        self.processing_interval = 10  # 增加处理间隔，减少CPU使用
         self.max_retries = 3
         self.retry_delays = [60, 300, 1800]  # 重试延迟：1分钟、5分钟、30分钟
         self._stop_event = threading.Event()
         self._auto_restart = True  # 自动重启标志
         self._restart_timer = None
+        self._max_memory_usage = 100 * 1024 * 1024  # 100MB内存限制
+        self._connection_timeout = 30  # 数据库连接超时
+        self._max_processing_time = 300  # 5分钟最大处理时间
+        self._health_check_interval = 60  # 1分钟健康检查
+        self._last_health_check = time.time()
     
     def start_processing(self):
         """启动邮件队列处理"""
@@ -68,6 +73,11 @@ class EmailQueueProcessor:
         """邮件队列处理主循环"""
         while self.is_running and not self._stop_event.is_set():
             try:
+                # 健康检查
+                if not self._health_check():
+                    logger.warning("健康检查失败，停止处理")
+                    break
+                
                 self._process_batch()
                 # 使用事件等待，支持优雅停止
                 if self._stop_event.wait(self.processing_interval):
@@ -487,6 +497,57 @@ class EmailQueueProcessor:
         self.stop_processing()
         self._auto_restart = True
         self.start_processing()
+    
+    def _health_check(self):
+        """健康检查"""
+        try:
+            current_time = time.time()
+            
+            # 定期健康检查
+            if current_time - self._last_health_check > self._health_check_interval:
+                self._last_health_check = current_time
+                
+                # 检查内存使用
+                if not self._check_memory_usage():
+                    return False
+                
+                # 检查数据库连接
+                if not self._check_database_connection():
+                    return False
+            
+            return True
+        except Exception as e:
+            logger.error(f"健康检查失败: {e}")
+            return False
+    
+    def _check_memory_usage(self):
+        """检查内存使用情况"""
+        try:
+            import psutil
+            process = psutil.Process()
+            memory_info = process.memory_info()
+            
+            if memory_info.rss > self._max_memory_usage:
+                logger.warning(f"内存使用过高: {memory_info.rss / 1024 / 1024:.2f}MB")
+                return False
+            return True
+        except ImportError:
+            # 如果没有psutil，跳过内存检查
+            return True
+        except Exception as e:
+            logger.error(f"内存检查失败: {e}")
+            return True
+    
+    def _check_database_connection(self):
+        """检查数据库连接"""
+        try:
+            db = SessionLocal()
+            db.execute("SELECT 1")
+            db.close()
+            return True
+        except Exception as e:
+            logger.error(f"数据库连接检查失败: {e}")
+            return False
 
 # 全局邮件队列处理器实例
 email_queue_processor = EmailQueueProcessor()
