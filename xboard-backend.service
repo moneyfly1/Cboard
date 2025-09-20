@@ -1,0 +1,33 @@
+[Unit]
+Description=XBoard Backend Service
+After=network.target
+Wants=network.target
+
+[Service]
+Type=simple
+User=apple
+Group=staff
+WorkingDirectory=/Users/apple/Downloads/xboard 2
+Environment=PATH=/Users/apple/Downloads/xboard 2/venv/bin
+Environment=PYTHONPATH=/Users/apple/Downloads/xboard 2
+ExecStart=/Users/apple/Downloads/xboard 2/venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=xboard-backend
+
+# 资源限制
+LimitNOFILE=65536
+LimitNPROC=4096
+
+# 安全设置
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/Users/apple/Downloads/xboard 2
+
+[Install]
+WantedBy=multi-user.target
